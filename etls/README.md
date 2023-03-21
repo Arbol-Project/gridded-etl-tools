@@ -1,11 +1,9 @@
 ETL Developer's Manual
 ======================
 
-This README expands on the [overall README](../README.md), which explains the logic behind the structure of this repo and how to use the ETL manager scripts contained within. If you have not read that yet, do so before reading the below.
+This README expands on the [overall README](../README.md), which explains the logic behind the structure of this repo and how to use the CHIRPS ETL manager script contained within. If you have not read that yet, do so before reading the below.
 
-Writing a new climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `update_local_input`. This, however, will only handle the retrieval part of the ETL. To get the data onto IPFS, a `parse` method that optionally modifies the format of the data and writes the data to IPFS is necessary as well.
-
-In practice, we have parsed only two kinds of datasets: gridded (Zarr) and non-gridded (raw). Non-gridded data is now managed on [a separate repo](https://github.com/Arbol-Project/climate-ipfs) and will not be discussed here. This document will exclusively discuss how to manage gridded data via Zarrs.
+Writing a new gridded climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `update_local_input`. This, however, will only handle the retrieval part of the ETL. To get the data onto IPFS, a `parse` method that optionally modifies the format of the data and writes the data to IPFS is necessary as well.
 
 Note that once a class is written, there is then the matter of [running](../generate_zarr.py) and [testing](../tests) the class, also explained below under [Running](#running).
 
