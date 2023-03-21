@@ -10,7 +10,7 @@ Note that once a class is written, there is then the matter of [running](../gene
 Zarr
 ----
 
-zarr-climate-etl retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on [IPFS](https://ipfs.tech/). 
+zarr-climate-etl-ipfs retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on [IPFS](https://ipfs.tech/). 
 
 Legacy climate data providers frequently published climate data as individual files per period in a datasets' time series (e.g. one file per day) to ease the download of massive files when bandwidth and hard disk space were hard constraints for many actors. Fully implemented managers are able to retrieve the files composing an overall dataset, transform them into Zarr-compatible formats, and create or update a single final output Zarr containing them.
 

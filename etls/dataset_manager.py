@@ -62,8 +62,6 @@ class DatasetManager(Logging, Publish, IPFS, ABC):
             A hash to use for operations using the latest hash
         custom_input_path : str, optional
             A path to use for input files
-        http_root : str, optional
-            A URL to use for interacting with the API
         console_log : bool, optional
             Enable logging `logging.INFO` level and higher statements to console. For more customization, see
             `DatasetManager.log_to_console`
