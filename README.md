@@ -10,7 +10,7 @@ How to use this repository
 
 This repository provides a workflow for building climate data ETLs that output to IPFS. This workflow utilizes a set of common methods in sequence to download raw data, transform it into suitable intermediate NetCDF4 Classic data files, lazily read them as Zarrs, and finally write the overall dataset to a Zarr. If a dataset already exists it will automatically update the existing dataset with any new files found during the process.
 
-Users of this library are expected to build ETLS by importing utility methods directly from the [etls/utils](etls/utils/) folder, rather than importing the package like `pandas` or a similar library. Future iterations of this repository will be packaged for standalone import via PyPI in order to permit a more "normal" workflow. For more information see the [Development roadmap](docs/roadmap.md).
+Users of this library are expected to build ETLS by importing utility methods directly from the [etls/utils](etls/utils/) folder, rather than importing the package like `pandas` or a similar library. Future iterations of this repository will be packaged for standalone import via PyPI in order to permit a more "normal" workflow. For more information see the [Development roadmap](docs/development_roadmap.md).
 
 The below graphic provides a high level overview of the full anticipated workflow and the key methods for each step. These methods are covered in detail in the [ETL README](etls/README.md) and demonstrated in the example CHIRPS ETL in the [managers](etls/managers) directory.
 
