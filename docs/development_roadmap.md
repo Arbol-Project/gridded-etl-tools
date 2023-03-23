@@ -33,4 +33,4 @@ This is a medium priority objective and we anticipate its release within the nex
 
 The documentation for this repository is not the easiest to navigate due to being presented as a collection of markdown files. We would like to refactor the docs as a standalone ReadTheDocs instance where they can be more easily navigated -- not to mention better annotated by Sphinx's powerful markdown tools.
 
-This is a medium priority objective and we anticipate its release within the next 9-12 months. Because the readthedocs would stand apart from the repo it won't require a release of any sort, except to point users to the newly activate documentation.
+This is a medium priority objective and we anticipate its release within the next 9-12 months. Because the readthedocs would stand apart from the repo it won't require a release of any sort, except to point users to the newly active documentation.
