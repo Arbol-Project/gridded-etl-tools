@@ -267,7 +267,8 @@ class Creation(Convenience):
         """
         dataset = xr.open_dataset(
             "reference://",
-            engine="zarr", 
+            engine="zarr",
+            chunks={},
             backend_kwargs={
                 "storage_options": {
                     "fo": str(self.zarr_json_path()),
