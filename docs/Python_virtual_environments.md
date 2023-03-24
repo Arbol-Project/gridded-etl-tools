@@ -12,6 +12,12 @@ Setting up an environment on a local Mac OS X machine
 
 Users parsing modest datasets or looking to test ETLs quickly may want to run them from a local Mac OS X machine. Follow the steps here to instantiate a Python 3.10.9 virtual environment using the [pyenv](https://realpython.com/intro-to-pyenv/) utility, install all the packages in `requirements.txt`, and run ETLs.
 
+## Climate data binaries
+
+To use this package you must install system wide binary tools used for data transformations
+
+    brew install cdo eccodes netcdf gdal jpeg
+
 ## Pyenv setup
 
 First install pyenv with `homebrew`
