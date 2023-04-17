@@ -1,0 +1,38 @@
+# pyproject.toml
+[build-system]
+requires = [
+    "setuptools>=45",
+    "wheel",
+    "setuptools_scm>=6.2"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zarr_etl_tools"
+version = "0.2.0"
+authors = [
+    { name = "Robert Banick", email = "robert.banick@arbol.io" },
+    { name = "Evan Schechter", email = "evan@arbol.io" },
+    { name = "Frank DeMarco", email = "if.self.end@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Atmospheric Science"
+]
+
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+write_to = "zarr_etl_tools/_version.py"
+
+
+[project.urls]
+Homepage = "https://arbol.io/"
