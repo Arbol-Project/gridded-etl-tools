@@ -123,7 +123,7 @@ class MyNewETL(DatasetManager):
         """
         return ["time"]
 
-    def update_local_input(self, rebuild: bool = False, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
+    def extract(self, rebuild: bool = False, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
         """
         Check the remote from the end year of or after our data's end date. Download necessary files. Check
         newest file and return `True` if it has newer data than us or `False` otherwise.

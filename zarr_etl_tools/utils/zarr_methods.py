@@ -346,12 +346,6 @@ class Publish(Creation, Metadata):
 
         """
         self.info("Running parse routine")
-        # Dynamically adjust metadata based on fields calculated during `update_local_input`, if necessary (usually not)
-        self.populate_metadata()
-        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for MultiZarring
-        self.prepare_input_files()
-        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
-        self.create_zarr_json()
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
         # Use a Dask client to open, process, and write the data

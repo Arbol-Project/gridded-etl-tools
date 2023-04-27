@@ -1,7 +1,7 @@
 Zarr_etl_tools
 ==============
 
-Zarr_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and shares it in a distributed fashion. 
+Zarr_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium, most notably [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
 
 Zarr_etl_tools's utilities are combined in a DatasetManager abstract base class that can be adapted to retrieve data from a custom source. This abstract base class powers manager classes that can perform automated [data retrieval, transformation, and storage cycles](https://en.wikipedia.org/wiki/Extract,_transform,_load) (also known as ETLs) for a respective data source. The manager classes are also able to update, modify, and append to existing data in storage.
 
@@ -58,18 +58,19 @@ The CHIRPS U.S. precipitation dataset is of medium size and can be run in a few 
     from examples.managers.chirps import CHIRPSFinal25
     etl = CHIRPSFinal25(store='ipld')
 
-Now run the `update_local_input` to download all the files for this dataset. We're going to use the **date_range** parameter to only download files for 2021 and 2022 so this example goes quickly. Note that you can skip this step if you already have your files!
+Now run the `extract` to download all the files for this dataset. We're going to use the **date_range** parameter to only download files for 2021 and 2022 so this example goes quickly. Note that you can skip this step if you already have your files!
 
-    etl.update_local_input(date_range=[datetime.datetime(2021, 1, 1), datetime.datetime(2022, 12, 31)])
+    etl.extract(date_range=[datetime.datetime(2021, 1, 1), datetime.datetime(2022, 12, 31)])
 
-After running `update_local_input` a folder containing the original data from CHIRPS is created in `datasets/chirps/final/25` in the parent directory of the directory holding the CHIRPS manager
+After running `extract` a folder containing the original data from CHIRPS is created in `datasets/chirps/final/25` in the parent directory of the directory holding the CHIRPS manager
 
     $ ls datasets/chirps/final/25
     chirps-v2.0.2021.days_p25.nc
     chirps-v2.0.2022.days_p25.nc
 
-Now run the `parse` method to read all the files, transform them into a single Zarr, and place that Zarr on the desired store.
+Now run the `transform` method to read all the files and transform them into a single Zarr, and  `parse` to place that Zarr on the desired store.
 
+    etl.transform()
     etl.parse()
 
 #### Retrieving your dataset

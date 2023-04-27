@@ -3,7 +3,7 @@ ETL Developer's Manual
 
 This README expands on the [library README](../README.md), which explains the logic behind the structure of the library and how to run the CHIRPS ETL manager example script. If you have not read that yet, do so before reading the below.
 
-Writing a new gridded climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `update_local_input` for retrieval and a `parse` method that optionally modifies the format of the data and writes the data to IPFS, S3, or a local file system.
+Writing a new gridded climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `extract` for retrieval and a `parse` method that optionally modifies the format of the data and writes the data to IPFS, S3, or a local file system.
 
 New climate datasets can be added by creating a child class for that dataset within the manager script for the overall source. The recommended practice is to create child classes for each climate variable (minimum temperature, water salinity, etc.) extracted from that source -- e.g. CHIRPSFinal05 for the CHIRPS data source. Abstractly, a new dataset's manager will look like:
 
@@ -45,7 +45,7 @@ The following parameters must be defined per dataset
 
 The following methods _must_ be (highly) customized per dataset
 
-* `update_local_input`
+* `extract`
 
 The following methods _may_ need to be (lightly) customized per dataset
 
@@ -256,16 +256,16 @@ Static metadata is populated at the top of the ETL where common to the entire da
 
 #### Update local input
 
-The `update_local_input` function and its helper methods retrieve new data from the provider. As providers' publication formats, methods, and schedules vary greatly this will be the most custom (and therefore laborious) part of any ETL. DatasetManager provides some useful methods for common operations, such as `sync_ftp_files`, but in most cases code will need to be written from scratch or adapted from a similar ETL. 
+The `extract` function and its helper methods retrieve new data from the provider. As providers' publication formats, methods, and schedules vary greatly this will be the most custom (and therefore laborious) part of any ETL. DatasetManager provides some useful methods for common operations, such as `sync_ftp_files`, but in most cases code will need to be written from scratch or adapted from a similar ETL.
 
-`Update_local_input` can flexibly accept kwargs as required by the dataset being processed. Arbol's own ETLs make heavy use of the `date_range` kwargs. This kwarg parses a list of datetimes ([datetime.datetime, datetime.datetime]) into a range between which data will be downloaded and parsed.
+`extract` can flexibly accept kwargs as required by the dataset being processed. Arbol's own ETLs make heavy use of the `date_range` kwargs. This kwarg parses a list of datetimes ([datetime.datetime, datetime.datetime]) into a range between which data will be downloaded and parsed.
 
 For example, to download and parse CHIRPS Final 05 data between January 1, 2005 and June 31st, 2007 you would run the following
 
 ```python
     from examples.managers.chirps import CHIRPSFinal05
     etl = CHIRPSFinal05()
-    etl.update_local_input(date_range = [datetime.datetime(2005, 1, 1, 0), datetime.datetime(2007, 6, 31, 0)])
+    etl.extract(date_range = [datetime.datetime(2005, 1, 1, 0), datetime.datetime(2007, 6, 31, 0)])
 ```
 
 #### Processing
@@ -320,7 +320,7 @@ Metadata creation and updates should adopt the following logic to avoid unantici
 * To the extent possible, metadata common to all subclasses of a datasets -- spatial extent, provider description, etc. -- should be declared in a `static_metadata` property at the top of manager. 
 * Metadata which varies by subclass -- spatial resolution, unit of measurement, etc. -- should be declared as properties of that subclass and then populated w/in `static_metadata` by calls of those properties.
 * Dynamically generated metadata -- e.g. the data range or finalization date -- should be populated in `populate_metadata` (if dependent on ETL operations) or `set_zarr_metadata` (if dependent on the dataset) under `parse`. An example of the former might be the latest update time for a dataset, which is found during retrieval; an example of the latter might be to remove properties encoded in each file by the provider.
-* Metadata should never be edited within `update_local_input` or its helper methods. If reference to previous metadata or dataset properties is needed, read in the existing STAC metadata via `load_stac_metadata`.
+* Metadata should never be edited within `extract` or its helper methods. If reference to previous metadata or dataset properties is needed, read in the existing STAC metadata via `load_stac_metadata`.
 * The `encoding` of a zarr dataset or one of its dimensions or data variables should be as empty as possible. Only chunk size information and fields required by the [Climate and Forecasting Metadata Conventions](https://cfconventions.org/) should be stored under the data variable's encoding.
 
 How the resulting metadata is managed and published is described in the [metadata readme](./metadata_standard.md).
