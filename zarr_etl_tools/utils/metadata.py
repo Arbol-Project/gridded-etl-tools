@@ -484,13 +484,19 @@ class Metadata(Convenience, IPFS):
             Either an IPNS name hash or an empty dictionary (if no IPNS name hash found)
 
         """
-        if not key:
-            key = self.json_key()
-        try:
-            return self.ipns_retrieve_object(key)[0]
-        except (KeyError, TimeoutError):
+        if isinstance(self.store, IPLD):
+            if not key:
+                key = self.json_key()
+            try:
+                return self.ipns_retrieve_object(key)[0]
+            except (KeyError, TimeoutError):
+                self.warn(
+                    "STAC metadata requested but no STAC object found at the provided key. Returning empty dictionary"
+                )
+                return {}
+        else:
             self.warn(
-                "STAC metadata requested but no STAC object found at the provided key"
+                "STAC metadata requested but STAC not yet implemented in non-IPFS stores. Returning empty dictionary"
             )
             return {}
 
