@@ -280,7 +280,7 @@ class Creation(Convenience):
             Object representing the dataset described by the CID at `self.latest_hash()`
 
         """
-        mapper = IPLD(self).mapper(set_root=False)
+        mapper = self.store.mapper(set_root=False)
         mapper.set_root(ipfs_hash)
         dataset = xr.open_zarr(mapper)
         return dataset

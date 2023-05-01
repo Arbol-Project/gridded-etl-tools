@@ -8,6 +8,7 @@ import ipldstore
 import pathlib
 import fsspec
 import collections
+
 from .. import dataset_manager
 from abc import abstractmethod, ABC
 
@@ -187,6 +188,20 @@ class IPLD(StoreInterface):
     IPFS mapper will be returned that can be used to write new data to IPFS and generate a new recursive hash.
     """
 
+    def __init__(self, dm: dataset_manager.DatasetManager, host: str):
+        """
+        Get an interface to a dataset's Zarr hosted on a specifed IPFS HTTP API.
+
+        Parameters
+        ----------
+        dm : dataset_manager.DatasetManager
+            The dataset to be read or written.
+        host : str
+            The address of the IPFS HTTP API to use for IPFS operations
+        """
+        super().__init__(dm)
+        self._host = host
+
     def mapper(self, set_root: bool = True, **kwargs: dict) -> ipldstore.IPLDStore:
         """
         Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the associated dataset's
@@ -209,9 +224,9 @@ class IPLD(StoreInterface):
             An IPLD `MutableMapping`, usable, for example, to open a Zarr with `xr.open_zarr`
         """
         if self.dm.requested_ipfs_chunker:
-            mapper = ipldstore.get_ipfs_mapper(chunker=self.dm.requested_ipfs_chunker)
+            mapper = ipldstore.get_ipfs_mapper(host=self._host, chunker=self.dm.requested_ipfs_chunker)
         else:
-            mapper = ipldstore.get_ipfs_mapper()
+            mapper = ipldstore.get_ipfs_mapper(host=self._host)
         self.dm.info(f"IPFS chunker is {mapper._store._chunker}")
         if set_root and self.dm.latest_hash():
             mapper.set_root(self.dm.latest_hash())
