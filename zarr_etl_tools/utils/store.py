@@ -9,7 +9,6 @@ import pathlib
 import fsspec
 import collections
 
-from zarr_etl_tools import dataset_manager
 from .. import dataset_manager
 from abc import abstractmethod, ABC
 
