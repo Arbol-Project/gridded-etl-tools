@@ -172,7 +172,7 @@ class CHIRPS(DatasetManager):
         """Value to round bbox values by"""
         return 3
 
-    def update_local_input(self, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
+    def extract(self, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
         """
         Check CHIRPS HTTP server for files from the end year of or after our data's end date. Download necessary files. Check
         newest file and return `True` if it has newer data than us or `False` otherwise.

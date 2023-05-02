@@ -188,21 +188,7 @@ class IPLD(StoreInterface):
     IPFS mapper will be returned that can be used to write new data to IPFS and generate a new recursive hash.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager, host: str):
-        """
-        Get an interface to a dataset's Zarr hosted on a specifed IPFS HTTP API.
-
-        Parameters
-        ----------
-        dm : dataset_manager.DatasetManager
-            The dataset to be read or written.
-        host : str
-            The address of the IPFS HTTP API to use for IPFS operations
-        """
-        super().__init__(dm)
-        self._host = host
-
-    def mapper(self, set_root: bool = True, **kwargs: dict) -> ipldstore.IPLDStore:
+    def mapper(self, set_root: bool = True, refresh: bool = False, **kwargs: dict) -> ipldstore.IPLDStore:
         """
         Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the associated dataset's
         `requested_ipfs_chunker` property has been set.
@@ -215,6 +201,9 @@ class IPLD(StoreInterface):
         ----------
         set_root : bool
             Return a mapper rooted at the dataset's latest hash if `True`, otherwise return a new mapper.
+        refresh : bool
+            Force getting a new mapper by checking the latest IPNS hash. Without this set, the mapper will only be set the first time this
+            function is called.
         **kwargs
             Arbitrary keyword args supported for compatibility with S3 and Local.
 
@@ -223,14 +212,15 @@ class IPLD(StoreInterface):
         ipldstore.IPLDStore
             An IPLD `MutableMapping`, usable, for example, to open a Zarr with `xr.open_zarr`
         """
-        if self.dm.requested_ipfs_chunker:
-            mapper = ipldstore.get_ipfs_mapper(host=self._host, chunker=self.dm.requested_ipfs_chunker)
-        else:
-            mapper = ipldstore.get_ipfs_mapper(host=self._host)
-        self.dm.info(f"IPFS chunker is {mapper._store._chunker}")
-        if set_root and self.dm.latest_hash():
-            mapper.set_root(self.dm.latest_hash())
-        return mapper
+        if refresh or not hasattr(self, "_mapper"):
+            if self.dm.requested_ipfs_chunker:
+                self._mapper = ipldstore.get_ipfs_mapper(chunker=self.dm.requested_ipfs_chunker)
+            else:
+                self._mapper = ipldstore.get_ipfs_mapper()
+            self.dm.info(f"IPFS chunker is {self._mapper._store._chunker}")
+            if set_root and self.dm.latest_hash():
+                self._mapper.set_root(self.dm.latest_hash())
+        return self._mapper
 
     def __str__(self) -> str:
         """

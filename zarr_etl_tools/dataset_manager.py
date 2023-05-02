@@ -180,12 +180,23 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         ...
 
     @abstractmethod
-    def update_local_input(self):
+    def extract(self):
         """
         Check for updates to local input files (usually by checking a remote location where climate data publishers post updated
-        data)
+        data). Highly customized for every ETL.
         """
         self.new_files = []
+
+    def transform(self):
+        """
+        Rework downloaded data into a virtual Zarr JSON conforming to Arbol's standard format for gridded datasets
+        """
+        # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
+        self.populate_metadata()
+        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for MultiZarring
+        self.prepare_input_files()
+        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
+        self.create_zarr_json()
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):
@@ -347,10 +358,11 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
                 "action": "store_true",
                 "help": "only run the update local input function",
             },
-            "--only-prepare-input": {
+            "--only-transform": {
                 "action": "store_true",
-                "help": "Instead of running the full parse,just run the dataset manager's prepare_input_files and create_zarr_json methods.\
-                                This will also run the update input function unless --only-parse has been specified as well.",
+                "help": "Instead of running the full parse,just run the dataset manager's populate_metada, prepare_input_files,\
+                                and create_zarr_json methods. This will also run the update input function unless --only-parse \
+                                has been specified as well.",
             },
             "--local-output": {
                 "action": "store_true",
@@ -385,7 +397,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         rebuild: bool = False,
         only_parse: bool = False,
         only_update_input: bool = False,
-        only_prepare_input: bool = False,
+        only_transform: bool = False,
         only_metadata: bool = False,
         custom_output_path: str = None,
         custom_latest_hash: str = None,
@@ -424,7 +436,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         only_update_input : bool, optional
             A boolean to skip parsing data and only update local files. Defaults to False.
 
-        only_prepare_input : bool, optional
+        only_transform : bool, optional
             A boolean to skip updating and parsing data and only prepare the local Zarr JSON. Defaults to False.
 
         only_metadata : bool, optional
@@ -454,12 +466,12 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Initialize logging for the ETL
         manager.log_to_file()
         manager.log_to_file(level=logging.DEBUG)
-        # Set parse to False by default, unless user specifies `only_parse`. This will be changed to True if new files found by update_local_input
+        # Set parse to False by default, unless user specifies `only_parse`. This will be changed to True if new files found by extract
         trigger_parse = only_parse
         # update local files
         if only_parse:
             manager.info(
-                "only parse flag present,skipping update of local input and using locally available data"
+                "only parse flag present, skipping update of local input and using locally available data"
             )
         elif only_metadata:
             manager.info(
@@ -467,27 +479,30 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             )
         else:
             manager.info("updating local input")
-            # update_local_input will return True if parse should be triggered
-            trigger_parse = manager.update_local_input(
+            # extract will return True if parse should be triggered
+            trigger_parse = manager.extract(
                 rebuild=rebuild, date_range=date_range
             )
             if only_update_input:
                 # we're finished if only update input was set
                 manager.info("ending here because only update local input flag is set")
                 return
-        # only update metadata and/or prepare input if these flags are specified
+        # only update metadata and/or transform if these flags are specified
         if only_metadata:
             manager.info(f"preparing metadata for {manager}")
             manager.only_update_metadata()
             manager.info(f"Metadata for {manager} successfully updated")
-        if only_prepare_input:
+        if only_transform:
             manager.info(
-                "Only prepare input requested, just preparing source files for parsing and creating corresponding Zarr JSON file"
+                "Only transform requested, just preparing source files for parsing and creating corresponding Zarr JSON file"
             )
-            manager.prepare_input_files()
-            manager.create_zarr_json()
+            manager.transform()
         # parse if only_parse flag is set or if parse was triggered by local input update return value
         if trigger_parse:
+            # first transform data
+            manager.info(f"transforming raw {manager} datasets")
+            manager.transform()
+            manager.info(f"data for {manager} successfully transformed")
             manager.info(f"parsing {manager}")
             # parse will return `True` if new data was parsed
             if manager.parse():

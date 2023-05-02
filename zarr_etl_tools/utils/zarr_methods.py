@@ -58,8 +58,8 @@ class Creation(Convenience):
             for fil in self.input_files()
             if (fil.suffix == ".nc4" or fil.suffix == ".nc")
         ]
-        os.makedirs(self.zarr_json_path().parent, 0o755, True)
-        # Generate a multizarr if it doesn't exist. Otherwise move ahead
+        self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
+        # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
             self.info(f"Generating Zarr for {self.file_type} files")
             start_kerchunking = time.time()
@@ -72,6 +72,8 @@ class Creation(Convenience):
             self.info(
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
             )
+        else:
+            self.info(f"Existing Zarr found, using that")
 
     def kerchunkify(self, input_file: str):
         """
@@ -230,6 +232,9 @@ class Creation(Convenience):
             f"Converting {(len(list(raw_files)))} NetCDFs to NetCDF4 Classic files"
         )
         p_map(self.sb_nc_copy, job_args)
+        self.info(
+            f"{(len(list(raw_files)))} conversions finished"
+        )
 
     @staticmethod
     def sb_nc_copy(job_args):
@@ -346,12 +351,6 @@ class Publish(Creation, Metadata):
 
         """
         self.info("Running parse routine")
-        # Dynamically adjust metadata based on fields calculated during `update_local_input`, if necessary (usually not)
-        self.populate_metadata()
-        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for MultiZarring
-        self.prepare_input_files()
-        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
-        self.create_zarr_json()
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
         # Use a Dask client to open, process, and write the data

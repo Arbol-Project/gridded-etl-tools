@@ -16,8 +16,9 @@ An ETL can be run within a notebook or interactive environment (e.g. ipython) as
     from .managers.manager_script import MyNewETLDataset
 
     etl = MyNewETLDataset(store='ipld') # exports to IPFS
-    etl.update_local_input() # download the entire dataset, or just updates to the existing dataset
-    etl.parse() # process downloaded files into a new or update dataset and push it to the storage medium of choice
+    etl.extract() # download the entire dataset, or just updates to the existing dataset
+    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse()  # push this single Zarr it to the storage medium of choice
     
     # move onwards to retrieval (or whatever else your script demands)
 
@@ -32,8 +33,9 @@ An alternative configuration triggering a parse to Amazon's S3 cloud file store 
     os.environ['AWS_SECRET_ACCESS_KEY'] = <SECRET_KEY_STR>
 
     etl = MyNewETLDataset(store='s3', s3_bucket_name='my_bucket_name') # exports to s3
-    etl.update_local_input() # download the entire dataset, or just updates to the existing dataset
-    etl.parse() # process downloaded files into a new or update dataset and push it to the storage medium of choice
+    etl.extract()  # download the entire dataset, or just updates to the existing dataset
+    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse()  # push this single Zarr it to the storage medium of choice
     
     # move onwards to retrieval (or whatever else your script demands)
 ```
@@ -44,13 +46,14 @@ Finally, to export to your local file system run the following
     from .managers.manager_script import MyNewETLDataset
 
     etl = MyNewETLDataset(store='local') # exports to IPFS
-    etl.update_local_input() # download the entire dataset, or just updates to the existing dataset
-    etl.parse() # process downloaded files into a new or update dataset and push it to the storage medium of choice
+    etl.extract() # download the entire dataset, or just updates to the existing dataset
+    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse()  # push this single Zarr it to the storage medium of choice
 ```
 
 #### Passing parameters
 
-Note that if desired, kwargs can be passed to the ETL manager, `update_local_input` or `parse`. 
+Note that if desired, kwargs can be passed to the ETL manager, `extract` or `parse`.
 
 For example, if you want to allow your ETL to rebuild a dataset from scratch, overwriting any existing data in the process (a potentially dangerous operation!) you would invoke it like so
 
@@ -66,15 +69,15 @@ Or alternately, if you wished to write locally but to a custom location you woul
     etl = CHIRPSPrelim05(store='local', custom_output_path='~/path/to/desired/store/location/chirps_prelim_05.zarr')
 ```
 
-In another example, if you only wanted to download (not parse) data for the first half of 2022 you would pass kwargs to the `update_local_input` function
+In another example, if you only wanted to download (not parse) data for the first half of 2022 you would pass kwargs to the `extract` function
 
 ```python
     from examples.managers.chirps import CHIRPSPrelim05
     etl = CHIRPSPrelim05(store='ipld')
-    etl.update_local_input(date_range=[datetime.datetime(2022, 1, 1, 0), datetime.datetime(2022, 6, 31, 0)], only_update_input=True)
+    etl.extract(date_range=[datetime.datetime(2022, 1, 1, 0), datetime.datetime(2022, 6, 31, 0)], only_update_input=True)
 ```
 
-Consult the docstring for `dataset_manager.__init__` and `update_local_input` to see acceptable parameters you can pass.
+Consult the docstring for `dataset_manager.__init__` and `extract` to see acceptable parameters you can pass.
 
 
 ## Retrieving a dataset
@@ -198,7 +201,7 @@ Similarly, to run the script exporting to the local file store at `climate/your/
 
 ### Using run_etl
 
-Users looking to run all of an ETL at once can use the `run_etl` function. This runs `update_local_input` and `parse` in sequence, passing through kwargs to each of the respective functions.
+Users looking to run all of an ETL at once can use the `run_etl` function. This runs `extract` and `parse` in sequence, passing through kwargs to each of the respective functions.
 
 To see the full list of available options for `run_etl` call its docstring
 
@@ -214,7 +217,7 @@ To see the full list of available options for `run_etl` call its docstring
         rebuild: bool = False,
         only_parse: bool = False,
         only_update_input: bool = False,
-        only_prepare_input: bool = False,
+        only_transform: bool = False,
         only_metadata: bool = False,
         custom_output_path: str = None,
         custom_latest_hash: str = None,
@@ -254,7 +257,7 @@ To see the full list of available options for `run_etl` call its docstring
     only_update_input : bool, optional
         A boolean to skip parsing data and only update local files. Defaults to False.
 
-    only_prepare_input : bool, optional
+    only_transform : bool, optional
         A boolean to skip updating and parsing data and only prepare the local Zarr JSON. Defaults to False.
 
     only_metadata : bool, optional
