@@ -26,7 +26,7 @@ Each ETL should have a dedicated unit test for any important or unique processin
 Requirements
 ------------
 
-* A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](requirements.txt). See [the virtual environment setup walkthrough](doc/Python_virtual_environment.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
+* A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](requirements.txt). See [the virtual environment setup walkthrough](doc/Python_virtual_environments.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
 
 * [IPFS 0.10+](https://github.com/ipfs/go-ipfs/) node **with a running daemon** (see [further instructions](docs/ipfs_node_management.md) for installation on a Linux machine)
 
@@ -68,7 +68,7 @@ After running `extract` a folder containing the original data from CHIRPS is cre
     chirps-v2.0.2021.days_p25.nc
     chirps-v2.0.2022.days_p25.nc
 
-Now run the `transform` method to read all the files and transform them into a single Zarr, and  `parse` to place that Zarr on the desired store.
+Now run the `transform` method to read all the files and transform them into a single Zarr, and `parse` to place that Zarr on the desired store.
 
     etl.transform()
     etl.parse()
