@@ -53,6 +53,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
+        ipfs_host="http://127.0.0.1:5001",
         *args,
         **kwargs,
     ):
@@ -61,6 +62,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         Parameters
         ----------
+        ipfs_host : str, optional
+            The address of the IPFS HTTP API to use for IPFS operations
         rebuild_requested : bool, optional
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all available data from beginning
             to end.
@@ -87,7 +90,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             warning message.
         """
         # call IPFS init
-        super().__init__()
+        super().__init__(host=ipfs_host)
         # Set member variable defaults
         self.new_files = []
         self.custom_output_path = custom_output_path
@@ -100,7 +103,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         if store is None or store == "local":
             self.store = Local(self)
         elif store == "ipld":
-            self.store = IPLD(self)
+            self.store = IPLD(self, host=ipfs_host)
         elif store == "s3":
             self.store = S3(self, s3_bucket_name)
         else:
