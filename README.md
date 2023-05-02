@@ -36,7 +36,7 @@ Quickstart
 
 #### Setup
 
-First install the library from the github repository using `pip`. We recommend doing so within [a Python virtual environment](docs/python_virtual_environments.md).
+First install the library from the github repository using `pip`. We recommend doing so within [a Python virtual environment](docs/Python_virtual_environments.md).
 
     pip install git+https://github.com/Arbol-Project/zarr-climate-etl@generate
 
