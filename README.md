@@ -10,7 +10,7 @@ How to use this repository
 
 This repository provides a workflow for building climate data ETLs that output to IPFS, S3, or a local file system. This workflow utilizes a set of common methods in a predictable sequence to download raw data, transform it into suitable intermediate data files, lazily read them as Zarrs, and finally write the overall dataset to a Zarr on the desired storage medium. If a dataset already exists it will automatically update the existing dataset with any new files found during the process.
 
-Users of this library should build ETLS for a desired gridded climate dataset by importing the library within an ETL manager script, using the `DatasetManager` class from [DatasetManager](dataset_manager.py) as a base class, then applying its standardized workflow to the climate dataset in question. ETL child classes will need to overload one or many parent properties or methods from the [utils](utils) directory; the exact number depends on the intricacies of how the raw climate data is packaged. Where anticipated these methods are marked as **@abstractmethod** to prompt the user. See 
+Users of this library should build ETLS for a desired gridded climate dataset by importing the library within an ETL manager script, using the `DatasetManager` class from [DatasetManager](zarr_etl_tools/dataset_manager.py) as a base class, then applying its standardized workflow to the climate dataset in question. ETL child classes will need to overload one or many parent properties or methods from the [utils](zarr_etl_tools/utils) directory; the exact number depends on the intricacies of how the raw climate data is packaged. Where anticipated these methods are marked as **@abstractmethod** to prompt the user. See 
 
  The [ETL developers manual](docs/etl_developers_manual.md) provides precise instructions on how to build your own manager using the library. These are demonstrated in [an example ETL](examples/managers/chirps.py) for the [Climate Hazards Group InfraRed Precipitation with Station data (CHIRPS)](https://www.chc.ucsb.edu/data/chirps) dataset in the [managers](examples/managers) directory. The below graphic provides a high level overview of the full anticipated workflow and the key methods for each step.
 
@@ -20,13 +20,13 @@ Users of this library can run the ETLs they build on the command line or within 
 
 ETL logs are output to a [logs](logs) folder in the parent directory of your managers. Two types of logs are output, INFO and DEBUG. In practice the DEBUG log will be *very* verbose due to each individual Dask worker processes outputting to this log: use with care.
 
-Each ETL should have a dedicated unit test for any important or unique processing and parsing methods to ensure changes to the code base do not affect datasets in production and speed up development of the ETLs. Unit tests can be run from within the [tests](examples/tests) folder using `pytest`. Further instructions are included in [that directory's README](examples/tests/README.md).
+Each ETL should have a dedicated unit test for any important or unique processing and parsing methods to ensure changes to the code base do not affect datasets in production and speed up development of the ETLs. Unit tests can be run from within the [tests](tests) folder using `pytest`. Further instructions are included in [that directory's README](tests/README.md).
 
 
 Requirements
 ------------
 
-* A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](requirements.txt). See [the virtual environment setup walkthrough](doc/Python_virtual_environments.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
+* A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](setup.cfg). See [the virtual environment setup walkthrough](docs/Python_virtual_environments.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
 
 * [IPFS 0.10+](https://github.com/ipfs/go-ipfs/) node **with a running daemon** (see [further instructions](docs/ipfs_node_management.md) for installation on a Linux machine)
 
@@ -40,7 +40,7 @@ First install the library from the github repository using `pip`. We recommend d
 
     pip install git+https://github.com/Arbol-Project/zarr-climate-etl@generate
 
-Next install IPFS, as per [the docs](docs/ipfs_node_management.md).
+Next install IPFS, as per [the docs](docs/IPFS_Node_Management.md).
 
 Once the library and an IPFS node are installed, instantiate an IPFS daemon. Open a terminal and run
 
@@ -101,7 +101,7 @@ Note that the IPFS hash for a dataset can be found at any time by consulting the
 
 #### Further information 
 
-For further help invoking scripts and retrieving datasets, including over Amazon's s3 or a local file system, consult [the ETL running manual](docs/running_an_etl.md). To understand the various optional invocation flags, consult the docstring for the `run_etl` function in the [dataset_manager script](dataset_manager.py#296)
+For further help invoking scripts and retrieving datasets, including over Amazon's s3 or a local file system, consult [the ETL running manual](docs/running_an_etl.md). To understand the various optional invocation flags, consult the docstring for the `run_etl` function in the [dataset_manager script](zarr_etl_tools/dataset_manager.py#391)
 
 dClimate
 --------
@@ -118,11 +118,11 @@ Documentation for how to use this repository is spread over several files. A dev
 
 [Understanding this repository](docs/understanding_this_repository.md)
 
-[Setting up a Python environment](docs/python_virtual_environments.md)
+[Setting up a Python environment](docs/Python_virtual_environments.md)
 
 [Installing and managing an IPFS node](docs/ipfs_node_management.md)
 
-[Creating ETLs](docs/etl_developers_manual.md.md)
+[Creating ETLs](docs/etl_developers_manual.md)
 
 [Running ETLs](docs/running_an_etl.md)
 
@@ -130,9 +130,9 @@ Documentation for how to use this repository is spread over several files. A dev
 
 [Registering dataset sources](docs/registering_dataset_sources.md)
 
-[Building and running tests](examples/tests/README.md)
+[Building and running tests](tests/README.md)
 
-[Out of scope topics](docs/out_of_scope.md)
+[Out of scope topics](docs/Out_of_scope.md)
 
 [Development roadmap](docs/development_roadmap.md)
 
