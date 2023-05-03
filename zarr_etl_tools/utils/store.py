@@ -227,9 +227,9 @@ class IPLD(StoreInterface):
         """
         if refresh or not hasattr(self, "_mapper"):
             if self.dm.requested_ipfs_chunker:
-                self._mapper = ipldstore.get_ipfs_mapper(chunker=self.dm.requested_ipfs_chunker)
+                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host, chunker=self.dm.requested_ipfs_chunker)
             else:
-                self._mapper = ipldstore.get_ipfs_mapper()
+                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host)
             self.dm.info(f"IPFS chunker is {self._mapper._store._chunker}")
             if set_root and self.dm.latest_hash():
                 self._mapper.set_root(self.dm.latest_hash())
