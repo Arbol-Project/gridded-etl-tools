@@ -28,7 +28,7 @@ Requirements
 
 * A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](setup.cfg). See [the virtual environment setup walkthrough](docs/Python_virtual_environments.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
 
-* [IPFS 0.10+](https://github.com/ipfs/go-ipfs/) node **with a running daemon** (see [further instructions](docs/ipfs_node_management.md) for installation on a Linux machine)
+* [IPFS 0.10+](https://github.com/ipfs/go-ipfs/) node **with a running daemon** (see [further instructions](docs/IPFS_Node_Management.md) for installation on a Linux machine)
 
 
 Quickstart
@@ -120,7 +120,7 @@ Documentation for how to use this repository is spread over several files. A dev
 
 [Setting up a Python environment](docs/Python_virtual_environments.md)
 
-[Installing and managing an IPFS node](docs/ipfs_node_management.md)
+[Installing and managing an IPFS node](docs/IPFS_Node_Management.md)
 
 [Creating ETLs](docs/etl_developers_manual.md)
 
