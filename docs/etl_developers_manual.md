@@ -150,7 +150,7 @@ The following principles should guide your choice of Dask chunk dimensions, whic
 
 * Time chunks should be large (in the hundreds or thousands) to speed retrieval of large time series with relatively few chunks
 * Latitude/longitude chunks should be sufficiently large to enable queries over small areas in a single chunk, i.e. 16x 16 or 30 x 30.
-* Latitude and longitude chunk sizes must be even divisors of both range lengths -- e.g. PRISM has 120 latitudes and 300 longitudes, so 24 is chosen as a chunk size.
+* Latitude and longitude chunk sizes must be even divisors of both range lengths -- e.g. PRISM has 120 latitudes and 300 longitudes, so 20 is chosen as a chunk size.
 * Always set `longitude = -1` (all values) for Dask chunks as this greatly speeds up parses.
 * Therefore dask and zarr chunk sizes should be chosen such that `time * latitude * {all longitudes} = ~100-200 MB` and `time * latitude * {zarr chunk longitude size} = ~1-6MB`. 
 
