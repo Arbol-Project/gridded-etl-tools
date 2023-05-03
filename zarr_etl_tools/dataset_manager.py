@@ -103,7 +103,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         if store is None or store == "local":
             self.store = Local(self)
         elif store == "ipld":
-            self.store = IPLD(self, host=ipfs_host)
+            self.store = IPLD(self)
         elif store == "s3":
             self.store = S3(self, s3_bucket_name)
         else:
