@@ -188,19 +188,6 @@ class IPLD(StoreInterface):
     IPFS mapper will be returned that can be used to write new data to IPFS and generate a new recursive hash.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager, host: str):
-        """
-        Get an interface to a dataset's Zarr hosted on a specifed IPFS HTTP API.
-        Parameters
-        ----------
-        dm : dataset_manager.DatasetManager
-            The dataset to be read or written.
-        host : str
-            The address of the IPFS HTTP API to use for IPFS operations
-        """
-        super().__init__(dm)
-        self._host = host
-
     def mapper(self, set_root: bool = True, refresh: bool = False, **kwargs: dict) -> ipldstore.IPLDStore:
         """
         Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the associated dataset's
@@ -227,9 +214,9 @@ class IPLD(StoreInterface):
         """
         if refresh or not hasattr(self, "_mapper"):
             if self.dm.requested_ipfs_chunker:
-                self._mapper = ipldstore.get_ipfs_mapper(chunker=self.dm.requested_ipfs_chunker)
+                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host, chunker=self.dm.requested_ipfs_chunker)
             else:
-                self._mapper = ipldstore.get_ipfs_mapper()
+                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host)
             self.dm.info(f"IPFS chunker is {self._mapper._store._chunker}")
             if set_root and self.dm.latest_hash():
                 self._mapper.set_root(self.dm.latest_hash())
