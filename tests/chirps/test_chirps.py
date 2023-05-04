@@ -110,7 +110,8 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
-    # Test parse
+    # run ETL
+    manager.transform()
     manager.parse()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
@@ -137,6 +138,8 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform()
     manager.parse()
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
     generated_dataset = manager.zarr_hash_to_dataset(manager.dataset_hash)
