@@ -1,7 +1,6 @@
 import os
 import datetime
 import multiprocessing
-import multiprocessing.pool
 import time
 import json
 import re
