@@ -18,7 +18,7 @@ import xarray as xr
 
 from shapely import geometry
 from tqdm import tqdm
-from p_tqdm import p_imap
+from p_tqdm import p_umap
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.combine import MultiZarrToZarr
 from dask.distributed import Client, LocalCluster
@@ -230,7 +230,7 @@ class Creation(Convenience):
         self.info(
             f"Converting {(len(list(raw_files)))} NetCDFs to NetCDF4 Classic files"
         )
-        p_imap(self.sb_nc_copy, job_args)
+        p_umap(self.sb_nc_copy, job_args)
         self.info(
             f"{(len(list(raw_files)))} conversions finished"
         )
