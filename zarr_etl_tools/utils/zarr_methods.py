@@ -18,7 +18,7 @@ import xarray as xr
 
 from shapely import geometry
 from tqdm import tqdm
-from p_tqdm import p_umap
+from subprocess import Popen
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.combine import MultiZarrToZarr
 from dask.distributed import Client, LocalCluster
@@ -172,6 +172,49 @@ class Creation(Convenience):
 
     # CONVERT FILES
 
+    def parallel_subprocess(
+            self,
+            input_files: list[pathlib.Path],
+            command_text: list[str],
+            replacement_suffix: str,
+            keep_originals: bool = False
+    ):
+        """
+        Run a command line operation on a set of input files. In most cases, replace each file with an alternative file.
+
+        Optionally, keep the original files for development and testing purposes.
+
+        Parameters
+        ----------
+        raw_files : list
+            A list of pathlib.Path objects referencing the original files prior to processing
+        command_text : list[str]
+            A list of strings to reconstruct into a shell command
+        replacement_suffix : str
+            The desired extension of the file(s) created by the shell routine. Replaces the old extension.
+        keep_originals : bool, optional
+            An optional flag to preserve the original files for debugging purposes. Defaults to False.
+        """
+        # set up and run conversion subprocess on command line
+        commands = []
+        for existing_file in input_files:
+            new_file = existing_file.with_suffix(replacement_suffix)
+            commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
+                    list(map(str, command_text + [existing_file, new_file]))
+                 )
+        # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
+        processes = [ Popen(command) for command in commands ]
+        for process in processes:
+            process.wait()
+        self.info(
+            f"{(len(list(input_files)))} conversions finished, cleaning up original files"
+        )
+        # Get rid of original files that were converted
+        self.delete_original_files(input_files, keep_originals)
+        self.info(
+            f"Cleanup finished"
+        )
+
     def convert_to_lowest_common_time_denom(
         self, raw_files: list, keep_originals: bool = False
     ):
@@ -188,26 +231,10 @@ class Creation(Convenience):
         keep_originals : bool, optional
             An optional flag to preserve the original files for debugging purposes. Defaults to False.
         """
-        if raw_files:
-            originals_dir = pathlib.Path(raw_files[0]).parent.parent / (
-                pathlib.Path(raw_files[0]).parent.stem + "_originals"
-            )
-            for raw_file in raw_files:
-                command_args = [
-                    "cdo",
-                    "-f",
-                    "nc4",
-                    "splitsel,1",
-                    raw_file,
-                    os.path.splitext(raw_file)[0],
-                ]  # subprocess CDO doesn't like pathlib paths, must use strings
-                subprocess.run(command_args, check=True)
-                raw_file = pathlib.Path(raw_file)
-                if keep_originals:
-                    originals_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-                    raw_file.rename(originals_dir / raw_file.name)
-                else:
-                    raw_file.unlink()
+        if len(list(raw_files)) == 0:
+            raise FileNotFoundError("No files found to convert, exiting script")
+        command_text = ["cdo", "-f", "nc4", "splitsel,1"]
+        self.parallel_subprocess(raw_files, command_text, '', keep_originals)
 
     def ncs_to_nc4s(self, keep_originals: bool = False):
         """
@@ -222,50 +249,40 @@ class Creation(Convenience):
         keep_originals : bool
             A flag to preserve the original files for debugging purposes.
         """
-        input_dir = pathlib.Path(self.local_input_path())
-        # Build a series of (filename, keep_originals) tuples to pass in parallel to p_map
-        raw_files = glob.glob(str(input_dir / "*.nc"))
-        job_args = [(raw_file, keep_originals) for raw_file in raw_files]
+        # Build a list of files for manipulation
+        raw_files = [pathlib.Path(file) for file in glob.glob(str(self.local_input_path() / "*.nc"))]
+        if len(list(raw_files)) == 0:
+            raise FileNotFoundError("No files found to convert, exiting script")
         # convert raw NetCDFs to NetCDF4-Classics in parallel
         self.info(
             f"Converting {(len(list(raw_files)))} NetCDFs to NetCDF4 Classic files"
         )
-        p_umap(self.sb_nc_copy, job_args)
-        self.info(
-            f"{(len(list(raw_files)))} conversions finished"
-        )
+        command_text = ["nccopy", "-k", "netCDF-4 classic model"]
+        self.parallel_subprocess(raw_files, command_text, '.nc4', keep_originals)
 
-    @staticmethod
-    def sb_nc_copy(job_args):
+    def delete_original_files(self, files: list, keep_originals: bool = False):
         """
-        Static method to convert an input NetCDF file into a NetCDF4 file.
-        Meant to be used in parallel w/ arguments provided as an iterable.
+        Clean up original files
         Optionally moves the original file to a "<dataset_name>_originals" folder for reference
 
         Parameters
         ----------
-        job_args : tuple
-            An iterable of (str, bool) elements indicating the file path and whether to keep the original file.
+        files : list
+            A list of original files to delete or save
+
+        keep_originals : bool
+            A boolean indicating whether to preserve the original files (for dev purposes)
         """
-        # define file paths
-        file, keep_originals = job_args[0], job_args[1]
-        file = pathlib.Path(file)
-        originals_dir = file.parents[1] / (file.parent.stem + "_originals")
-        # set up and run conversion subprocess on command line
-        subprocess_args = [
-            "nccopy",
-            "-k",
-            "netCDF-4 classic model",
-            file,
-            file.with_suffix(".nc4"),
-        ]
-        subprocess.run(subprocess_args, check=True)
-        # keep or get rid of original files
-        if keep_originals:
-            pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
-            file.rename(originals_dir / file.name)
-        else:
-            file.unlink()
+        # use the first file to define the originals_dir path
+        first_file = files[0]
+        originals_dir = first_file.parents[1] / (first_file.stem + "_originals")
+        for file in files:
+            # keep or get rid of original files
+            if keep_originals:
+                pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
+                file.rename(originals_dir / file.name)
+            else:
+                file.unlink()
 
     # RETURN DATASET
 
