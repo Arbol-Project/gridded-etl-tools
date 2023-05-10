@@ -172,7 +172,7 @@ class Creation(Convenience):
 
     # CONVERT FILES
 
-    def parallel_subprocess(
+    def parallel_subprocess_files(
             self,
             input_files: list[pathlib.Path],
             command_text: list[str],
@@ -234,7 +234,7 @@ class Creation(Convenience):
         if len(list(raw_files)) == 0:
             raise FileNotFoundError("No files found to convert, exiting script")
         command_text = ["cdo", "-f", "nc4", "splitsel,1"]
-        self.parallel_subprocess(raw_files, command_text, '', keep_originals)
+        self.parallel_subprocess_files(raw_files, command_text, '', keep_originals)
 
     def ncs_to_nc4s(self, keep_originals: bool = False):
         """
@@ -258,7 +258,7 @@ class Creation(Convenience):
             f"Converting {(len(list(raw_files)))} NetCDFs to NetCDF4 Classic files"
         )
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
-        self.parallel_subprocess(raw_files, command_text, '.nc4', keep_originals)
+        self.parallel_subprocess_files(raw_files, command_text, '.nc4', keep_originals)
 
     def delete_original_files(self, files: list, keep_originals: bool = False):
         """
