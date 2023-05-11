@@ -176,6 +176,7 @@ class IPFS:
     def ipns_generate_name(self, key: str = None) -> str:
         """
         Generate a stable IPNS name hash to populate the `href` field of any STAC Object.
+        If a name hash already exits, return it.
 
         Parameters
         ----------
@@ -204,7 +205,7 @@ class IPFS:
 
     def ipns_retrieve_object(self, ipns_name: str) -> tuple[dict, str]:
         """
-        Retrieve a JSON object using its IPNS name key.
+        Retrieve a JSON object using its human readable IPNS name key.
 
         Parameters
         ----------
@@ -218,9 +219,10 @@ class IPFS:
         tuple[dict, str, str] | None
             A tuple of the JSON and the hash part of the IPNS key pair
         """
+        ipns_key_hash = self.ipns_key_list()[ipns_name]
         ipfs_hash = self.ipns_resolve(ipns_name)
         json_obj = self.ipfs_get(ipfs_hash)
-        return json_obj, ipns_name
+        return json_obj, ipns_key_hash
 
     # RETRIEVE LATEST OBJECT
 
