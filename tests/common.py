@@ -98,12 +98,12 @@ original_root_stac_catalog = DatasetManager.default_root_stac_catalog
 
 def patched_root_stac_catalog(self):
     return {
-        "id": f"{self.host_organization}_data_catalog_test",
+        "id": f"{self.host_organization()}_data_catalog_test",
         "type": "Catalog",
-        "title": f"{self.host_organization} Data Catalog - test",
+        "title": f"{self.host_organization()} Data Catalog - test",
         "stac_version": "1.0.0",
         "description": f"This catalog contains all the data uploaded by \
-            {self.host_organization} that has been issued STAC-compliant metadata. \
+            {self.host_organization()} that has been issued STAC-compliant metadata. \
             The catalogs and collections describe single providers. Each may contain one or multiple datasets. \
             Each individual dataset has been documented as STAC Items."
         }

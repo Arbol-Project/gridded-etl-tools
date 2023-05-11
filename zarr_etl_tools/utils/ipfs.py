@@ -110,10 +110,11 @@ class IPFS:
         str
             The IPFS hash corresponding to a given IPNS name hash
         """
+        ipns_key =  self.ipns_key_list()[key]
         res = self.ipfs_session.post(
             self._host + "/api/v0/name/resolve",
             timeout=self._default_timeout,
-            params={"arg": key},
+            params={"arg": ipns_key},
         )
         res.raise_for_status()
         return res.json()["Path"][6:]  # 6: shaves off leading '/ipfs/'
@@ -199,9 +200,9 @@ class IPFS:
             res.raise_for_status()
             return res.json()["Id"]
         else:
-            self.info(f"Key '{key}' already found in key list, skipping generation")
+            return self.ipns_key_list()[key]
 
-    def ipns_retrieve_object(self, key: str) -> tuple[dict, str, str] | None:
+    def ipns_retrieve_object(self, ipns_name: str) -> tuple[dict, str]:
         """
         Retrieve a JSON object using its IPNS name key.
 
@@ -215,13 +216,11 @@ class IPFS:
         Returns
         -------
         tuple[dict, str, str] | None
-            A tuple of the JSON, the hash part of the IPNS key pair, and the IPFS/IPLD hash the IPNS key pair resolves
-            to, or None if the object is not found
+            A tuple of the JSON and the hash part of the IPNS key pair
         """
-        ipns_name_hash = self.ipns_key_list()[key]
-        ipfs_hash = self.ipns_resolve(ipns_name_hash)
+        ipfs_hash = self.ipns_resolve(ipns_name)
         json_obj = self.ipfs_get(ipfs_hash)
-        return json_obj, ipns_name_hash, ipfs_hash
+        return json_obj, ipns_name
 
     # RETRIEVE LATEST OBJECT
 
@@ -276,11 +275,11 @@ class IPFS:
             if "stac_version" not in obj_json:
                 raise TypeError
         except TypeError:
-            self.info(f"Non-STAC compliant object found for {key}, recreating object")
+            self.info(f"Non-STAC compliant object found for {key}")
             exists = False
         except (KeyError, ValueError):
             self.info(
-                f"No existing STAC-compliant object found for {key}. Creating new object, pushing it to IPFS, and populating any linked collections/catalogs"
+                f"No existing STAC-compliant object found for {key}."
             )
             exists = False
         except (HTTPError, TimeoutError):

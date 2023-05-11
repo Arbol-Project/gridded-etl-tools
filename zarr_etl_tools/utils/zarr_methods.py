@@ -381,7 +381,10 @@ class Publish(Creation, Metadata):
                         self.info(f"Data at {self.store} will be replaced.")
                     self.write_initial_zarr()
                 else:
-                    self.zarr_to_ipld()
+                    raise RuntimeError(
+                        "There is already a zarr at the specified path and a rebuild is requested, "
+                        "but overwrites are not allowed."
+                    )
             except KeyboardInterrupt:
                 self.info(
                     "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
@@ -389,6 +392,36 @@ class Publish(Creation, Metadata):
                 client.close()
 
         return True
+
+    def publish_metadata(self):
+        """
+        Publishes STAC metadata to the backing store
+        """
+        if isinstance(self.store, IPLD):
+            if not hasattr(self, "dataset_hash"):
+                previous_hash = self.latest_hash()
+                if not previous_hash:
+                    raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
+                self.dataset_hash = previous_hash
+            current_zarr = self.zarr_hash_to_dataset(self.dataset_hash)
+        else:
+            current_zarr = self.store.dataset(set_root=True)
+
+        if not current_zarr:
+            raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
+
+        if not hasattr(self, "metadata"):
+            # This will occur when user is only updating metadata and has not parsed
+            self.populate_metadata()
+
+        self.create_root_stac_catalog()
+        made_new_stac_collection = self.create_stac_collection(current_zarr)
+        if not made_new_stac_collection:
+            self.update_stac_collection(current_zarr)
+
+        # Create and publish metadata as a STAC Item
+        self.create_stac_item(current_zarr, self.dataset_hash)
+
 
     def to_zarr(self, dataset: xr.Dataset, *args, **kwargs):
         """
@@ -438,6 +471,7 @@ class Publish(Creation, Metadata):
             empty_dataset.to_zarr(self.store.mapper(), append_dim="time")
 
     # SETUP
+
 
     def dask_configuration(self):
         """
@@ -515,16 +549,8 @@ class Publish(Creation, Metadata):
         mapper = self.store.mapper(set_root=False)
 
         self.to_zarr(dataset, mapper, consolidated=True, mode="w")
-
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
-            self.info(f"IPFS hash is {str(self.dataset_hash)}")
-
-            # Create and publish metadata as a STAC Item
-            self.create_root_stac_catalog()
-            self.create_stac_collection(dataset)
-            self.create_stac_item(dataset, self.dataset_hash)
-            self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
     # UPDATES
 
@@ -632,11 +658,6 @@ class Publish(Creation, Metadata):
             self.append_to_dataset(update_dataset, append_times, original_chunks)
         else:
             self.info("No new records to append to original zarr")
-
-        # In the case of IPLD store, update STAC
-        if isinstance(self.store, IPLD):
-            # Regenerate the STAC Item and update the relevant Collection entry with the final hash
-            self.finalize_update_metadata()
 
     def insert_into_dataset(
         self,
@@ -809,11 +830,3 @@ class Publish(Creation, Metadata):
 
         return datetime_ranges, regions_indices
 
-    def finalize_update_metadata(self):
-        """
-        Publish updated STAC Item and Collection metadata reflecting the new dataset hash and parameters
-        """
-        final_dataset = self.zarr_hash_to_dataset(self.dataset_hash)
-        self.info(f"IPFS hash is {str(self.dataset_hash)}")
-        self.create_stac_item(final_dataset, self.dataset_hash)
-        self.update_stac_collection(final_dataset)
