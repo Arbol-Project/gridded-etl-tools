@@ -240,7 +240,7 @@ class CHIRPS(DatasetManager):
             A flag to preserve the original files for debugging purposes. Defaults to False.
         """
         input_dir = pathlib.Path(self.local_input_path())
-        yearlies = glob.glob(str(input_dir / "*.nc"))
+        yearlies = [pathlib.Path(file) for file in glob.glob(str(input_dir / "*.nc"))]
         if len(yearlies) == 0:
             if glob.glob(str(input_dir / "*.nc4")):
                 self.info("Only converted NC4s found, skipping preparation step")
@@ -252,6 +252,8 @@ class CHIRPS(DatasetManager):
             self.convert_to_lowest_common_time_denom(yearlies, keep_originals)
             # Convert all NCs to NC4s
             self.ncs_to_nc4s(keep_originals)
+
+        self.info("Finished preparing input files")
 
     def remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
         """
