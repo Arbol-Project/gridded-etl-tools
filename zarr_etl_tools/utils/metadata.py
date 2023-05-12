@@ -136,10 +136,8 @@ class Metadata(Convenience, IPFS):
         """
         if isinstance(self.store, IPLD):
             return self.check_stac_on_ipns(title)
-        elif isinstance(self.store, Local):
-            return pathlib.Path.exists(get_local_stac_path(title, stac_type))
         else:
-            raise NotImplementedError
+            return self.store.metadata_exists(title, stac_type.value)
 
     def publish_stac(self, title: str, stac_content: dict, stac_type: "StacType"):
         """Publish a STAC entity to the backing store
@@ -155,17 +153,10 @@ class Metadata(Convenience, IPFS):
         """
         if isinstance(self.store, IPLD):
             self.ipns_publish(title, self.ipfs_put(self.json_to_bytes(stac_content)))
-        elif isinstance(self.store, Local):
-            local_path = get_local_stac_path(title, stac_type)
-            local_path.parent.mkdir(exist_ok=True, parents=True)
-            with open(local_path, "w") as f:
-                json.dump(stac_content, f)
         else:
-            raise NotImplementedError
+            self.store.push_metadata(title, stac_content, stac_type.value)
 
-    def retrieve_stac(
-        self, title: str, stac_type: "StacType"
-    ) -> tuple[dict, str | pathlib.Path]:
+    def retrieve_stac(self, title: str, stac_type: "StacType") -> tuple[dict, str]:
         """Retrieve a STAC entity and its href from the backing store
 
         Parameters
@@ -182,12 +173,8 @@ class Metadata(Convenience, IPFS):
         """
         if isinstance(self.store, IPLD):
             return self.ipns_retrieve_object(title)
-        elif isinstance(self.store, Local):
-            local_path = get_local_stac_path(title, stac_type)
-            with open(local_path) as f:
-                return json.load(f), str(local_path)
         else:
-            raise NotImplementedError
+            return self.store.retrieve_metadata(title, stac_type.value)
 
     def get_href(self, title: str, stac_type: "StacType") -> str:
         """Get a STAC entity's href from the backing store. Might be
@@ -207,10 +194,8 @@ class Metadata(Convenience, IPFS):
         """
         if isinstance(self.store, IPLD):
             return self.ipns_generate_name(key=title)
-        elif isinstance(self.store, Local):
-            return str(get_local_stac_path(title, stac_type))
         else:
-            raise NotImplementedError
+            return str(self.store.get_metadata_path(title, stac_type.value))
 
     def create_root_stac_catalog(self):
         """
@@ -245,9 +230,7 @@ class Metadata(Convenience, IPFS):
             )
             ...
 
-    def create_stac_collection(
-        self, dataset: xr.Dataset, rebuild: bool = False
-    ):
+    def create_stac_collection(self, dataset: xr.Dataset, rebuild: bool = False):
         """
         Prepare a parent collection for the dataset the first time it's created.
         In order to check for the collection's existence we must populate the relevant dictionary first in order to use its attributes.
@@ -377,7 +360,7 @@ class Metadata(Convenience, IPFS):
         elif isinstance(self.store, Local):
             zarr_href = str(self.store.path)
         else:
-            raise NotImplementedError
+            zarr_href = self.store.url
         stac_item["assets"]["zmetadata"]["href"] = zarr_href
         stac_item["properties"] = properties_dict
         # Push to backing store w/ link to href
@@ -833,7 +816,3 @@ class StacType(Enum):
     ITEM = "datasets"
     COLLECTION = "collections"
     CATALOG = ""
-
-
-def get_local_stac_path(title: str, stac_type: StacType) -> pathlib.Path:
-    return (pathlib.Path() / "metadata" / stac_type.value / f"{title}.json").resolve()
