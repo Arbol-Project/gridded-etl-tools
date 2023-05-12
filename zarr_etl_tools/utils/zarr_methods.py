@@ -397,16 +397,7 @@ class Publish(Creation, Metadata):
         """
         Publishes STAC metadata to the backing store
         """
-        if isinstance(self.store, IPLD):
-            if not hasattr(self, "dataset_hash"):
-                previous_hash = self.latest_hash()
-                if not previous_hash:
-                    raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
-                self.dataset_hash = previous_hash
-            current_zarr = self.zarr_hash_to_dataset(self.dataset_hash)
-        else:
-            current_zarr = self.store.dataset(set_root=True)
-
+        current_zarr = self.store.dataset()
         if not current_zarr:
             raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
 
@@ -414,13 +405,14 @@ class Publish(Creation, Metadata):
             # This will occur when user is only updating metadata and has not parsed
             self.populate_metadata()
 
+        # This will do nothing if catalog already exists
         self.create_root_stac_catalog()
-        made_new_stac_collection = self.create_stac_collection(current_zarr)
-        if not made_new_stac_collection:
-            self.update_stac_collection(current_zarr)
+
+        # This will update the stac collection if it already exists
+        self.create_stac_collection(current_zarr)
 
         # Create and publish metadata as a STAC Item
-        self.create_stac_item(current_zarr, self.dataset_hash)
+        self.create_stac_item(current_zarr)
 
 
     def to_zarr(self, dataset: xr.Dataset, *args, **kwargs):

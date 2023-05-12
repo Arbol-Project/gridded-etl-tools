@@ -247,7 +247,7 @@ class Metadata(Convenience, IPFS):
 
     def create_stac_collection(
         self, dataset: xr.Dataset, rebuild: bool = False
-    ) -> bool:
+    ):
         """
         Prepare a parent collection for the dataset the first time it's created.
         In order to check for the collection's existence we must populate the relevant dictionary first in order to use its attributes.
@@ -327,14 +327,13 @@ class Metadata(Convenience, IPFS):
                 },
             ]
             self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
-            return True
         else:
             self.info(
-                "Found existing STAC Collection for this dataset, skipping creation"
+                "Found existing STAC Collection for this dataset, skipping creation and updating instead"
             )
-            return False
+            self.update_stac_collection(dataset)
 
-    def create_stac_item(self, dataset: xr.Dataset, dataset_hash: str):
+    def create_stac_item(self, dataset: xr.Dataset):
         """
         Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal, and data dimensions into a STAC Item-compliant JSON.
         Push this JSON to IPFS and its relevant parent STAC Collection via `register_stac_item`
@@ -343,8 +342,6 @@ class Metadata(Convenience, IPFS):
         ----------
         dataset : xr.Dataset
             The dataset being published
-        dataset_hash : str
-            The CID of the dataset being published
         """
         self.info("Creating STAC Item")
         stac_item = self.default_stac_item()
@@ -376,7 +373,7 @@ class Metadata(Convenience, IPFS):
             shapely.geometry.mapping(shapely.geometry.box(minx, miny, maxx, maxy))
         )
         if isinstance(self.store, IPLD):
-            zarr_href = {"/": dataset_hash}
+            zarr_href = {"/": self.latest_hash()}
         elif isinstance(self.store, Local):
             zarr_href = str(self.store.path)
         else:

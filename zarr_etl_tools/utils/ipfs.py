@@ -176,7 +176,7 @@ class IPFS:
     def ipns_generate_name(self, key: str = None) -> str:
         """
         Generate a stable IPNS name hash to populate the `href` field of any STAC Object.
-        If a name hash already exits, return it.
+        If a name hash already exists, return it.
 
         Parameters
         ----------
@@ -205,7 +205,8 @@ class IPFS:
 
     def ipns_retrieve_object(self, ipns_name: str) -> tuple[dict, str]:
         """
-        Retrieve a JSON object using its human readable IPNS name key.
+        Retrieve a JSON object using its human readable IPNS name key
+        (e.g. 'prism-precip-hourly).
 
         Parameters
         ----------
@@ -247,8 +248,11 @@ class IPFS:
         else:
             if key is None:
                 key = self.json_key()
-            if self.check_stac_on_ipns(key):
-                # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}` it finds to a CID object. Convert it bck to a hash
+            if hasattr(self, "dataset_hash") and self.dataset_hash:
+                return self.dataset_hash
+            elif self.check_stac_on_ipns(key):
+                # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
+                # it finds to a CID object. Convert it back to a hash of type `str``
                 return str(
                     self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(
                         base=self._default_base
