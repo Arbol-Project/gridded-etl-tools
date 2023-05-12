@@ -23,19 +23,18 @@ class Convenience(Attributes):
 
     # BASE DIRECTORIES
 
-    @property
-    def root_directory(self):
-        return (
-            pathlib.Path.cwd()
-        )  # Paths are relative to the working directory of the ETL manager, *not* the scripts
+    def root_directory(self, refresh: bool = False):
+        if refresh or not hasattr(self, "_root_directory"):  # ensure this is only calculated one time, at the beginning of the script
+            self._root_directory = pathlib.Path.cwd()  # Paths are relative to the working directory of the ETL manager, *not* the scripts
+        return self._root_directory
 
     @property
     def local_input_root(self):
-        return self.root_directory / "datasets"
+        return self.root_directory() / "datasets"
 
     @property
     def output_root(self):
-        return self.root_directory / "climate"
+        return self.root_directory() / "climate"
 
     # NAMES
 
@@ -48,7 +47,7 @@ class Convenience(Attributes):
         pathlib.Path
             The path to the virtual Zarr JSON file
         """
-        return self.root_directory / f"{self.name()}_zarr.json"
+        return self.root_directory() / f"{self.name()}_zarr.json"
 
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:
