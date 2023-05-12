@@ -47,7 +47,7 @@ class Convenience(Attributes):
         pathlib.Path
             The path to the virtual Zarr JSON file
         """
-        return self.root_directory / f"{self.name()}_zarr.json"
+        return self.root_directory() / f"{self.name()}_zarr.json"
 
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:
