@@ -110,7 +110,7 @@ class IPFS:
         str
             The IPFS hash corresponding to a given IPNS name hash
         """
-        ipns_key =  self.ipns_key_list()[key]
+        ipns_key = self.ipns_key_list()[key]
         res = self.ipfs_session.post(
             self._host + "/api/v0/name/resolve",
             timeout=self._default_timeout,
@@ -284,9 +284,7 @@ class IPFS:
             self.info(f"Non-STAC compliant object found for {key}")
             exists = False
         except (KeyError, ValueError):
-            self.info(
-                f"No existing STAC-compliant object found for {key}."
-            )
+            self.info(f"No existing STAC-compliant object found for {key}.")
             exists = False
         except (HTTPError, TimeoutError):
             self.info(f"No object found at {key}")

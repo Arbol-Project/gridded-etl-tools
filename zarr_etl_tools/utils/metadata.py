@@ -1,13 +1,11 @@
 from enum import Enum
 import json
-import pathlib
 import datetime
 import shapely
 import numcodecs
 
 import numpy as np
 import xarray as xr
-from shapely import geometry
 
 from .ipfs import IPFS
 from .convenience import Convenience
@@ -539,7 +537,6 @@ class Metadata(Convenience, IPFS):
         ]
         # Publish STAC Collection with updated fields
         self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
-
 
     def load_stac_metadata(self, key: str = None) -> str | dict:
         """

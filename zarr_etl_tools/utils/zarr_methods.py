@@ -16,7 +16,6 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from shapely import geometry
 from tqdm import tqdm
 from p_tqdm import p_umap
 from kerchunk.hdf import SingleHdf5ToZarr
@@ -72,7 +71,7 @@ class Creation(Convenience):
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
             )
         else:
-            self.info(f"Existing Zarr found, using that")
+            self.info("Existing Zarr found, using that")
 
     def kerchunkify(self, input_file: str):
         """
@@ -414,7 +413,6 @@ class Publish(Creation, Metadata):
         # Create and publish metadata as a STAC Item
         self.create_stac_item(current_zarr)
 
-
     def to_zarr(self, dataset: xr.Dataset, *args, **kwargs):
         """
         Wrapper around `xr.Dataset.to_zarr`. `*args` and `**kwargs` are forwarded to `to_zarr`. The dataset to write to Zarr must be the first argument.
@@ -463,7 +461,6 @@ class Publish(Creation, Metadata):
             empty_dataset.to_zarr(self.store.mapper(), append_dim="time")
 
     # SETUP
-
 
     def dask_configuration(self):
         """
@@ -821,4 +818,3 @@ class Publish(Creation, Metadata):
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
-

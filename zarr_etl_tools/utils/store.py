@@ -130,8 +130,10 @@ class S3(StoreInterface):
                     key=os.environ["AWS_ACCESS_KEY_ID"],
                     secret=os.environ["AWS_SECRET_ACCESS_KEY"]
                     )
-            except KeyError:  # KeyError indicates credentials have not been manually specified
-                self._fs = s3fs.S3FileSystem() # credentials automatically supplied from ~/.aws/credentials
+            # KeyError indicates credentials have not been manually specified
+            except KeyError:
+                # credentials automatically supplied from ~/.aws/credentials
+                self._fs = s3fs.S3FileSystem()
             self.dm.info("Connected to S3 filesystem")
         return self._fs
 
