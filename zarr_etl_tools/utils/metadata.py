@@ -265,7 +265,7 @@ class Metadata(Convenience, IPFS):
                     self.numpydate_to_py(dataset.time.values.max()).isoformat() + "Z",
                 ]
             ]
-            # Create an IPNS name corresponding to the collection in order to note this in the collection and root catalog.
+            # Create an href corresponding to the collection in order to note this in the collection and root catalog.
             href = self.get_href(self.collection(), StacType.COLLECTION)
             # Append collection to the root catalog if it doesn't already exist
             root_catalog, root_catalog_href = self.retrieve_stac(
@@ -438,14 +438,14 @@ class Metadata(Convenience, IPFS):
         """
         self.info("Registering STAC Item in IPFS and its parent STAC Collection")
         # Generate variables of interest
-        stac_coll, href = self.retrieve_stac(
+        stac_coll, collection_href = self.retrieve_stac(
             str(self.collection()), StacType.COLLECTION
         )
         # Register links
         stac_item["links"].append(
             {
                 "rel": "parent",
-                "href": str(href),
+                "href": str(collection_href),
                 "type": "application/geo+json",
                 "title": stac_coll["title"],
             }
@@ -540,21 +540,6 @@ class Metadata(Convenience, IPFS):
         # Publish STAC Collection with updated fields
         self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
 
-    def only_update_metadata(self):
-        """
-        Standalone function to update STAC Item and Collection metadata for a previously published dataset without running a parse.
-        This function is called via a `--only-metadata` flag to run_etl.py.
-        """
-        # Find the published dataset's IPFS hash and use it to pull in the dataset
-        self.dataset_hash = self.latest_hash()
-        self.info(f"Published dataset IPFS hash is {str(self.dataset_hash)}")
-        dataset = self.zarr_hash_to_dataset(self.latest_hash())
-        # generate metadata and insert it into the Zarr's attributes
-        self.populate_metadata()
-        dataset = self.set_zarr_metadata(dataset)
-        # Update metadata for this dataset
-        self.create_stac_item(dataset, self.dataset_hash)
-        self.update_stac_collection(dataset)
 
     def load_stac_metadata(self, key: str = None) -> str | dict:
         """

@@ -490,7 +490,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # only update metadata and/or transform if these flags are specified
         if only_metadata:
             manager.info(f"preparing metadata for {manager}")
-            manager.only_update_metadata()
+            manager.publish_metadata()
             manager.info(f"Metadata for {manager} successfully updated")
         if only_transform:
             manager.info(

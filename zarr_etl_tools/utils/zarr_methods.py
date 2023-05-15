@@ -390,7 +390,7 @@ class Publish(Creation, Metadata):
                     "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
                 )
                 client.close()
-
+        self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
         return True
 
     def publish_metadata(self):

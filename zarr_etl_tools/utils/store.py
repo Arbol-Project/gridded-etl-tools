@@ -131,7 +131,7 @@ class S3(StoreInterface):
                     secret=os.environ["AWS_SECRET_ACCESS_KEY"]
                     )
             except KeyError:  # KeyError indicates credentials have not been manually specified
-                self._fs = s3fs.S3FileSystem()  # credentials automatically supplied from ~/.aws/credentials
+                self._fs = s3fs.S3FileSystem() # credentials automatically supplied from ~/.aws/credentials
             self.dm.info("Connected to S3 filesystem")
         return self._fs
 
@@ -200,7 +200,8 @@ class S3(StoreInterface):
         if self.fs().exists(metadata_path):
             # Generate history file
             old_mod_time = self.fs().ls(metadata_path, detail=True)[0]["LastModified"]
-            history_path = f"s3://{self.bucket}/history/{title}/{old_mod_time.isoformat(sep='T')}.json"
+            history_file_name = f"{title}-{old_mod_time.isoformat(sep='T')}.json"
+            history_path = f"s3://{self.bucket}/history/{title}/{history_file_name}"
             self.fs().copy(metadata_path, history_path)
 
         self.fs().write_text(metadata_path, json.dumps(stac_content))
@@ -431,7 +432,7 @@ class Local(StoreInterface):
                 pathlib.Path()
                 / "history"
                 / title
-                / f"{old_mod_time.isoformat(sep='T')}.json"
+                / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
             )
             history_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy(metadata_path, history_path)
