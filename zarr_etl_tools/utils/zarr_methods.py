@@ -16,7 +16,6 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from shapely import geometry
 from tqdm import tqdm
 from subprocess import Popen
 from kerchunk.hdf import SingleHdf5ToZarr
@@ -72,7 +71,7 @@ class Creation(Convenience):
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
             )
         else:
-            self.info(f"Existing Zarr found, using that")
+            self.info("Existing Zarr found, using that")
 
     def kerchunkify(self, input_file: str):
         """
@@ -398,14 +397,38 @@ class Publish(Creation, Metadata):
                         self.info(f"Data at {self.store} will be replaced.")
                     self.write_initial_zarr()
                 else:
-                    self.zarr_to_ipld()
+                    raise RuntimeError(
+                        "There is already a zarr at the specified path and a rebuild is requested, "
+                        "but overwrites are not allowed."
+                    )
             except KeyboardInterrupt:
                 self.info(
                     "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
                 )
                 client.close()
-
+        self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
         return True
+
+    def publish_metadata(self):
+        """
+        Publishes STAC metadata to the backing store
+        """
+        current_zarr = self.store.dataset()
+        if not current_zarr:
+            raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
+
+        if not hasattr(self, "metadata"):
+            # This will occur when user is only updating metadata and has not parsed
+            self.populate_metadata()
+
+        # This will do nothing if catalog already exists
+        self.create_root_stac_catalog()
+
+        # This will update the stac collection if it already exists
+        self.create_stac_collection(current_zarr)
+
+        # Create and publish metadata as a STAC Item
+        self.create_stac_item(current_zarr)
 
     def to_zarr(self, dataset: xr.Dataset, *args, **kwargs):
         """
@@ -532,16 +555,8 @@ class Publish(Creation, Metadata):
         mapper = self.store.mapper(set_root=False)
 
         self.to_zarr(dataset, mapper, consolidated=True, mode="w")
-
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
-            self.info(f"IPFS hash is {str(self.dataset_hash)}")
-
-            # Create and publish metadata as a STAC Item
-            self.create_root_stac_catalog()
-            self.create_stac_collection(dataset)
-            self.create_stac_item(dataset, self.dataset_hash)
-            self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
     # UPDATES
 
@@ -649,11 +664,6 @@ class Publish(Creation, Metadata):
             self.append_to_dataset(update_dataset, append_times, original_chunks)
         else:
             self.info("No new records to append to original zarr")
-
-        # In the case of IPLD store, update STAC
-        if isinstance(self.store, IPLD):
-            # Regenerate the STAC Item and update the relevant Collection entry with the final hash
-            self.finalize_update_metadata()
 
     def insert_into_dataset(
         self,
@@ -825,12 +835,3 @@ class Publish(Creation, Metadata):
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
-
-    def finalize_update_metadata(self):
-        """
-        Publish updated STAC Item and Collection metadata reflecting the new dataset hash and parameters
-        """
-        final_dataset = self.zarr_hash_to_dataset(self.dataset_hash)
-        self.info(f"IPFS hash is {str(self.dataset_hash)}")
-        self.create_stac_item(final_dataset, self.dataset_hash)
-        self.update_stac_collection(final_dataset)

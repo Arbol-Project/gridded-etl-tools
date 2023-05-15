@@ -1,7 +1,10 @@
 # This is necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
 from __future__ import annotations
+import datetime
+import json
 
 import os
+import shutil
 import s3fs
 import xarray as xr
 import ipldstore
@@ -127,8 +130,10 @@ class S3(StoreInterface):
                     key=os.environ["AWS_ACCESS_KEY_ID"],
                     secret=os.environ["AWS_SECRET_ACCESS_KEY"]
                     )
-            except KeyError:  # KeyError indicates credentials have not been manually specified
-                self._fs = s3fs.S3FileSystem()  # credentials automatically supplied from ~/.aws/credentials
+            # KeyError indicates credentials have not been manually specified
+            except KeyError:
+                # credentials automatically supplied from ~/.aws/credentials
+                self._fs = s3fs.S3FileSystem()
             self.dm.info("Connected to S3 filesystem")
         return self._fs
 
@@ -177,6 +182,93 @@ class S3(StoreInterface):
             Return `True` if there is a Zarr at `S3.url`
         """
         return self.fs().exists(self.url)
+
+    def push_metadata(self, title: str, stac_content: dict, stac_type: str):
+        """
+        Publish metadata entity to s3 store. Tracks historical state
+        of metadata as well
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_content : dict
+            content of the stac entity
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        if self.fs().exists(metadata_path):
+            # Generate history file
+            old_mod_time = self.fs().ls(metadata_path, detail=True)[0]["LastModified"]
+            history_file_name = f"{title}-{old_mod_time.isoformat(sep='T')}.json"
+            history_path = f"s3://{self.bucket}/history/{title}/{history_file_name}"
+            self.fs().copy(metadata_path, history_path)
+
+        self.fs().write_text(metadata_path, json.dumps(stac_content))
+
+    def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
+        """
+        Retrieve metadata entity from s3 store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        dict
+            Tuple of content of stac entity as dict and the s3 path as a string
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        return json.loads(self.fs().cat(metadata_path)), metadata_path
+
+    def metadata_exists(self, title: str, stac_type: str) -> bool:
+        """
+        Check whether metadata exists at a given s3 path
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        bool
+            Whether metadata exists at path
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        return self.fs().exists(metadata_path)
+
+    def get_metadata_path(self, title: str, stac_type: str) -> str:
+        """
+        Get the s3 path for a given STAC title and type
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        str
+            The s3 path for this entity as a string
+        """
+        if stac_type:
+            return f"s3://{self.bucket}/metadata/{stac_type}/{title}.json"
+        else:
+            return f"s3://{self.bucket}/metadata/{title}.json"
 
 
 class IPLD(StoreInterface):
@@ -316,3 +408,98 @@ class Local(StoreInterface):
             Return `True` if there is a local Zarr for this dataset, `False` otherwise.
         """
         return self.path.exists()
+
+    def push_metadata(self, title: str, stac_content: dict, stac_type: str):
+        """
+        Publish metadata entity to local store. Tracks historical state
+        of metadata as well
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_content : dict
+            content of the stac entity
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        if pathlib.Path.exists(metadata_path):
+            # Generate history file
+            old_mod_time = datetime.datetime.fromtimestamp(
+                metadata_path.stat().st_mtime
+            )
+            history_path = (
+                pathlib.Path()
+                / "history"
+                / title
+                / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
+            )
+            history_path.parent.mkdir(exist_ok=True, parents=True)
+            shutil.copy(metadata_path, history_path)
+
+        # Write new metadata to file (may overwrite)
+        metadata_path.parent.mkdir(exist_ok=True, parents=True)
+        with open(metadata_path, "w") as f:
+            json.dump(stac_content, f)
+
+    def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
+        """
+        Retrieve metadata entity from local store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        dict
+            Tuple of content of stac entity as dict and the local path as a string
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        with open(metadata_path) as f:
+            return json.load(f), str(metadata_path)
+
+    def metadata_exists(self, title: str, stac_type: str) -> bool:
+        """
+        Check whether metadata exists at a given local path
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        bool
+            Whether metadata exists at path
+        """
+        metadata_path = self.get_metadata_path(title, stac_type)
+        return pathlib.Path.exists(metadata_path)
+
+    def get_metadata_path(self, title: str, stac_type: str) -> pathlib.Path:
+        """
+        Get the local path for a given STAC title and type
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        str
+            The s3 path for this entity as a pathlib.Path
+        """
+        return (pathlib.Path() / "metadata" / stac_type / f"{title}.json").resolve()

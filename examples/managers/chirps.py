@@ -78,6 +78,10 @@ class CHIRPS(DatasetManager):
         return static_metadata
 
     @classmethod
+    def host_organization(cls) -> str:
+        return "My Organization"
+
+    @classmethod
     def name(cls) -> str:
         return "chirps"
 

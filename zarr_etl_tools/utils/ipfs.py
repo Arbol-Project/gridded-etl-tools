@@ -110,10 +110,11 @@ class IPFS:
         str
             The IPFS hash corresponding to a given IPNS name hash
         """
+        ipns_key = self.ipns_key_list()[key]
         res = self.ipfs_session.post(
             self._host + "/api/v0/name/resolve",
             timeout=self._default_timeout,
-            params={"arg": key},
+            params={"arg": ipns_key},
         )
         res.raise_for_status()
         return res.json()["Path"][6:]  # 6: shaves off leading '/ipfs/'
@@ -175,6 +176,7 @@ class IPFS:
     def ipns_generate_name(self, key: str = None) -> str:
         """
         Generate a stable IPNS name hash to populate the `href` field of any STAC Object.
+        If a name hash already exists, return it.
 
         Parameters
         ----------
@@ -199,11 +201,12 @@ class IPFS:
             res.raise_for_status()
             return res.json()["Id"]
         else:
-            self.info(f"Key '{key}' already found in key list, skipping generation")
+            return self.ipns_key_list()[key]
 
-    def ipns_retrieve_object(self, key: str) -> tuple[dict, str, str] | None:
+    def ipns_retrieve_object(self, ipns_name: str) -> tuple[dict, str]:
         """
-        Retrieve a JSON object using its IPNS name key.
+        Retrieve a JSON object using its human readable IPNS name key
+        (e.g. 'prism-precip-hourly).
 
         Parameters
         ----------
@@ -215,13 +218,12 @@ class IPFS:
         Returns
         -------
         tuple[dict, str, str] | None
-            A tuple of the JSON, the hash part of the IPNS key pair, and the IPFS/IPLD hash the IPNS key pair resolves
-            to, or None if the object is not found
+            A tuple of the JSON and the hash part of the IPNS key pair
         """
-        ipns_name_hash = self.ipns_key_list()[key]
-        ipfs_hash = self.ipns_resolve(ipns_name_hash)
+        ipns_key_hash = self.ipns_key_list()[ipns_name]
+        ipfs_hash = self.ipns_resolve(ipns_name)
         json_obj = self.ipfs_get(ipfs_hash)
-        return json_obj, ipns_name_hash, ipfs_hash
+        return json_obj, ipns_key_hash
 
     # RETRIEVE LATEST OBJECT
 
@@ -246,8 +248,11 @@ class IPFS:
         else:
             if key is None:
                 key = self.json_key()
-            if self.check_stac_on_ipns(key):
-                # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}` it finds to a CID object. Convert it bck to a hash
+            if hasattr(self, "dataset_hash") and self.dataset_hash:
+                return self.dataset_hash
+            elif self.check_stac_on_ipns(key):
+                # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
+                # it finds to a CID object. Convert it back to a hash of type `str``
                 return str(
                     self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(
                         base=self._default_base
@@ -276,12 +281,10 @@ class IPFS:
             if "stac_version" not in obj_json:
                 raise TypeError
         except TypeError:
-            self.info(f"Non-STAC compliant object found for {key}, recreating object")
+            self.info(f"Non-STAC compliant object found for {key}")
             exists = False
         except (KeyError, ValueError):
-            self.info(
-                f"No existing STAC-compliant object found for {key}. Creating new object, pushing it to IPFS, and populating any linked collections/catalogs"
-            )
+            self.info(f"No existing STAC-compliant object found for {key}.")
             exists = False
         except (HTTPError, TimeoutError):
             self.info(f"No object found at {key}")

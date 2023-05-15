@@ -113,6 +113,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     # run ETL
     manager.transform()
     manager.parse()
+    manager.publish_metadata()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
     generated_dataset = manager.zarr_hash_to_dataset(manager.latest_hash())
@@ -141,6 +142,7 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     # run ETL
     manager.transform()
     manager.parse()
+    manager.publish_metadata()
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
     generated_dataset = manager.zarr_hash_to_dataset(manager.dataset_hash)
     lat, lon = 14.625, -91.375
@@ -164,6 +166,6 @@ def test_metadata(manager_class, heads_path):
     manager = manager_class(store='ipld')
     manager.HASH_HEADS_PATH = heads_path
     try:
-        manager.only_update_metadata()
+        manager.publish_metadata()
     except Exception:
         manager.fail("Metadata update failed")

@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 import datetime
 import shapely
@@ -5,11 +6,10 @@ import numcodecs
 
 import numpy as np
 import xarray as xr
-from shapely import geometry
 
 from .ipfs import IPFS
 from .convenience import Convenience
-from .store import IPLD
+from .store import IPLD, Local
 
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
@@ -74,7 +74,7 @@ class Metadata(Convenience, IPFS):
             ],
             "providers": [
                 {
-                    "name": f"{self.host_organization}",
+                    "name": f"{self.host_organization()}",
                     "description": "",  # provide description for your organization here
                     "roles": ["processor"],  #
                     "url": "",  # provide URL for your organization here
@@ -93,7 +93,7 @@ class Metadata(Convenience, IPFS):
     @classmethod
     def default_root_stac_catalog(cls) -> dict:
         """
-        Default metadata template for the {self.host_organization} root Catalog
+        Default metadata template for the {self.host_organization()} root Catalog
 
         Returns
         -------
@@ -101,11 +101,11 @@ class Metadata(Convenience, IPFS):
             The STAC Catalog metadata template with all pre-fillable values populated
         """
         return {
-            "id": f"{cls.host_organization}_data_catalog",
+            "id": f"{cls.host_organization()}_data_catalog",
             "type": "Catalog",
-            "title": f"{cls.host_organization} Data Catalog",
+            "title": f"{cls.host_organization()} Data Catalog",
             "stac_version": "1.0.0",
-            "description": f"This catalog contains all the data uploaded to {cls.host_organization} \
+            "description": f"This catalog contains all the data uploaded to {cls.host_organization()} \
                 that has been issued STAC-compliant metadata. The catalogs and collections describe single providers. \
                 Each may contain one or multiple datasets. Each individual dataset has been documented as STAC Items.",
         }
@@ -117,36 +117,114 @@ class Metadata(Convenience, IPFS):
         """
         ...
 
+    def check_stac_exists(self, title: str, stac_type: "StacType") -> bool:
+        """Check if a STAC entity exists in the backing store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Type of STAC entity (Catalog, Collection or Item)
+
+        Returns
+        -------
+        bool
+            Whether the entity exists in the backing store
+        """
+        if isinstance(self.store, IPLD):
+            return self.check_stac_on_ipns(title)
+        else:
+            return self.store.metadata_exists(title, stac_type.value)
+
+    def publish_stac(self, title: str, stac_content: dict, stac_type: "StacType"):
+        """Publish a STAC entity to the backing store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_content : dict
+            content of the stac entity
+        stac_type : StacType
+            Type of STAC entity (Catalog, Collection or Item)
+        """
+        if isinstance(self.store, IPLD):
+            self.ipns_publish(title, self.ipfs_put(self.json_to_bytes(stac_content)))
+        else:
+            self.store.push_metadata(title, stac_content, stac_type.value)
+
+    def retrieve_stac(self, title: str, stac_type: "StacType") -> tuple[dict, str]:
+        """Retrieve a STAC entity and its href from the backing store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Type of STAC entity (Catalog, Collection or Item)
+
+        Returns
+        -------
+        tuple[dict, str | pathlib.Path]
+            tuple of STAC content and the href for the STAC
+        """
+        if isinstance(self.store, IPLD):
+            return self.ipns_retrieve_object(title)
+        else:
+            return self.store.retrieve_metadata(title, stac_type.value)
+
+    def get_href(self, title: str, stac_type: "StacType") -> str:
+        """Get a STAC entity's href from the backing store. Might be
+        an IPNS name, a local path or a s3 path depending on the store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Type of STAC entity (Catalog, Collection or Item)
+
+        Returns
+        -------
+        str
+            string representation of href.
+        """
+        if isinstance(self.store, IPLD):
+            return self.ipns_generate_name(key=title)
+        else:
+            return str(self.store.get_metadata_path(title, stac_type.value))
+
     def create_root_stac_catalog(self):
         """
         Prepare a root catalog for your organization if it doesn't already exist.
         """
         root_catalog = self.default_root_stac_catalog()
-        root_catalog_exists = self.check_stac_on_ipns(root_catalog["title"])
+        root_catalog_exists = self.check_stac_exists(
+            root_catalog["title"], StacType.CATALOG
+        )
         if not root_catalog_exists:
             # Publish the root catalog if it doesn't exist
-            self.info(f"Publishing root {self.host_organization} STAC Catalog")
-            root_catalog_ipns_name = self.ipns_generate_name(key=root_catalog["title"])
+            self.info(f"Publishing root {self.host_organization()} STAC Catalog")
+            catalog_href = self.get_href(root_catalog["title"], StacType.CATALOG)
             root_catalog["links"] = [
                 {
                     "rel": "root",
-                    "href": root_catalog_ipns_name,
+                    "href": catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization} root catalog",
+                    "title": f"{self.host_organization()} root catalog",
                 },
                 {
                     "rel": "self",
-                    "href": root_catalog_ipns_name,
+                    "href": catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization} root catalog",
+                    "title": f"{self.host_organization()} root catalog",
                 },
             ]
-            self.ipns_publish(
-                root_catalog["title"], self.ipfs_put(self.json_to_bytes(root_catalog))
-            )
+            self.publish_stac(root_catalog["title"], root_catalog, StacType.CATALOG)
         else:
             self.info(
-                f"Root {self.host_organization} STAC Catalog already exists, building collection"
+                f"Root {self.host_organization()} STAC Catalog already exists, building collection"
             )
             ...
 
@@ -161,11 +239,17 @@ class Metadata(Convenience, IPFS):
             The dataset being published
         rebuild : bool, optional
             Whether to recreate the STAC Collection from scratch or not
+        Returns
+        -------
+        bool
+            Whether the stac collection was created
         """
         stac_coll = self.default_stac_collection
         # Check if the collection already exists to avoid duplication of effort
         # Populate and publish a collection if one doesn't exist, or a rebuild was requested
-        if rebuild or not self.check_stac_on_ipns(self.collection()):
+        if rebuild or not self.check_stac_exists(
+            self.collection(), StacType.COLLECTION
+        ):
             if rebuild:
                 self.info(
                     "Collection rebuild requested. Creating new collection, pushing it to IPFS, and populating the main catalog"
@@ -179,58 +263,58 @@ class Metadata(Convenience, IPFS):
                     self.numpydate_to_py(dataset.time.values.max()).isoformat() + "Z",
                 ]
             ]
-            # Create an IPNS name corresponding to the collection in order to note this in the collection and root catalog.
-            coll_ipns_name = self.ipns_generate_name(key=self.collection())
+            # Create an href corresponding to the collection in order to note this in the collection and root catalog.
+            href = self.get_href(self.collection(), StacType.COLLECTION)
             # Append collection to the root catalog if it doesn't already exist
-            root_catalog, root_catalog_ipns_name, _ = self.ipns_retrieve_object(
-                self.default_root_stac_catalog()["title"]
+            root_catalog, root_catalog_href = self.retrieve_stac(
+                self.default_root_stac_catalog()["title"], StacType.CATALOG
             )
             if not any(
                 stac_coll["title"] in link_dict.values()
                 for link_dict in root_catalog["links"]
             ):
                 self.info(
-                    f"Appending collection link to root {self.host_organization} STAC Catalog"
+                    f"Appending collection link to root {self.host_organization()} STAC Catalog"
                 )
                 root_catalog["links"].append(
                     {
                         "rel": "child",
-                        "href": coll_ipns_name,
+                        "href": href,
                         "type": "application/json",
                         "title": stac_coll["title"],
                     }
                 )
-                self.ipns_publish(
+                self.publish_stac(
                     root_catalog["title"],
-                    self.ipfs_put(self.json_to_bytes(root_catalog)),
+                    root_catalog,
+                    StacType.CATALOG,
                 )
             # Add links and publish this collection
             for link_dict in stac_coll["links"]:
                 if link_dict["rel"] == "self":
-                    link_dict["href"] = coll_ipns_name
+                    link_dict["href"] = href
             stac_coll["links"] = stac_coll["links"] + [
                 {
                     "rel": "root",
-                    "href": root_catalog_ipns_name,
+                    "href": root_catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization} root catalog",
+                    "title": f"{self.host_organization()} root catalog",
                 },
                 {
                     "rel": "parent",
-                    "href": root_catalog_ipns_name,
+                    "href": root_catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization} root catalog",
+                    "title": f"{self.host_organization()} root catalog",
                 },
             ]
-            self.ipns_publish(
-                self.collection(), self.ipfs_put(self.json_to_bytes(stac_coll))
-            )
+            self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
         else:
             self.info(
-                "Found existing STAC Collection for this dataset, skipping creation"
+                "Found existing STAC Collection for this dataset, skipping creation and updating instead"
             )
+            self.update_stac_collection(dataset)
 
-    def create_stac_item(self, dataset: xr.Dataset, dataset_hash: str):
+    def create_stac_item(self, dataset: xr.Dataset):
         """
         Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal, and data dimensions into a STAC Item-compliant JSON.
         Push this JSON to IPFS and its relevant parent STAC Collection via `register_stac_item`
@@ -239,8 +323,6 @@ class Metadata(Convenience, IPFS):
         ----------
         dataset : xr.Dataset
             The dataset being published
-        dataset_hash : str
-            The CID of the dataset being published
         """
         self.info("Creating STAC Item")
         stac_item = self.default_stac_item()
@@ -271,9 +353,15 @@ class Metadata(Convenience, IPFS):
         stac_item["geometry"] = json.dumps(
             shapely.geometry.mapping(shapely.geometry.box(minx, miny, maxx, maxy))
         )
-        stac_item["assets"]["zmetadata"]["href"] = {"/": dataset_hash}
+        if isinstance(self.store, IPLD):
+            zarr_href = {"/": self.latest_hash()}
+        elif isinstance(self.store, Local):
+            zarr_href = str(self.store.path)
+        else:
+            zarr_href = self.store.url
+        stac_item["assets"]["zmetadata"]["href"] = zarr_href
         stac_item["properties"] = properties_dict
-        # Push to IPFS w/ link to IPNS name
+        # Push to backing store w/ link to href
         self.register_stac_item(stac_item)
 
     def zarr_md_to_stac_format(self, dataset: xr.Dataset) -> dict:
@@ -348,52 +436,53 @@ class Metadata(Convenience, IPFS):
         """
         self.info("Registering STAC Item in IPFS and its parent STAC Collection")
         # Generate variables of interest
-        stac_coll, coll_ipns_name, _ = self.ipns_retrieve_object(str(self.collection()))
+        stac_coll, collection_href = self.retrieve_stac(
+            str(self.collection()), StacType.COLLECTION
+        )
         # Register links
         stac_item["links"].append(
             {
                 "rel": "parent",
-                "href": coll_ipns_name,
+                "href": str(collection_href),
                 "type": "application/geo+json",
                 "title": stac_coll["title"],
             }
         )
+        # Check if an older version of the STAC Item exists and if so create a "previous" link for them in the new STAC Item
         try:
-            # Check if an older version of the STAC Item exists and if so create a "previous" link for them in the new STAC Item
-            (
-                old_stac_item,
-                item_ipns_name,
-                old_item_ipfs_hash,
-            ) = self.ipns_retrieve_object(self.json_key())
-            stac_item["links"].append(
-                {
-                    "rel": "prev",
-                    "href": str(
-                        old_stac_item["assets"]["zmetadata"]["href"].set(
-                            base=self._default_base
-                        )
-                    ),  # convert CID object back to hash str
-                    "metadata href": {"/": old_item_ipfs_hash},
-                    "type": "application/geo+json",
-                    "title": stac_item["assets"]["zmetadata"]["title"],
-                }
-            )
-            self.info("Updating 'previous' link in dataset's STAC Item")
-        except (KeyError, TimeoutError):
-            # Otherwise create an IPNS name for your new dataset
+            old_stac_item, href = self.retrieve_stac(self.json_key(), StacType.ITEM)
+            if isinstance(self.store, IPLD):
+                # If IPLD, generate the previous hash link
+                old_item_ipfs_hash = self.ipns_resolve(self.json_key())
+                self.info("Updating 'previous' link in dataset's STAC Item")
+                stac_item["links"].append(
+                    {
+                        "rel": "prev",
+                        "href": str(
+                            old_stac_item["assets"]["zmetadata"]["href"].set(
+                                base=self._default_base
+                            )
+                        ),  # convert CID object back to hash str
+                        "metadata href": {"/": old_item_ipfs_hash},
+                        "type": "application/geo+json",
+                        "title": stac_item["assets"]["zmetadata"]["title"],
+                    }
+                )
+        except (KeyError, TimeoutError, FileNotFoundError):
+            # Otherwise create a STAC name for your new dataset
             self.info("No previous STAC Item found")
-            item_ipns_name = self.ipns_generate_name(key=self.json_key())
+            href = self.get_href(self.json_key(), StacType.ITEM)
         stac_item["links"].append(
             {
                 "rel": "self",
-                "href": item_ipns_name,
+                "href": str(href),
                 "type": "application/geo+json",
                 "title": f"{self.name()} metadata",
             }
         )
-        # push final STAC Item to IPNS
-        self.info("Pushing STAC Item to IPFS and linking to IPNS")
-        self.ipns_publish(self.json_key(), self.ipfs_put(self.json_to_bytes(stac_item)))
+        # push final STAC Item to backing store
+        self.info("Pushing STAC Item to backing store")
+        self.publish_stac(self.json_key(), stac_item, StacType.ITEM)
         # register item as a link in the relevant collection, if not already there, and push updated collection to IPFS
         if any(
             stac_item["assets"]["zmetadata"]["title"] in link_dict["title"]
@@ -406,18 +495,16 @@ class Metadata(Convenience, IPFS):
             self.info(
                 "No existing STAC Item found in this dataset's parent collection, inserting a child link"
             )
-            # register IPNS name hrefs in both the Item and Collection and publish updated objects to IPNS
+            # register hrefs in both the Item and Collection and publish updated objects
             stac_coll["links"].append(
                 {
                     "rel": "item",
-                    "href": item_ipns_name,
+                    "href": str(href),
                     "type": "application/json",
                     "title": stac_item["assets"]["zmetadata"]["title"],
                 }
             )
-            self.ipns_publish(
-                self.collection(), self.ipfs_put(self.json_to_bytes(stac_coll))
-            )
+            self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
 
     def update_stac_collection(self, dataset: xr.Dataset):
         """'
@@ -430,7 +517,7 @@ class Metadata(Convenience, IPFS):
         """
         self.info("Updating dataset's parent STAC Collection")
         # Get existing STAC Collection and add new datasets to it, if necessary
-        stac_coll = self.ipns_retrieve_object(str((self.collection())))[0]
+        stac_coll = self.retrieve_stac(self.collection(), StacType.COLLECTION)[0]
         # Update spatial extent
         min_bbox_coords = np.minimum(
             stac_coll["extent"]["spatial"]["bbox"][0], [self.bbox_coords(dataset)]
@@ -449,29 +536,11 @@ class Metadata(Convenience, IPFS):
             ]
         ]
         # Publish STAC Collection with updated fields
-        self.ipns_publish(
-            self.collection(), self.ipfs_put(self.json_to_bytes(stac_coll))
-        )
-
-    def only_update_metadata(self):
-        """
-        Standalone function to update STAC Item and Collection metadata for a previously published dataset without running a parse.
-        This function is called via a `--only-metadata` flag to run_etl.py.
-        """
-        # Find the published dataset's IPFS hash and use it to pull in the dataset
-        self.dataset_hash = self.latest_hash()
-        self.info(f"Published dataset IPFS hash is {str(self.dataset_hash)}")
-        dataset = self.zarr_hash_to_dataset(self.latest_hash())
-        # generate metadata and insert it into the Zarr's attributes
-        self.populate_metadata()
-        dataset = self.set_zarr_metadata(dataset)
-        # Update metadata for this dataset
-        self.create_stac_item(dataset, self.dataset_hash)
-        self.update_stac_collection(dataset)
+        self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
 
     def load_stac_metadata(self, key: str = None) -> str | dict:
         """
-        Return the latest version of a dataset's STAC Item from IPFS (via IPNS)
+        Return the latest version of a dataset's STAC Item from IPFS
 
         Parameters
         ----------
@@ -488,17 +557,12 @@ class Metadata(Convenience, IPFS):
             if not key:
                 key = self.json_key()
             try:
-                return self.ipns_retrieve_object(key)[0]
+                return self.retrieve_stac(key, StacType.ITEM)[0]
             except (KeyError, TimeoutError):
                 self.warn(
                     "STAC metadata requested but no STAC object found at the provided key. Returning empty dictionary"
                 )
                 return {}
-        else:
-            self.warn(
-                "STAC metadata requested but STAC not yet implemented in non-IPFS stores. Returning empty dictionary"
-            )
-            return {}
 
     # NON-STAC METADATA
 
@@ -728,3 +792,9 @@ class Metadata(Convenience, IPFS):
         dataset[self.data_var()].encoding["compressor"] = compressor
 
         return dataset
+
+
+class StacType(Enum):
+    ITEM = "datasets"
+    COLLECTION = "collections"
+    CATALOG = ""
