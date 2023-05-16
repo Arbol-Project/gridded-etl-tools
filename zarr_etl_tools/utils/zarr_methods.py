@@ -208,11 +208,6 @@ class Creation(Convenience):
             commands_slice = [ Popen(cmd) for cmd in commands[index:index+100]]
             for command in commands_slice:
                 command.wait()
-        # handle the remainder commands if they exist
-        if len(commands) % 100:
-            commands_slice = [ Popen(cmd) for cmd in commands[index:]]
-            for command in commands_slice:
-                command.wait()
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
