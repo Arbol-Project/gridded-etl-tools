@@ -8,8 +8,8 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zarr_etl_tools"
-version = "0.3.3"
+name = "gridded_etl_tools"
+version = "0.3.4"
 authors = [
     { name = "Robert Banick", email = "robert.banick@arbol.io" },
     { name = "Evan Schechter", email = "evan@arbol.io" },
@@ -31,7 +31,7 @@ classifiers = [
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"
-write_to = "zarr_etl_tools/_version.py"
+write_to = "gridded_etl_tools/_version.py"
 
 
 [project.urls]

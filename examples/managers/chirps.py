@@ -8,7 +8,7 @@ import pathlib
 import re
 import requests
 import xarray as xr
-from zarr_etl_tools.dataset_manager import DatasetManager
+from gridded_etl_tools.dataset_manager import DatasetManager
 
 
 class CHIRPS(DatasetManager):

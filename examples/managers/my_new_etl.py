@@ -6,7 +6,7 @@
 import datetime
 import pathlib
 
-from zarr_etl_tools.dataset_manager import DatasetManager
+from gridded_etl_tools.dataset_manager import DatasetManager
 
 
 class MyNewETL(DatasetManager):

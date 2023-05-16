@@ -1,20 +1,20 @@
-Zarr_etl_tools
+gridded_etl_tools
 ==============
 
-Zarr_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium, most notably [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
+gridded_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium, most notably [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
 
-Zarr_etl_tools's utilities are combined in a DatasetManager abstract base class that can be adapted to retrieve data from a custom source. This abstract base class powers manager classes that can perform automated [data retrieval, transformation, and storage cycles](https://en.wikipedia.org/wiki/Extract,_transform,_load) (also known as ETLs) for a respective data source. The manager classes are also able to update, modify, and append to existing data in storage.
+gridded_etl_tools's utilities are combined in a DatasetManager abstract base class that can be adapted to retrieve data from a custom source. This abstract base class powers manager classes that can perform automated [data retrieval, transformation, and storage cycles](https://en.wikipedia.org/wiki/Extract,_transform,_load) (also known as ETLs) for a respective data source. The manager classes are also able to update, modify, and append to existing data in storage.
 
 How to use this repository
 --------------------------
 
 This repository provides a workflow for building climate data ETLs that output to IPFS, S3, or a local file system. This workflow utilizes a set of common methods in a predictable sequence to download raw data, transform it into suitable intermediate data files, lazily read them as Zarrs, and finally write the overall dataset to a Zarr on the desired storage medium. If a dataset already exists it will automatically update the existing dataset with any new files found during the process.
 
-Users of this library should build ETLS for a desired gridded climate dataset by importing the library within an ETL manager script, using the `DatasetManager` class from [DatasetManager](zarr_etl_tools/dataset_manager.py) as a base class, then applying its standardized workflow to the climate dataset in question. ETL child classes will need to overload one or many parent properties or methods from the [utils](zarr_etl_tools/utils) directory; the exact number depends on the intricacies of how the raw climate data is packaged. Where anticipated these methods are marked as **@abstractmethod** to prompt the user. See 
+Users of this library should build ETLS for a desired gridded climate dataset by importing the library within an ETL manager script, using the `DatasetManager` class from [DatasetManager](gridded_etl_tools/dataset_manager.py) as a base class, then applying its standardized workflow to the climate dataset in question. ETL child classes will need to overload one or many parent properties or methods from the [utils](gridded_etl_tools/utils) directory; the exact number depends on the intricacies of how the raw climate data is packaged. Where anticipated these methods are marked as **@abstractmethod** to prompt the user. See 
 
  The [ETL developers manual](docs/etl_developers_manual.md) provides precise instructions on how to build your own manager using the library. These are demonstrated in [an example ETL](examples/managers/chirps.py) for the [Climate Hazards Group InfraRed Precipitation with Station data (CHIRPS)](https://www.chc.ucsb.edu/data/chirps) dataset in the [managers](examples/managers) directory. The below graphic provides a high level overview of the full anticipated workflow and the key methods for each step.
 
-![ETL Workflow](docs/images/Arbol-Zarr_ETL-process_diagram.svg "The Zarr ETL Workflow")
+![ETL Workflow](docs/images/Arbol-gridded_etl-process_diagram.svg "The Zarr ETL Workflow")
 
 Users of this library can run the ETLs they build on the command line or within a notebook environment, as described below in [quickstart](#quickstart), When run, an ETL will first download raw data to a **datasets** directory and later output finalized data to a **climate** directory, creating either directory if they don't yet exist. Note that the storage and RAM requirements for ETLs make it impractical to download and parse large time frames for most datasets on local machines.[^2]
 
@@ -50,7 +50,7 @@ Keep the terminal open as you move through the rest of the quickstart
 
 #### Running the ETL
 
-With the IPFS daemon up and running manager scripts using the `zarr_etl_tools` library can be invoked within a separate script or notebook. Note you will have to first create a functioning manager script, as described in the [ETL developers manual](docs/etl_developers_manual.md). We use the CHIRPS example manager included in this repository below.
+With the IPFS daemon up and running manager scripts using the `gridded_etl_tools` library can be invoked within a separate script or notebook. Note you will have to first create a functioning manager script, as described in the [ETL developers manual](docs/etl_developers_manual.md). We use the CHIRPS example manager included in this repository below.
 
 The CHIRPS U.S. precipitation dataset is of medium size and can be run in a few hours on a well powered machine. To run a data retrieval, transformation, and storage cycle for the `CHIRPSFinal25` class in [chirps.py](examples/managers/chirps.py), import and instantiate it within a notebook or script
 
@@ -101,7 +101,7 @@ Note that the IPFS hash for a dataset can be found at any time by consulting the
 
 #### Further information 
 
-For further help invoking scripts and retrieving datasets, including over Amazon's s3 or a local file system, consult [the ETL running manual](docs/running_an_etl.md). To understand the various optional invocation flags, consult the docstring for the `run_etl` function in the [dataset_manager script](zarr_etl_tools/dataset_manager.py#391)
+For further help invoking scripts and retrieving datasets, including over Amazon's s3 or a local file system, consult [the ETL running manual](docs/running_an_etl.md). To understand the various optional invocation flags, consult the docstring for the `run_etl` function in the [dataset_manager script](gridded_etl_tools/dataset_manager.py#391)
 
 dClimate
 --------

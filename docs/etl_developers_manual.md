@@ -9,7 +9,7 @@ New climate datasets can be added by creating a child class for that dataset wit
 
     # manager_script.py
 
-    from zarr_etl_tools.dataset_manager import DatasetManager
+    from gridded_etl_tools.dataset_manager import DatasetManager
 
     Class MyNewETL(DatasetManager):
         # ETL content here
@@ -25,11 +25,11 @@ To run the manager script for a given child class follow the instructions under 
 Zarr ETLs
 ---------
 
-zarr_etl_tools retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on [IPFS](https://ipfs.tech/). 
+gridded_etl_tools retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on [IPFS](https://ipfs.tech/). 
 
 Legacy climate data providers frequently publish climate data as individual files per period in a datasets' time series (e.g. one file per day) because bandwidth and hard disk space previously constrained many users's ability to download and process massive files. Today this complicates retrieval and consolidation in more performant modern systems. Fully implemented managers are able to retrieve the files composing an overall dataset, transform them into Zarr-compatible formats, and create or update a single final output Zarr containing all of their data.
 
-The output datasets for gridded data produced using zarr_etl_tools are meant to be read and transformed by [dClimate-Zarr-Client](https://github.com/dClimate/dClimate-Zarr-Client) and served by [dClimate-Zarr-API](https://github.com/dClimate/dClimate-Zarr-API).
+The output datasets for gridded data produced using gridded_etl_tools are meant to be read and transformed by [dClimate-Zarr-Client](https://github.com/dClimate/dClimate-Zarr-Client) and served by [dClimate-Zarr-API](https://github.com/dClimate/dClimate-Zarr-API).
 
 Standalone metadata for datasets and their sources are stored over IPFS in formats compatible with the Spatio-Temporal Asset Catalog ([STAC](https://stacspec.org/en)) industry metadata standard -- see the [metadata guide](./metadata_standard.md) for more details.
 
