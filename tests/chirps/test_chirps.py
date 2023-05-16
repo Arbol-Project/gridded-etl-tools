@@ -67,11 +67,11 @@ def setup_and_teardown_per_test(mocker, request, initial_input_path, appended_in
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
     # Force ipns_publish to use offline mode to make tests run faster
-    mocker.patch("zarr_etl_tools.dataset_manager.DatasetManager.json_key", patched_json_key)
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.json_key", patched_json_key)
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
-    mocker.patch("zarr_etl_tools.dataset_manager.DatasetManager.zarr_json_path", patched_zarr_json_path)
-    mocker.patch("zarr_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog", patched_root_stac_catalog)
-    mocker.patch("zarr_etl_tools.dataset_manager.DatasetManager.ipns_publish", empty_ipns_publish)
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path", patched_zarr_json_path)
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog", patched_root_stac_catalog)
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish", empty_ipns_publish)
     yield  # run the tests first
     # delete temp files
     remove_zarr_json()
@@ -106,7 +106,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
     if manager.json_key() not in manager.ipns_key_list():
-        mocker.patch("zarr_etl_tools.dataset_manager.DatasetManager.ipns_publish", offline_ipns_publish)
+        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish", offline_ipns_publish)
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks

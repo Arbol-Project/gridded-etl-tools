@@ -19,5 +19,5 @@ static/STAC_Master_Catalog.json
 dask-worker-space/
 *.idx
 .python-version
-zarr_etl_tools/_version.py
-zarr_etl_tools.egg-info/
+gridded_etl_tools/_version.py
+gridded_etl_tools.egg-info/
