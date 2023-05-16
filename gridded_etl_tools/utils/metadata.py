@@ -7,6 +7,7 @@ import numcodecs
 import numpy as np
 import xarray as xr
 
+from shapely import geometry  # must be imported by name or shapely.geometry calls will fail
 from .ipfs import IPFS
 from .convenience import Convenience
 from .store import IPLD, Local
