@@ -592,10 +592,14 @@ class Metadata(Convenience, IPFS):
             The dataset being published, after metadata update
 
         """
-        # Rename data variable to desired name, if necessary
-        dataset = dataset.rename_vars(
-            {[key for key in dataset.data_vars][0]: self.data_var()}
-        )
+        # Rename data variable to desired name, if necessary. Will ValueError out if the name already exists
+        try:
+            dataset = dataset.rename_vars(
+                {[key for key in dataset.data_vars][0]: self.data_var()}
+            )
+        except ValueError:
+            self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
+            pass
 
         # Encode data types and missing value indicators for the data variable
         dataset = self.encode_vars(dataset)
