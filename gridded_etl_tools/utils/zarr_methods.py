@@ -202,9 +202,11 @@ class Creation(Convenience):
                     list(map(str, command_text + [existing_file, new_file]))
                  )
         # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
-        processes = [ Popen(command) for command in commands ]
-        for process in processes:
-            process.wait()
+        # Only run 100 processes at a time to prevent BlockingIOErrors
+        for index in range(0, len(commands), 100):
+            commands_slice = [ Popen(cmd) for cmd in commands[index:index+100]]
+            for command in commands_slice:
+                command.wait()
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
