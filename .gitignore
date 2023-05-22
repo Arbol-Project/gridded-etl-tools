@@ -1,8 +1,30 @@
+# Python
 *.pyc
+__pycache__/
+.python-version
+gridded_etl_tools/_version.py
+gridded_etl_tools.egg-info/
+
+# Python virtual env
+bin/
+lib/
+lib64
+pyvenv.cfg
+share/
+
+# Climate data
 datasets
 climate
+*.json
+static/STAC_Master_Catalog.json
+dask-worker-space/
+*.html
+*.idx
+
+# Editor/IDE
 *.swp
-__pycache__/
+
+# Tests temp data
 tests/local_*/
 tests/etc/local_*/
 tests/etc/heads.json
@@ -12,12 +34,7 @@ tests/intermediate/
 tests/logging/
 tests/performance_report_*
 tests/*_zarr.json
-static/STAC_Master_Catalog.json
-*.json
+
+# Logs
+logs/
 *.log
-*.html
-dask-worker-space/
-*.idx
-.python-version
-gridded_etl_tools/_version.py
-gridded_etl_tools.egg-info/
