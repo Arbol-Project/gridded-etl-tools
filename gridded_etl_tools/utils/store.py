@@ -116,8 +116,6 @@ class S3(StoreInterface):
         By default, the filesystem is only created once, the first time this function is called. To force it create a new one, set `refresh`
         to `True`.
 
-        no authentication will be performed yet. 
-
         Parameters
         ----------
         refresh : bool
