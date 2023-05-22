@@ -110,7 +110,7 @@ class S3(StoreInterface):
 
     def fs(self, refresh: bool = False) -> s3fs.S3FileSystem:
         """
-        Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be performed when according to the rules
+        Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be performed according to the rules
         at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
 
         By default, the filesystem is only created once, the first time this function is called. To force it create a new one, set `refresh`
