@@ -50,7 +50,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         custom_input_path=None,
         console_log=True,
         global_log_level=logging.DEBUG,
-        dataset_name: str = None,
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
@@ -79,9 +78,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         global_log_level : str, optional
             The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all logging
             statements will be generated and then logging handlers can decide what to do with them.
-        dataset_name : str, optional
-            The .name() corresponding to a desired subclass of an invoked manager. Used to return that subclass's manager.
-            For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
         store : str | None
             A string indicating the type of filestore to use (one of, "local", "ipld" or "s3"). A corresponding store object will be initialized.
             If `None`, the store is left unset and the default store interface defined in `Attributes.store` (local) is returned when the property is
@@ -250,7 +246,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Parameters
         ----------
         name : str
-            The str returned by the name() property of the dataset to be parsed
+            The str returned by the name() property of the dataset to be parsed. Used to return that subclass's manager.
+            For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
 
         Returns
         -------
