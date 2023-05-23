@@ -110,9 +110,11 @@ class S3(StoreInterface):
 
     def fs(self, refresh: bool = False) -> s3fs.S3FileSystem:
         """
-        Get an `s3fs.S3FileSystem` object by logging in with the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables (which ideally should
-        be set beforehand in the ~/.aws/credentials file). By default, the filesystem is only created once, the first time this function is called. To force it create a
-        new one, set `refresh` to `True`.
+        Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be performed according to the rules
+        at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
+
+        By default, the filesystem is only created once, the first time this function is called. To force it create a new one, set `refresh`
+        to `True`.
 
         Parameters
         ----------
@@ -125,16 +127,8 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            try:
-                self._fs = s3fs.S3FileSystem(
-                    key=os.environ["AWS_ACCESS_KEY_ID"],
-                    secret=os.environ["AWS_SECRET_ACCESS_KEY"]
-                    )
-            # KeyError indicates credentials have not been manually specified
-            except KeyError:
-                # credentials automatically supplied from ~/.aws/credentials
-                self._fs = s3fs.S3FileSystem()
-            self.dm.info("Connected to S3 filesystem")
+            self._fs = s3fs.S3FileSystem()
+            self.dm.info("Initialized S3 filesystem. Credentials will be looked up according to rules at https://s3fs.readthedocs.io/en/latest/#credentials")
         return self._fs
 
     @property
