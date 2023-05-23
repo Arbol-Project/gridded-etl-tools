@@ -149,11 +149,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
 
-        # If the dataset_name property is used to specify a manager subclass, return that
-        if dataset_name:
-            self.manager = self.get_dataset_manager_from_name(dataset_name)
-
-
     # SETUP
 
     def __str__(self) -> str:
@@ -247,7 +242,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield from subclass.get_subclasses()
             yield subclass
 
-    def get_dataset_manager_from_name(self, name: str) -> type:
+    @classmethod
+    def get_subclass(cls, name: str, forecast_dataset: bool = False) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -260,12 +256,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         -------
         type
             A dataset source class
-
         """
-        for source in self.get_subclasses():
-            if (
-                "gfs" in name
-            ):  # special handling of GFS which generates multiple keys in a single class
+        for source in cls.get_subclasses():
+            if forecast_dataset:  # special handling of forecasts which generate multiple keys in a single class
                 if source.json_key() == name:
                     return source
             else:
@@ -462,7 +455,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         """
         # Find the dataset class (e.g. CHIRPSPrelim05) from its name string
-        dataset_class = self.get_dataset_manager_from_name(dataset_name)
+        dataset_class = self.get_subclass(dataset_name)
         # Initialize a manager for the given class. For example,if class is ERA5Precip, the manager will be ERA5Precip([args]). This will create
         # INFO and DEBUG logs in the current working directory.
         manager = dataset_class(
