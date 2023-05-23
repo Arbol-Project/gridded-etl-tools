@@ -151,7 +151,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         # If the dataset_name property is used to specify a manager subclass, return that
         if dataset_name:
-            return self.get_dataset_manager_from_name(dataset_name)
+            self.manager = self.get_dataset_manager_from_name(dataset_name)
+
 
     # SETUP
 
