@@ -255,13 +255,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
+            print(f"source {source} with name {source.name()} found")
             if forecast_dataset:  # special handling of forecasts which generate multiple keys in a single class
                 if source.json_key() == name:
                     return source
             else:
                 if source.name() == name:
                     return source
-        print(
+        raise ValueError(
             f"failed to set manager from name {name}, could not find corresponding class"
         )
 
