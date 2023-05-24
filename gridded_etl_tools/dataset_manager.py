@@ -254,7 +254,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         type
             A dataset source class
         """
+        sources = []
         for source in cls.get_subclasses():
+            sources.append(source)
             print(f"source {source} with name {source.name()} found")
             if forecast_dataset:  # special handling of forecasts which generate multiple keys in a single class
                 if source.json_key() == name:
@@ -263,7 +265,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
                 if source.name() == name:
                     return source
         raise ValueError(
-            f"failed to set manager from name {name}, could not find corresponding class"
+            f"failed to set manager from name {name}, could not find corresponding class among sources {sources}"
         )
 
     def parse_command_line(self) -> tuple[type | dict]:
