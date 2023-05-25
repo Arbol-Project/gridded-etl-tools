@@ -608,15 +608,16 @@ class Convenience(Attributes):
         """
         return io.BytesIO(json.dumps(obj).encode("utf-8"))
 
-    def check_if_new_data(self, existing_file_end_date: datetime.datetime) -> bool:
+    def check_if_new_data(self, compare_date: datetime.datetime) -> bool:
         """
         Check if the downloaded data contains any new records relative to the existing dataset.
         Return a boolean indicating whether to proceed with a transform/parse based on the presence of new records.
 
         Parameters
         ==========
-        existing_file_end_date : datetime.datetime
-
+        compare_date : datetime.datetime
+            A cutoff date to compare against downloaded data; if any downloaded data is newer, move ahead with the parse.
+            When updating, refers to the last datetime available in the existing dataset.
 
         Returns
         =======
@@ -631,9 +632,9 @@ class Convenience(Attributes):
             self.info(f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}")
             return False
         self.info(f"newest file ends at {newest_file_end_date}")
-        if newest_file_end_date >= existing_file_end_date:
-            self.info(f"newest file has newer data than our end date {existing_file_end_date}, triggering parse")
+        if newest_file_end_date >= compare_date:
+            self.info(f"newest file has newer data than our end date {compare_date}, triggering parse")
             return True
         else:
-            self.info(f"newest file doesn't have data past our existing end date {existing_file_end_date}")
+            self.info(f"newest file doesn't have data past our existing end date {compare_date}. Exiting script.")
             return False
