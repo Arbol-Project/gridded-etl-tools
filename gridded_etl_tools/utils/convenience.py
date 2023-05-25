@@ -607,3 +607,28 @@ class Convenience(Attributes):
             The json encoded as a file type object
         """
         return io.BytesIO(json.dumps(obj).encode("utf-8"))
+
+    def check_if_new_data(self, end_date: datetime.datetime) -> bool:
+        """
+        Check if the downloaded data contains any new records relative to the existing dataset.
+        Return a boolean indicating whether to proceed with a transform/parse based on the presence of new records.
+
+        Returns
+        =======
+        bool
+            An indication of whether to proceed with a parse (True) or not (False)
+        """
+
+        # check if newest file on our server has newer data
+        try:
+            newest_file_end_date = self.get_newest_file_date_range()[1]
+        except IndexError as e:
+            self.info(f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}")
+            return False
+        self.info(f"newest file ends at {newest_file_end_date}")
+        if newest_file_end_date >= end_date:
+            self.info(f"newest file has newer data than our end date {end_date}, triggering parse")
+            return True
+        else:
+            self.info(f"newest file doesn't have data past our existing end date {end_date}")
+            return False
