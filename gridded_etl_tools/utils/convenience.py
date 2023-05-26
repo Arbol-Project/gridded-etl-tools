@@ -631,7 +631,7 @@ class Convenience(Attributes):
             self.info(f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}")
             return False
         self.info(f"newest file ends at {newest_file_end_date}")
-        if newest_file_end_date >= existing_file_end_date:
+        if newest_file_end_date > existing_file_end_date:
             self.info(f"newest file has newer data than our end date {existing_file_end_date}, triggering parse")
             return True
         else:

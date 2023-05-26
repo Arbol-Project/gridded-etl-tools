@@ -409,7 +409,7 @@ class Publish(Creation, Metadata):
                 )
                 client.close()
 
-        if hasattr(self, "dataset_hash"):
+        if hasattr(self, "dataset_hash") and self.dataset_hash:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
         return True
