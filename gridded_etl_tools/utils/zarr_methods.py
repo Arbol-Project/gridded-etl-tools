@@ -197,7 +197,7 @@ class Creation(Convenience):
         # set up and run conversion subprocess on command line
         commands = []
         for existing_file in input_files:
-            new_file = existing_file.with_suffix(replacement_suffix)
+            new_file = self.processed_file_name()
             commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
                     list(map(str, command_text + [existing_file, new_file]))
                  )
@@ -215,6 +215,25 @@ class Creation(Convenience):
         self.info(
             f"Cleanup finished"
         )
+
+    def processed_file_name(self, existing_file: str, replacement_suffix: str) -> str:
+        """
+        Superclass to manage the output name of processed files.
+        Allows for easy replacement in managers which need alternative file names or paths.
+
+        Parameters
+        ----------
+        existing_file : str
+            The pathlib.Path for the original (existing) file to be transformed
+        replacement_suffix : str
+            The suffix (file type) of the output file
+
+        Returns
+        -------
+        str
+            The filename and path of the final, processed file
+        """
+        return existing_file.with_suffix(replacement_suffix)
 
     def convert_to_lowest_common_time_denom(
         self, raw_files: list, keep_originals: bool = False
