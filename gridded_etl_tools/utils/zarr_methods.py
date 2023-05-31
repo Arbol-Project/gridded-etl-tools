@@ -607,8 +607,6 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
-        # Create a static variable to hold the hash of the updated dataset for IPLD store
-        self.dataset_hash = None
         original_times = set(original_dataset.time.values)
         if (
             type(update_dataset.time.values) == np.datetime64
