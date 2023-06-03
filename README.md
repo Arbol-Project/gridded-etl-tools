@@ -14,7 +14,7 @@ Users of this library should build ETLS for a desired gridded climate dataset by
 
  The [ETL developers manual](docs/etl_developers_manual.md) provides precise instructions on how to build your own manager using the library. These are demonstrated in [an example ETL](examples/managers/chirps.py) for the [Climate Hazards Group InfraRed Precipitation with Station data (CHIRPS)](https://www.chc.ucsb.edu/data/chirps) dataset in the [managers](examples/managers) directory. The below graphic provides a high level overview of the full anticipated workflow and the key methods for each step.
 
-![ETL Workflow](docs/images/Arbol-gridded_etl-process_diagram.svg "The Zarr ETL Workflow")
+![ETL Workflow](docs/images/Arbol-Zarr_ETL-process_diagram.svg "The Zarr ETL Workflow")
 
 Users of this library can run the ETLs they build on the command line or within a notebook environment, as described below in [quickstart](#quickstart), When run, an ETL will first download raw data to a **datasets** directory and later output finalized data to a **climate** directory, creating either directory if they don't yet exist. Note that the storage and RAM requirements for ETLs make it impractical to download and parse large time frames for most datasets on local machines.[^2]
 
