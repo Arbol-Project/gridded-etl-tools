@@ -216,6 +216,7 @@ class Creation(Convenience):
             f"Cleanup finished"
         )
 
+    @classmethod
     def processed_file_name(self, existing_file: str, replacement_suffix: str) -> str:
         """
         Superclass to manage the output name of processed files.
@@ -226,7 +227,7 @@ class Creation(Convenience):
         existing_file : str
             The pathlib.Path for the original (existing) file to be transformed
         replacement_suffix : str
-            The suffix (file type) of the output file
+            The suffix (file extension) of the output file
 
         Returns
         -------
