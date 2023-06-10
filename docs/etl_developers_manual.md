@@ -136,7 +136,7 @@ Confusingly, we work with three _types_ of chunks: dask, zarr, and ipfs chunks.
 
 * Dask chunks are the chunk sizes that Dask works with when parsing out the dataset. Dask's documentation says it is most efficient with chunks of approximately 100-200 MB.
 * Zarr chunks are the chunk sizes stored within the Zarr and retrieved by the Client. Small chunks of 1-5 MB are preferable to speed up retrieval.
-* IPFS chunks are the chunks stored within IPFS. Since IPFS hashes represent each chunk, any change to a chunk from dataset updates will cause the entire chunk to duplicate. Therefore we want IPFS chunks sized equivalent to the size of each update issued for a dataset. For instance, ERA5 data is hourly but is issued as 1 day updates, so we batch 24 hourly data points into each IPFS chunk.
+* IPFS chunks are the chunks stored within IPFS. Since IPFS hashes represent each chunk, any change to a chunk from dataset updates will cause the entire chunk to duplicate. Therefore we want IPFS chunks sized equivalent to the size of each update issued for a dataset. For instance, ERA5 data is hourly but is issued as 1 day updates, so we batch 24 hourly data points into each IPFS chunk. Additionally, IPFS Chunks should be limited to 1mb in size, with IPFS defaults of 262kb (due to IPFS max block size limits which are [technically 1mb but actually 2mb](https://discuss.ipfs.tech/t/1mb-max-chunk-size/4687), however if the total block size including network headers is over 2mb blocks will not transfer via bitswap over IPFS so 1mb is recommended by the IPFS team), otherwise there are no other "hard rules" regarding IPFS chunk sizes. That said, very small chunks (~1KB) can cause problems as far more I/O is necessary to retrieve blocks increasing RTT for accessing data, and large IPFS chunks can instead cause you to pull down data that you do not need, so IPFS Chunk sizes are part an art and a science :) 
 
 The relationship between these chunks is hierarchical, as per the graphic below.
 
@@ -148,16 +148,18 @@ Chunk sizing for each dataset is part art and part science. The ideal chunking s
 
 The following principles should guide your choice of Dask chunk dimensions, which will in turn condition the size of all other chunks. Keep in mind that the true size (in bytes) of each chunk is the product of each dimension's size and 4 (the size in bytes of a data point in binary).
 
-* Time chunks should be large (in the hundreds or thousands) to speed retrieval of large time series with relatively few chunks
+* Time chunks should be large (in the hundreds or thousands) to speed retrieval of large time series with relatively few chunks. **As an aside:** if having long time series is not important to you then you can definitely have larger latitude/longitude chunks (and correspondingly larger IPFS chunks) and correspondingly smaller time chunks. Arbol's main use case is pulling in lots of time periods quickly, at a cost to the actual geographic size of each chunkm however, this is an Arbol-specific implementation detail one can instead prioritize chunks providing big geographic size at the expense of temporal coverage. 
 * Latitude/longitude chunks should be sufficiently large to enable queries over small areas in a single chunk, i.e. 16x 16 or 30 x 30.
-* Latitude and longitude chunk sizes must be even divisors of both range lengths -- e.g. PRISM has 120 latitudes and 300 longitudes, so 20 is chosen as a chunk size.
+* Latitude and longitude chunk sizes must be even divisors of both range lengths -- e.g. PRISM has 120 latitudes and 300 longitudes, so 20 is chosen as a chunk size. It is important to note that although dask chunk sizes don’t need to evenly divide the overall dimensions of the dataset, zarr chunk sizes do need to evenly divide the dask chunks. For example for an example dataset if there are 1801 Latitude points, and 3600 longitude points you can set dask chunks to be whatever you want for the 1801 dimension (say, 40) and -1 (the entirety) of the 3600 longitude dimension. Then you can set zarr chunks to be 40 by 40, since 40 divides both 40 and 3600.
 * Always set `longitude = -1` (all values) for Dask chunks as this greatly speeds up parses.
 * Therefore dask and zarr chunk sizes should be chosen such that `time * latitude * {all longitudes} = ~100-200 MB` and `time * latitude * {zarr chunk longitude size} = ~1-6MB`. 
 
-Because IPFS chunk sizes should equate to one day's worth of data, a simple mathematical relationship with the `zarr_chunk` sizes determines their ideal size. IPFS chunks are specified as **strings** because this is how they are manually passed in to IPFS settings.
+Because IPFS chunk sizes should equate to one day's worth of data, a simple mathematical relationship with the `zarr_chunk` sizes determines their ideal size. IPFS chunks are specified as **strings** because this is how they are manually passed in to IPFS settings. Reminder: The IPFS chunk size is then multiplied by 4 (bytes) to have the total size.
 
 * ipfs chunk size = `zarr_chunk` / `time_chunk` _(daily or weekly temporal resolution datasets)_
 * ipfs chunk size = `zarr_chunk` / `time_chunk` * 24 _(hourly temporal resolution datasets)_
+
+You may ask why chunks are not maximized in size in order to reduce latency (as more blocks require more round-trips), and that would be because for Arbol datasets, which are continuously updated, Arbol is repeatedly appending a fixed number of bytes to the end of each zarr chunk. With larger block sizes, Arbol would be re-adding other parts of the zarr chunk with every update. The sizes chosen below are very specifically chosen to ensure that each update results in whole IPFS blocks being appended to the end of each zarr chunk, as opposed to fractional blocks, which would not be deduplicated. If a dataset is not continuously updated then other chunk sizes can be selected based on spatial/temporal query needs.
 
 #### Chunking sizing examples
 
@@ -169,7 +171,7 @@ ERA5 is an hourly global dataset reaching back to 1950, meaning it has a huge ov
 
 The tradeoff is that spatial coverage for each chunk is small -- 16 x 16 locations at 0.25 degrees of latitude or longitude each, so roughly 4 x 4 degrees latitude and longitude. Modeling of large areas will be very slow as a result.
 
-Even with an hourly dataset we encode IPFS chunks of one day each, since ERA5 data is updated for 24 hours at a time and we want to maximize de-duplication. Therefore the IPFS chunk size for ERA5 has to be quite large (24,576 bytes) since it must encompass 24 separate data points.
+Even with an hourly dataset we encode IPFS chunks of one day each, since ERA5 data is updated for 24 hours at a time and we want to maximize de-duplication. Therefore the IPFS chunk size for ERA5 has to be quite large, `16 (latitude) * 16 (longitude) * 4 (bytes) * 24 (hours) = 24,576 bytes` since it must encompass 24 separate data points.
 
 ```python
     requested_dask_chunks={"time": 5000, "latitude": 16, "longitude": -1},
@@ -183,7 +185,7 @@ PRISM is a daily dataset which only begins in 1991 and therefore has a much smal
 
 The smaller time dimension means we can afford to make time chunks smaller relative to latitude/longitude without badly compromising the performance of queries over the full time range. As a result, queries for large areas with PRISM will perform better (quicker) relative to ERA5. 
 
-Because the temporal resolution of PRISM is daily each IPFS chunk only has to encode a single data point. Therefore the IPFS chunks are much smaller than ERA5's hourly data.
+Because the temporal resolution of PRISM is daily each IPFS chunk only has to encode a single data point. Therefore the IPFS chunks are much smaller than ERA5's hourly data. 
 
 ```python
     requested_dask_chunks={"time": 625, "latitude": -1, "longitude": 27},
