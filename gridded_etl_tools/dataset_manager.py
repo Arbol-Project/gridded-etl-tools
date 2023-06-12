@@ -7,6 +7,7 @@ import multiprocessing
 import multiprocessing.pool
 import argparse
 import datetime
+import psutil
 
 from .utils.logging import Logging
 from .utils.zarr_methods import Publish
@@ -137,13 +138,22 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
 
-        # Each thread will use a CPU if self.dask_num_workers is 1. Setting it to use 75% of available CPUs seems to be reasonable.
-        # More specifically, setting it to use 24 of 32 CPUs on a 256 RAM server worked well for ERA5-Land. However, in that case,
-        # the choice of number of CPUs was actually a factor of RAM size.
-        self.dask_num_threads = max(1, int(multiprocessing.cpu_count() * 0.75))
-
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
+
+        # Each thread will use a CPU if self.dask_num_workers is 1. The target ratio is 3 threads per 32 GB RAM. If there are not enough cores
+        # available to use the target number of threads, use the number of available cores. If the target thread count is less than one, set it
+        # to 1.
+        target_ratio = 3 / 32
+        total_memory_gb = psutil.virtual_memory().total / 1000000000
+        target_thread_count = int(target_ratio * total_memory_gb)
+        if target_thread_count > multiprocessing.cpu_count():
+            self.dask_num_threads = multiprocessing.cpu_count()
+        elif target_thread_count < 1:
+            self.dask_num_threads = 1
+        else:
+            self.dask_num_threads = target_thread_count
+        self.info(f"Using {self.dask_num_threads} threads on a {multiprocessing.cpu_count()}-core system with {total_memory_gb:.2f}GB RAM")
 
     # SETUP
 
