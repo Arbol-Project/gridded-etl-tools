@@ -109,16 +109,35 @@ class Convenience(Attributes):
         -------
         list
             List of input files from `self.local_input_path()`
-
         """
-        root = pathlib.Path(self.local_input_path())
-        for entry in natsort.natsorted(pathlib.Path(root).iterdir()):
-            if (
-                not entry.name.startswith(".")
-                and not entry.name.endswith(".idx")
-                and entry.is_file()
-            ):
-                yield pathlib.Path(root / entry.name)
+        root = self.local_input_path()
+        for entry in natsort.natsorted(root.iterdir()):
+            if entry.is_dir():
+                for file in natsort.natsorted(entry.iterdir()):
+                    if (
+                        not file.name.startswith(".")
+                        and not file.name.endswith(".idx")
+                        and file.is_file()
+                    ):
+                        yield pathlib.Path(root / entry / file.name)
+            else:
+                if (
+                    not entry.name.startswith(".")
+                    and not entry.name.endswith(".idx")
+                    and entry.is_file()
+                ):
+                    yield pathlib.Path(root / entry.name)
+
+    def yield_input_file(self, entry: pathlib.Path) -> list:
+        """
+        Check whether a provided pathlib.Path is a compatible input file for parsing
+        """
+        if (
+            not entry.name.startswith(".")
+            and not entry.name.endswith(".idx")
+            and entry.is_file()
+        ):
+            yield pathlib.Path(self.local_input_path() / entry.name)
 
     def get_folder_path_from_date(
         self, date: datetime.datetime, omit_root: bool = False

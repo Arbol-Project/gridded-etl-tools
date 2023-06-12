@@ -407,7 +407,7 @@ class Metadata(Convenience, IPFS):
         all_md = {
             **dataset.attrs,
             **dataset.encoding,
-            **dataset[self.data_var()].encoding,
+            **dataset[self.data_var].encoding,
         }
         all_md = {key: all_md[key] for key in zarr_attrs if key in all_md}
         rename_dict = {
@@ -595,7 +595,7 @@ class Metadata(Convenience, IPFS):
         # Rename data variable to desired name, if necessary. Will ValueError out if the name already exists
         try:
             dataset = dataset.rename_vars(
-                {[key for key in dataset.data_vars][0]: self.data_var()}
+                {[key for key in dataset.data_vars][0]: self.data_var}
             )
         except ValueError:
             self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
@@ -635,13 +635,13 @@ class Metadata(Convenience, IPFS):
         """
         # Encode fields for the data variable in the main encoding dict and the data var's own encoding dict (for thoroughness)
         dataset.encoding = {
-            self.data_var(): {
+            self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value_indicator(),
                 "missing_value": self.missing_value_indicator(),  # deprecated by NUG but maintained for backwards compatibility
             }
         }
-        dataset[self.data_var()].encoding.update(
+        dataset[self.data_var].encoding.update(
             {
                 "units": self.unit_of_measurement,
                 "_FillValue": self.missing_value_indicator(),
@@ -793,8 +793,8 @@ class Metadata(Convenience, IPFS):
             dataset[coord].encoding.pop("_FillValue", None)
             dataset[coord].encoding.pop("missing_value", None)
             dataset[coord].encoding["compressor"] = compressor
-        dataset[self.data_var()].encoding.pop("filters", None)
-        dataset[self.data_var()].encoding["compressor"] = compressor
+        dataset[self.data_var].encoding.pop("filters", None)
+        dataset[self.data_var].encoding["compressor"] = compressor
 
         return dataset
 

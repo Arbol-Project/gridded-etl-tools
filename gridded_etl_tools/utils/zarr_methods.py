@@ -176,7 +176,8 @@ class Creation(Convenience):
             input_files: list[pathlib.Path],
             command_text: list[str],
             replacement_suffix: str,
-            keep_originals: bool = False
+            keep_originals: bool = False,
+            hold_delete: bool = False
     ):
         """
         Run a command line operation on a set of input files. In most cases, replace each file with an alternative file.
@@ -197,7 +198,7 @@ class Creation(Convenience):
         # set up and run conversion subprocess on command line
         commands = []
         for existing_file in input_files:
-            new_file = self.processed_file_name()
+            new_file = self.processed_file_name(existing_file=existing_file, replacement_suffix=replacement_suffix)
             commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
                     list(map(str, command_text + [existing_file, new_file]))
                  )
@@ -208,13 +209,17 @@ class Creation(Convenience):
             for command in commands_slice:
                 command.wait()
         self.info(
-            f"{(len(list(input_files)))} conversions finished, cleaning up original files"
+            f"{(len(list(input_files)))} conversions finished"
         )
         # Get rid of original files that were converted
-        self.delete_original_files(input_files, keep_originals)
-        self.info(
-            f"Cleanup finished"
-        )
+        if not hold_delete:
+            self.info(
+                f"Cleaning up original files"
+            )
+            self.cleanup_original_files(input_files, keep_originals)
+            self.info(
+                f"Cleanup finished"
+            )
 
     @classmethod
     def processed_file_name(self, existing_file: str, replacement_suffix: str) -> str:
@@ -281,7 +286,7 @@ class Creation(Convenience):
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
         self.parallel_subprocess_files(raw_files, command_text, '.nc4', keep_originals)
 
-    def delete_original_files(self, files: list, keep_originals: bool = False):
+    def cleanup_original_files(self, files: list, keep_originals: bool = False):
         """
         Clean up original files
         Optionally moves the original file to a "<dataset_name>_originals" folder for reference
@@ -294,16 +299,21 @@ class Creation(Convenience):
         keep_originals : bool
             A boolean indicating whether to preserve the original files (for dev purposes)
         """
-        # use the first file to define the originals_dir path
-        first_file = files[0]
-        originals_dir = first_file.parents[1] / (first_file.stem + "_originals")
         for file in files:
             # keep or get rid of original files
             if keep_originals:
-                pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
-                file.rename(originals_dir / file.name)
+                pathlib.Path.mkdir(self.originals_dir(file), mode=0o755, parents=True, exist_ok=True)
+                self.info(f"Originals dir is {self.originals_dir(file)}")
+                file.rename(self.originals_dir(file) / file.name)
             else:
                 file.unlink()
+
+    @classmethod
+    def originals_dir(self, file: pathlib.Path):
+        """
+        Parameterize the originals_dir variable to allow replacement by forecast datasets
+        """
+        return file.parents[1] / (file.stem + "_originals")
 
     # RETURN DATASET
 
@@ -539,7 +549,7 @@ class Publish(Creation, Metadata):
 
     # INITIAL PUBLICATION
 
-    def pre_initial_dataset(self) -> xr.Dataset:
+    def pre_initial_dataset(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the virtual Zarr JSON at the
         path returned by `Creation.zarr_json_path`, normalize the axes, re-chunk the dataset according to this object's chunking parameters, and
@@ -550,9 +560,6 @@ class Publish(Creation, Metadata):
         xr.Dataset
             The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
         """
-        # Transform the JSON Zarr into an xarray Dataset
-        dataset = self.zarr_json_to_dataset()
-
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.standard_dims = ["latitude", "longitude", "time"]
         dataset = dataset.transpose("time", "latitude", "longitude")
@@ -575,13 +582,16 @@ class Publish(Creation, Metadata):
         Writes the first iteration of zarr for the dataset to the store specified at
         initialization. If the store is `IPLD`, does some additional metadata processing
         """
-        # Transform the JSON Zar
-        dataset = self.pre_initial_dataset()
-        mapper = self.store.mapper(set_root=False)
-
-        self.to_zarr(dataset, mapper, consolidated=True, mode="w")
-        if isinstance(self.store, IPLD):
-            self.dataset_hash = str(mapper.freeze())
+        # Transform the JSON Zarr into an xarray Dataset
+        dataset = self.zarr_json_to_dataset()
+        # Process each variable separately
+        for var in dataset.data_vars:
+            dataset = self.pre_initial_dataset(dataset[[var]])  # double quotes ensure it returns as a Dataset, not a DataArray
+            mapper = self.store.mapper(set_root=False)
+            import ipdb; ipdb.set_trace(context=4)
+            self.to_zarr(dataset, mapper, consolidated=True, mode="w")
+            if isinstance(self.store, IPLD):
+                self.dataset_hash = str(mapper.freeze())
 
     # UPDATES
 
