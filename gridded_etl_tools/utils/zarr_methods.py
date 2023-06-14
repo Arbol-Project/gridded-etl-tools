@@ -380,6 +380,7 @@ class Publish(Creation, Metadata):
         ) as cluster, Client(
             cluster,
         ) as client:
+            self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
             try:
                 # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
                 # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
