@@ -59,7 +59,7 @@ class Creation(Convenience):
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
-            self.info(f"Generating Zarr for {self.file_type} files")
+            self.info(f"Generating Zarr for {len(input_files_list)} files")
             start_kerchunking = time.time()
             self.info(
                 f"Processing {len(input_files_list)} files with {multiprocessing.cpu_count()} processors"
