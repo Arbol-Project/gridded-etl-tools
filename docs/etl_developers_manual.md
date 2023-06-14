@@ -134,7 +134,7 @@ But what values to assign these chunks? Read on...
 
 Confusingly, we work with three _types_ of chunks: dask, zarr, and ipfs chunks.
 
-* Dask chunks are the chunk sizes that Dask works with when parsing out the dataset. Dask's documentation says it is most efficient with chunks of approximately 100-200 MB.
+* Dask chunks are the chunk sizes that Dask works with when parsing out the dataset. Dask's documentation says it is most efficient with chunks of approximately 100-200 MB. However in certain edge cases Dask chunks can be made larger.
 * Zarr chunks are the chunk sizes stored within the Zarr and retrieved by the Client. Small chunks of 1-5 MB are preferable to speed up retrieval.
 * IPFS chunks are the chunks stored within IPFS. Since IPFS hashes represent each chunk, any change to a chunk from dataset updates will cause the entire chunk to duplicate. Therefore we want IPFS chunks sized equivalent to the size of each update issued for a dataset. For instance, ERA5 data is hourly but is issued as 1 day updates, so we batch 24 hourly data points into each IPFS chunk. Additionally, IPFS Chunks should be limited to 1mb in size, with IPFS defaults of 262kb (due to IPFS max block size limits which are [technically 1mb but actually 2mb](https://discuss.ipfs.tech/t/1mb-max-chunk-size/4687), however if the total block size including network headers is over 2mb, blocks will not transfer via bitswap over IPFS so 1mb is recommended by the IPFS team), otherwise there are no other "hard rules" regarding IPFS chunk sizes. That said, very small chunks (~1KB) can cause problems as far more I/O is necessary to retrieve blocks increasing RTT for accessing data so IPFS Chunk sizes must be chosen based on usecases :) 
 
@@ -216,13 +216,16 @@ DatasetManager combines these utils in a structure common to all N-dimensional d
 
 ETL managers adapt the above approach to the specificities of each dataset. They download datasets, transform them as needed to be readable as Zarrs, and then parse them out either using or adapting the tools from DatasetManager. 
 
-Each gridded ETL can be divided into 5 stages
+Each gridded ETL can be divided into 5 stages which live under 3 separate functions.
 
-* Instantiation and parameter definition
-* Update local input
-* Processing data
-* Parsing (and metadata preparation)
-* Subclass definition
+* etl.extract()
+  * Instantiation and parameter definition
+  * Update local input
+* etl.transform()
+  * Processing data
+* etl.parse()
+  * Parsing (and metadata preparation)
+  * Subclass definition
 
 This section also reviews some tricky 'gotchas' that result from inputting older N-Dimensional formats into Xarray and outputting them as Zarrs.
 
@@ -256,7 +259,7 @@ Parameters that are fixed for the dataset should be declared with a `@property` 
 
 Static metadata is populated at the top of the ETL where common to the entire dataset or as properties within dataset subclasses when specific to that subclass. See the [Metadata Concepts][#metadata-concepts] section below for a more thorough explanation.
 
-#### Update local input
+#### Update local input (Extract)
 
 The `extract` function and its helper methods retrieve new data from the provider. As providers' publication formats, methods, and schedules vary greatly this will be the most custom (and therefore laborious) part of any ETL. DatasetManager provides some useful methods for common operations, such as `sync_ftp_files`, but in most cases code will need to be written from scratch or adapted from a similar ETL.
 
@@ -270,7 +273,10 @@ For example, to download and parse CHIRPS Final 05 data between January 1, 2005 
     etl.extract(date_range = [datetime.datetime(2005, 1, 1, 0), datetime.datetime(2007, 6, 31, 0)])
 ```
 
-#### Processing
+Files will be downloaded to a `datasets/relative_path()` subdirectory (where folders and subdirectories will be created if they do not already exist) from the root directory where the script is run. `relative_path()`is defined inside of the ETL script as class method both within the parent and child classes. For example, in `my_new_etl.py` when running MyNewETLTemp a subdirectory (if doesn't already exist) will be created `datasets/dataset_name/temp` as `dataset_name` comes from the parent class' `relative_path()` (`super().relative_path() / self.name()`) with the inheriting class `MyNewETLTemp` `relative_path()` appending `temp` to the folder structure. This is important to note if one is converting static files that are living on the local machine and do not need to be pulled from an external source. In order for local files to be processed they must be located in this folder. A "quick hack" is to run the script the first time (`etl.transform()` step in the section below), which will create the folder structure where you can then place the local files you wish to convert. 
+
+
+#### Processing (Transform)
 
 Raw datasets downloaded from providers are rarely well suited for amalgamation into a Zarr as-is. We use three different methods of pre- and post-processing to transform data.
 
