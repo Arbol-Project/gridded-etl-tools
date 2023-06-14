@@ -167,6 +167,91 @@ class MyNewETL(DatasetManager):
         """
         ...
 
+    @classmethod
+    def postprocess_zarr(self, dataset):
+        """
+        Serves to rename dimensions, drop unneeded vars and dimensions, and generally reshape the overall Dataset
+
+        :param xarray.Dataset dataset: The dataset to manipulate. This is automatically supplied when this function is submitted under xarray.open_dataset()
+        """
+
+        # Remove extraneous data variables and format dimensions/coordinates correctly
+        # unwanted_vars = [var for var in dataset.data_vars if var in ['time_bnds', 'lon_bnds', 'lat_bnds']]
+        # dataset = dataset.drop_vars(unwanted_vars)
+
+        # # Remove extraneous dimension
+        # dataset = dataset.drop_dims("extra_dim")
+
+        # Rename lat and lon to latitude and longitude which are dClimate standard
+        # dataset = dataset.rename({"lat" : "latitude", "lon" : "longitude"})
+
+        # Convert longitudes to -180 to 180 as dClimate data is stored in this format
+        # dataset = dataset.assign_coords(longitude=(((dataset.longitude + 180) % 360) - 180))
+
+        # After converting, the longitudes may still start at zero. This converts the longitude coordinates to go from -180 to 180 if necessary.
+        # dataset = dataset.sortby("latitude").sortby("longitude")
+
+        return dataset
+    
+    def set_zarr_metadata(self, dataset):
+        """
+        Function to append to or update key metadata information to the attributes and encoding of the output Zarr. 
+        Extends existing class method to create attributes or encoding specific to dataset being converted.
+        Dunction and its sub-methods provide a stepwise process for fixing encoding issues and getting the metadata just right.
+
+        :param xr.Dataset dataset: The dataset prepared for parsing to IPLD
+        """
+        dataset = super().set_zarr_metadata(dataset)
+        # Some example considerations for setting metadata below
+
+        # Some filters may carry over from the original datasets will result in the dataset being unwriteable b/c "ValueError: codec not available: 'grib"
+        # for coord in ["latitude","longitude"]:
+        #     dataset[coord].encoding.pop("_FillValue",None)
+        #     dataset[coord].encoding.pop("missing_value",None)
+
+        # Remove extraneous data from the data variable's attributes
+        # keys_to_remove = ["coordinates", "history","CDO","CDI"]
+        # for key in keys_to_remove:
+        #     dataset.attrs.pop(key, None)
+        #     dataset[self.data_var()].attrs.pop(key, None)
+
+        # It is important to note the encoding of a dataset in particular if compression is enabled
+        # if zlib or other compression is enabled this will subvert IPFS de-duplication if the dataset
+        # is to be continuously updated in the future so it is important to set compression to false
+        # and chunk according to the ETL developer's manual. Otherwise if the dataset will only be converted
+        # once and not updated in the future then it is ok to leave compression enabled.
+        # {'zlib': True,
+            # 'szip': False,
+            # 'zstd': False,
+            # 'bzip2': False,
+            # 'blosc': False,
+            # 'shuffle': True,
+            # 'complevel': 2,
+            # 'fletcher32': False,
+            # 'contiguous': False,
+            # 'chunksizes': (1, 1801, 3600),
+            # 'source': '/Users/test/Desktop/Staging/nc_to_zarr/test.nc',
+            # 'original_shape': (10, 1801, 3600),
+            # 'dtype': dtype('float32'),
+            # 'missing_value': 9.96921e+36,
+            # '_FillValue': 9.96921e+36
+        # }
+
+        # Add a finalization date attribute to the Zarr metadata. Set the value to the object's finalization date if it is present in this object.
+        # If not, try to carry over the finalization date from an existing dataset. Finally, if there is no existing data, set the date attribute
+        # to an empty string. If the finalization date exists, format it to %Y%m%d%H.
+        # if hasattr(self, "finalization_date") and self.finalization_date is not None:
+        #     dataset.attrs["finalization date"] = datetime.datetime.strftime(self.finalization_date, "%Y%m%d%H")
+        # else:
+        #     if self.store.has_existing and not self.rebuild_requested and "finalization date" in self.store.dataset().attrs:
+        #         dataset.attrs["finalization date"] = self.store.dataset().attrs["finalization date"]
+        #         self.info(f'Finalization date not set previously, setting to existing finalization date: "{dataset.attrs["finalization date"]}"')
+        #     else:
+        #         dataset.attrs["finalization date"] = ''
+        #         self.info("Finalization date not set previously, setting to empty string")
+
+        # return dataset
+
 
 class MyNewETLPrecip(MyNewETL):
     """
@@ -178,6 +263,10 @@ class MyNewETLPrecip(MyNewETL):
         return f"{super().name()}_precip"
 
     def relative_path(self) -> pathlib.Path:
+        """
+        This will be used to create the path for files to be download to and read from
+        For example datasets/dataset_name/precip
+        """
         return super().relative_path() / "precip"
 
     @property
@@ -210,6 +299,10 @@ class MyNewETLTemp(MyNewETL):
         return f"{super().name()}_temp"
 
     def relative_path(self) -> pathlib.Path:
+        """
+        This will be used to create the path for files to be download to and read from
+        For example datasets/dataset_name/temp
+        """
         return super().relative_path() / "temp"
 
     @property
