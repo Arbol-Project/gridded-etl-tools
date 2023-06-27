@@ -28,6 +28,8 @@ import datetime
 import pytest
 import xarray
 import shutil
+import psutil
+import multiprocessing
 
 from ..common import *  # import local functions common to all pytests
 
@@ -169,3 +171,47 @@ def test_metadata(manager_class, heads_path):
         manager.publish_metadata()
     except Exception:
         manager.fail("Metadata update failed")
+
+def test_thread_count(mocker, manager_class):
+    """
+    Test if the thread count is the correct ratio to RAM size.
+    """
+    # Create a fake return object for `psutil.virtual_memory` that will only contain the "total" field.
+    class MockMemoryStats:
+        pass
+    mock_vm_stats = MockMemoryStats()
+
+    # Test if 256GB RAM + 32 CPU == 24 threads
+    mock_vm_stats.total = 256 * 1000000000
+    mocker.patch("multiprocessing.cpu_count", return_value=32)
+    mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
+    manager = manager_class()
+    assert(manager.dask_num_threads == 24)
+
+    # Test if 128GB RAM + 32 CPU == 12 threads
+    mock_vm_stats.total = 128 * 1000000000
+    mocker.patch("multiprocessing.cpu_count", return_value=32)
+    mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
+    manager = manager_class()
+    assert(manager.dask_num_threads == 12)
+
+    # Test if 256GB RAM + 16 CPU == 16 threads
+    mock_vm_stats.total = 256 * 1000000000
+    mocker.patch("multiprocessing.cpu_count", return_value=16)
+    mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
+    manager = manager_class()
+    assert(manager.dask_num_threads == 16)
+
+    # Test the edge case of targeting less than one CPU == 1 thread
+    mock_vm_stats.total = 8 * 1000000000
+    mocker.patch("multiprocessing.cpu_count", return_value=8)
+    mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
+    manager = manager_class()
+    assert(manager.dask_num_threads == 1)
+
+    # Test the edge case of one CPU == 1 thread
+    mock_vm_stats.total = 32 * 1000000000
+    mocker.patch("multiprocessing.cpu_count", return_value=1)
+    mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
+    manager = manager_class()
+    assert(manager.dask_num_threads == 1)
