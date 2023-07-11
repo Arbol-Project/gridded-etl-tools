@@ -636,5 +636,5 @@ class Convenience(Attributes):
             self.info(f"newest file has newer data than our end date {compare_date}, triggering parse")
             return True
         else:
-            self.info(f"newest file doesn't have data past our existing end date {compare_date}. Exiting script.")
+            self.info(f"newest file doesn't have data past our existing end date {compare_date}.")
             return False
