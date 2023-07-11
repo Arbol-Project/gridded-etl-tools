@@ -59,7 +59,7 @@ class Creation(Convenience):
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
-            self.info(f"Generating Zarr for {self.file_type} files")
+            self.info(f"Generating Zarr for {len(input_files_list)} files")
             start_kerchunking = time.time()
             self.info(
                 f"Processing {len(input_files_list)} files with {multiprocessing.cpu_count()} processors"
@@ -380,6 +380,7 @@ class Publish(Creation, Metadata):
         ) as cluster, Client(
             cluster,
         ) as client:
+            self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
             try:
                 # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
                 # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
@@ -409,7 +410,7 @@ class Publish(Creation, Metadata):
                 )
                 client.close()
 
-        if hasattr(self, "dataset_hash"):
+        if hasattr(self, "dataset_hash") and self.dataset_hash:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
         return True
@@ -607,8 +608,6 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
-        # Create a static variable to hold the hash of the updated dataset for IPLD store
-        self.dataset_hash = None
         original_times = set(original_dataset.time.values)
         if (
             type(update_dataset.time.values) == np.datetime64

@@ -15,7 +15,7 @@ class Logging(Attributes):
         cls,
         path: str = None,
         level: str = logging.INFO,
-        log_format: str = "%(asctime)s %(levelname)-8s <%(name)s> %(message)s",
+        log_format: str = "%(asctime)s <%(name)s in %(threadName)s> %(levelname)-8s %(message)s",
         time_format: str = "%Y/%m/%d %H:%M",
     ) -> logging.Handler:
         """
@@ -92,7 +92,7 @@ class Logging(Attributes):
     def log_to_console(
         cls,
         level: str = logging.INFO,
-        log_format: str = "%(levelname)-8s <%(name)s> %(message)s",
+        log_format: str = "%(levelname)-8s <%(name)s in %(threadName)s> %(message)s",
     ):
         """
         Attach a logging.StreamHandler that will write log statements at `level` or higher to the console. Since this attaches the stream handler
