@@ -55,6 +55,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         s3_bucket_name=None,
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
+        forecast: bool = True,
         debug: bool = False,
         *args,
         **kwargs,
@@ -100,6 +101,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
         self.debug = debug
+        self.forecast = forecast
 
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
         # passed, raise a `ValueError`.

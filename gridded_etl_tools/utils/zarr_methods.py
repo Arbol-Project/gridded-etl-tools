@@ -53,23 +53,22 @@ class Creation(Convenience):
             Switch to create (or not) a new JSON at `DatasetManager.zarr_json_path()` even if the path exists
 
         """
-        if not hasattr(self, "zarr_jsons"):
-            self.input_files_list = [
-                str(fil)
-                for fil in self.input_files()
-                if (fil.suffix == ".nc4" or fil.suffix == ".nc")
-            ]
-            num_files = len(self.input_files_list)
-        elif hasattr(self, "zarr_jsons"):
-            num_files = len(self.zarr_jsons)
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
-            # TODO make the zarr_json / input_files list switching more elegant
             start_kerchunking = time.time()
-            self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
             if not hasattr(self, "zarr_jsons"):   # if remotely preparing kerchunk, self.zarr_jsons should already be prepared there
+                self.input_files_list = [
+                    str(fil)
+                    for fil in self.input_files()
+                    if (fil.suffix == ".nc4" or fil.suffix == ".nc")
+                ]
+                num_files = len(self.input_files_list)
+                self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(self.input_files_list)))
+            else:
+                num_files = len(self.zarr_jsons)
+                self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
             mzz = MultiZarrToZarr(self.zarr_jsons, **self.mzz_opts())
             mzz.translate(filename=self.zarr_json_path())
             self.info(
@@ -91,6 +90,11 @@ class Creation(Convenience):
         ----------
         input_file : str
             A file path to a NetCDF-4 Classic file
+        input_location: str
+            Where the input file will be read from. Accepts 'local' or 'remote'.
+            If local, assumes NETCDF4. If remote, assumes GRIB. Defaults to 'local'
+        var_filter : dict
+            A dictionary of filter arguments to pass to `scan_grib`'s `filter` parameter
 
         """
         if input_location == 'local':
@@ -104,13 +108,12 @@ class Creation(Convenience):
                         f"Error found with {fs_nc.path}, likely due to incomplete file. Full error message is {e}"
                     )
         elif input_location == 'remote':
-            # fs = fsspec.filesystem('s3', anon = True)
             s3_so = {
                 'anon': True, 
                 'skip_instance_cache': True,
-                #"default_cache_type": "readahead"
             }
-            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[0]
+            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=1)[0]
+            # append to self.zarr_jsons for later use
             self.zarr_jsons.append(scanned_zarr_json)
 
     @classmethod
@@ -346,9 +349,6 @@ class Creation(Convenience):
                 "consolidated": False,
             },
         )
-
-
-
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
 
@@ -482,7 +482,7 @@ class Publish(Creation, Metadata):
             if self.store.has_existing:
                 self.info("Pre-writing metadata to indicate an update is in progress")
                 empty_dataset.to_zarr(
-                    self.store.mapper(refresh=True), append_dim="time"
+                    self.store.mapper(refresh=True), append_dim=self.time_dim
                 )
 
         # Write data to Zarr and log duration.
@@ -499,7 +499,7 @@ class Publish(Creation, Metadata):
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            empty_dataset.to_zarr(self.store.mapper(), append_dim="time")
+            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
@@ -553,8 +553,14 @@ class Publish(Creation, Metadata):
         dataset = self.zarr_json_to_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.standard_dims = ["latitude", "longitude", "time"]
-        dataset = dataset.transpose("time", "latitude", "longitude")
+        if not self.forecast:
+            self.standard_dims = ["latitude", "longitude", "time"]
+            self.time_dim = "time"
+            dataset = dataset.transpose("time", "latitude", "longitude")
+        elif self.forecast:
+            self.standard_dims = ["latitude", "longitude", "forecast_reference_time", "step"]
+            self.time_dim = "forecast_reference_time"
+            dataset = dataset.transpose("forecast_reference_time", "step", "latitude", "longitude")
 
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
@@ -593,8 +599,13 @@ class Publish(Creation, Metadata):
         original_dataset = self.store.dataset()
         update_dataset = self.zarr_json_to_dataset()
 
-        # reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.standard_dims = ["latitude", "longitude", "time"]
+        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
+        if not self.forecast:
+            self.standard_dims = ["latitude", "longitude", "time"]
+            self.time_dim = "time"
+        elif self.forecast:
+            self.standard_dims = ["latitude", "longitude", "forecast_reference_time", "step"]
+            self.time_dim = "forecast_reference_time"
 
         self.info(f"Original dataset\n{original_dataset}")
 
@@ -723,7 +734,7 @@ class Publish(Creation, Metadata):
             self.to_zarr(
                 insert_slice.drop(self.standard_dims[:2]),
                 mapper,
-                region={"time": slice(region[0], region[1])},
+                region={self.time_dim: slice(region[0], region[1])},
             )
 
         self.info(
@@ -756,7 +767,7 @@ class Publish(Creation, Metadata):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
-        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim="time")
+        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         self.info(
             f"Appended records for {len(append_dataset.time.values)} datetimes to original zarr"
@@ -786,13 +797,13 @@ class Publish(Creation, Metadata):
             An xr.Dataset filtered to only the time values in `time_filter_vals`, with correct metadata
         """
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
-        if "time" in update_dataset.dims:
+        if self.time_dim in update_dataset.dims:
             update_dataset = update_dataset.sel(time=time_filter_vals).transpose(
-                "time", self.standard_dims[0], self.standard_dims[1]
+                self.time_dim, self.standard_dims[0], self.standard_dims[1]
             )
         else:
-            update_dataset = update_dataset.expand_dims("time").transpose(
-                "time", self.standard_dims[0], self.standard_dims[1]
+            update_dataset = update_dataset.expand_dims(self.time_dim).transpose(
+                self.time_dim, self.standard_dims[0], self.standard_dims[1]
             )
         update_dataset = update_dataset.chunk(new_chunks)
         update_dataset = self.set_zarr_metadata(update_dataset)
