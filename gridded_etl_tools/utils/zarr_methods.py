@@ -11,6 +11,7 @@ import subprocess
 import pathlib
 import glob
 import itertools
+import s3fs
 
 import pandas as pd
 import numpy as np
@@ -19,6 +20,7 @@ import xarray as xr
 from tqdm import tqdm
 from subprocess import Popen
 from kerchunk.hdf import SingleHdf5ToZarr
+from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
 from dask.distributed import Client, LocalCluster
 
@@ -51,21 +53,24 @@ class Creation(Convenience):
             Switch to create (or not) a new JSON at `DatasetManager.zarr_json_path()` even if the path exists
 
         """
-        input_files_list = [
-            str(fil)
-            for fil in self.input_files()
-            if (fil.suffix == ".nc4" or fil.suffix == ".nc")
-        ]
+        if not hasattr(self, "zarr_jsons"):
+            self.input_files_list = [
+                str(fil)
+                for fil in self.input_files()
+                if (fil.suffix == ".nc4" or fil.suffix == ".nc")
+            ]
+            num_files = len(self.input_files_list)
+        elif hasattr(self, "zarr_jsons"):
+            num_files = len(self.zarr_jsons)
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
-            self.info(f"Generating Zarr for {len(input_files_list)} files")
+            # TODO make the zarr_json / input_files list switching more elegant
             start_kerchunking = time.time()
-            self.info(
-                f"Processing {len(input_files_list)} files with {multiprocessing.cpu_count()} processors"
-            )
-            zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
-            mzz = MultiZarrToZarr(zarr_jsons, **self.mzz_opts())
+            self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
+            if not hasattr(self, "zarr_jsons"):   # if remotely preparing kerchunk, self.zarr_jsons should already be prepared there
+                self.zarr_jsons = list(map(self.kerchunkify, tqdm(self.input_files_list)))
+            mzz = MultiZarrToZarr(self.zarr_jsons, **self.mzz_opts())
             mzz.translate(filename=self.zarr_json_path())
             self.info(
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
@@ -73,7 +78,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, input_file: str):
+    def kerchunkify(self, input_file: str, input_location: str = 'local', var_filter: dict = None):
         """
         Transform input NetCDF into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -88,15 +93,25 @@ class Creation(Convenience):
             A file path to a NetCDF-4 Classic file
 
         """
-        fs = fsspec.filesystem("file")
-        fs_nc = fs.open(input_file)
-        with fs_nc as infile:
-            try:
-                return SingleHdf5ToZarr(infile, fs_nc.path).translate()
-            except OSError as e:
-                raise ValueError(
-                    f"Error found with {fs_nc.path}, likely due to incomplete file. Full error message is {e}"
-                )
+        if input_location == 'local':
+            fs = fsspec.filesystem("file")
+            fs_nc = fs.open(input_file)
+            with fs_nc as infile:
+                try:
+                    return SingleHdf5ToZarr(infile, fs_nc.path).translate()
+                except OSError as e:
+                    raise ValueError(
+                        f"Error found with {fs_nc.path}, likely due to incomplete file. Full error message is {e}"
+                    )
+        elif input_location == 'remote':
+            # fs = fsspec.filesystem('s3', anon = True)
+            s3_so = {
+                'anon': True, 
+                'skip_instance_cache': True,
+                #"default_cache_type": "readahead"
+            }
+            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[0]
+            self.zarr_jsons.append(scanned_zarr_json)
 
     @classmethod
     def mzz_opts(cls) -> dict:
@@ -331,6 +346,9 @@ class Creation(Convenience):
                 "consolidated": False,
             },
         )
+
+
+
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
 
