@@ -77,7 +77,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, input_file: str, input_location: str = 'local', var_filter: dict = None):
+    def kerchunkify(self, input_file: str, input_location: str = 'local', var_filter: dict = None, scan_indices: int = 0):
         """
         Transform input NetCDF into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -95,6 +95,11 @@ class Creation(Convenience):
             If local, assumes NETCDF4. If remote, assumes GRIB. Defaults to 'local'
         var_filter : dict
             A dictionary of filter arguments to pass to `scan_grib`'s `filter` parameter
+        scan_indices : int, int:int
+            One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
+            When multiple options are returned we currently favor the 1st (Default index=0),
+            as it represents the shallowest depth / surface layer in ETLs we've written.
+            This may need to be amended in the future.
 
         """
         if input_location == 'local':
@@ -112,7 +117,7 @@ class Creation(Convenience):
                 'anon': True, 
                 'skip_instance_cache': True,
             }
-            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[0]
+            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[scan_indices]
             # append to self.zarr_jsons for later use
             self.zarr_jsons.append(scanned_zarr_json)
 
@@ -554,12 +559,7 @@ class Publish(Creation, Metadata):
         dataset = self.zarr_json_to_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        if not self.forecast:
-            self.standard_dims = ["time", "latitude", "longitude"]
-            self.time_dim = "time"
-        elif self.forecast:
-            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
-            self.time_dim = "forecast_reference_time"
+        self.set_key_dims()
         dataset = dataset.transpose(*self.standard_dims)
 
         # Re-chunk
@@ -588,6 +588,18 @@ class Publish(Creation, Metadata):
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
+    def set_key_dims(self):
+        """
+        Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
+        The self.forecast dim is set in the `init` of a dataset and defaults to False.
+        """
+        if not self.forecast:
+            self.standard_dims = ["time", "latitude", "longitude"]
+            self.time_dim = "time"
+        else:
+            self.standard_dims = ["forecast_reference_time", "constant_offset", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+
     # UPDATES
 
     def update_zarr(self):
@@ -600,13 +612,7 @@ class Publish(Creation, Metadata):
         update_dataset = self.zarr_json_to_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        if not self.forecast:
-            self.standard_dims = ["latitude", "longitude", "time"]
-            self.time_dim = "time"
-        elif self.forecast:
-            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
-            self.time_dim = "forecast_reference_time"
-
+        self.set_key_dims()
         self.info(f"Original dataset\n{original_dataset}")
 
         # Prepare inputs for the update operation
@@ -735,7 +741,7 @@ class Publish(Creation, Metadata):
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
-                insert_slice.drop(self.standard_dims[:2]),
+                insert_slice.drop(self.standard_dims[:-1]),
                 mapper,
                 region={self.time_dim: slice(region[0], region[1])},
             )
@@ -802,9 +808,7 @@ class Publish(Creation, Metadata):
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
         if self.time_dim in update_dataset.dims:
             if not self.forecast:
-                update_dataset = update_dataset.sel(time=time_filter_vals).transpose(
-                    self.time_dim, self.standard_dims[0], self.standard_dims[1]
-                )
+                update_dataset = update_dataset.sel(time=time_filter_vals).transpose(*self.standard_dims)
             elif self.forecast:
                 update_dataset = update_dataset.sel(forecast_reference_time=time_filter_vals).transpose(*self.standard_dims)
         else:
