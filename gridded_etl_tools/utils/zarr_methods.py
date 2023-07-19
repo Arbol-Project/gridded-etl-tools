@@ -57,18 +57,17 @@ class Creation(Convenience):
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
             start_kerchunking = time.time()
-            if not hasattr(self, "zarr_jsons"):   # if remotely preparing kerchunk, self.zarr_jsons should already be prepared there
+            # if extracting JSONs from S3 via kerchunk, self.zarr_jsons should already be prepared during the `extract` step
+            if not hasattr(self, "zarr_jsons"):
                 self.input_files_list = [
                     str(fil)
                     for fil in self.input_files()
                     if (fil.suffix == ".nc4" or fil.suffix == ".nc")
                 ]
-                num_files = len(self.input_files_list)
-                self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
+                self.info(f"Generating Zarr for {len(self.input_files_list)} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(self.input_files_list)))
             else:
-                num_files = len(self.zarr_jsons)
-                self.info(f"Generating Zarr for {num_files} files with {multiprocessing.cpu_count()} processors")
+                self.info(f"Generating Zarr for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
             mzz = MultiZarrToZarr(self.zarr_jsons, **self.mzz_opts())
             mzz.translate(filename=self.zarr_json_path())
             self.info(
@@ -94,7 +93,7 @@ class Creation(Convenience):
             Where the input file will be read from. Accepts 'local' or 'remote'.
             If local, assumes NETCDF4. If remote, assumes GRIB. Defaults to 'local'
         var_filter : dict
-            A dictionary of filter arguments to pass to `scan_grib`'s `filter` parameter
+            A dictionary of filter arguments to pass to `scan_grib`'s `filter` parameter    
         scan_indices : int, int:int
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned we currently favor the 1st (Default index=0),
@@ -118,7 +117,7 @@ class Creation(Convenience):
                 'skip_instance_cache': True,
             }
             scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[scan_indices]
-            # append to self.zarr_jsons for later use
+            # append to self.zarr_jsons for later use in an ETL's `transform` step
             self.zarr_jsons.append(scanned_zarr_json)
 
     @classmethod
@@ -591,7 +590,7 @@ class Publish(Creation, Metadata):
     def set_key_dims(self):
         """
         Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
-        The self.forecast dim is set in the `init` of a dataset and defaults to False.
+        The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
         """
         if not self.forecast:
             self.standard_dims = ["time", "latitude", "longitude"]
