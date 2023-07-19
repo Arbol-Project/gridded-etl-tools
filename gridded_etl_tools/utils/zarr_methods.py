@@ -112,7 +112,7 @@ class Creation(Convenience):
                 'anon': True, 
                 'skip_instance_cache': True,
             }
-            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=1)[0]
+            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[0]
             # append to self.zarr_jsons for later use
             self.zarr_jsons.append(scanned_zarr_json)
 
@@ -130,6 +130,7 @@ class Creation(Convenience):
         """
         opts = dict(
             remote_protocol=cls.remote_protocol(),
+            remote_options={'anon' : True},
             identical_dims=cls.identical_dims(),
             concat_dims=cls.concat_dims(),
             preprocess=cls.preprocess_kerchunk,
@@ -554,13 +555,12 @@ class Publish(Creation, Metadata):
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         if not self.forecast:
-            self.standard_dims = ["latitude", "longitude", "time"]
+            self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-            dataset = dataset.transpose("time", "latitude", "longitude")
         elif self.forecast:
-            self.standard_dims = ["latitude", "longitude", "forecast_reference_time", "step"]
+            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
-            dataset = dataset.transpose("forecast_reference_time", "step", "latitude", "longitude")
+        dataset = dataset.transpose(*self.standard_dims)
 
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
@@ -604,7 +604,7 @@ class Publish(Creation, Metadata):
             self.standard_dims = ["latitude", "longitude", "time"]
             self.time_dim = "time"
         elif self.forecast:
-            self.standard_dims = ["latitude", "longitude", "forecast_reference_time", "step"]
+            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
 
         self.info(f"Original dataset\n{original_dataset}")
@@ -637,13 +637,13 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
-        original_times = set(original_dataset.time.values)
+        original_times = set(original_dataset[self.time_dim].values)
         if (
-            type(update_dataset.time.values) == np.datetime64
+            type(update_dataset[self.time_dim].values) == np.datetime64
         ):  # cannot perform iterative (set) operations on a single numpy.datetime64 value
-            update_times = set([update_dataset.time.values])
+            update_times = set([update_dataset[self.time_dim].values])
         else:  # many values will come as an iterable numpy.ndarray
-            update_times = set(update_dataset.time.values)
+            update_times = set(update_dataset[self.time_dim].values)
         insert_times = sorted(update_times.intersection(original_times))
         append_times = sorted(update_times - original_times)
 
@@ -728,7 +728,10 @@ class Publish(Creation, Metadata):
             original_dataset, insert_dataset
         )
         for dates, region in zip(date_ranges, regions):
-            insert_slice = insert_dataset.sel(time=slice(dates[0], dates[1]))
+            if not self.forecast:
+                insert_slice = insert_dataset.sel(time=slice(dates[0], dates[1]))
+            elif self.forecast:
+                insert_slice = insert_dataset.sel(forecast_reference_time=slice(dates[0], dates[1]))
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
@@ -738,7 +741,7 @@ class Publish(Creation, Metadata):
             )
 
         self.info(
-            f"Inserted records for {len(insert_dataset.time.values)} times from {len(regions)} date range(s) to original zarr"
+            f"Inserted records for {len(insert_dataset[self.time_dim].values)} times from {len(regions)} date range(s) to original zarr"
         )
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
@@ -770,7 +773,7 @@ class Publish(Creation, Metadata):
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         self.info(
-            f"Appended records for {len(append_dataset.time.values)} datetimes to original zarr"
+            f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr"
         )
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
@@ -798,13 +801,14 @@ class Publish(Creation, Metadata):
         """
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
         if self.time_dim in update_dataset.dims:
-            update_dataset = update_dataset.sel(time=time_filter_vals).transpose(
-                self.time_dim, self.standard_dims[0], self.standard_dims[1]
-            )
+            if not self.forecast:
+                update_dataset = update_dataset.sel(time=time_filter_vals).transpose(
+                    self.time_dim, self.standard_dims[0], self.standard_dims[1]
+                )
+            elif self.forecast:
+                update_dataset = update_dataset.sel(forecast_reference_time=time_filter_vals).transpose(*self.standard_dims)
         else:
-            update_dataset = update_dataset.expand_dims(self.time_dim).transpose(
-                self.time_dim, self.standard_dims[0], self.standard_dims[1]
-            )
+            update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
         update_dataset = update_dataset.chunk(new_chunks)
         update_dataset = self.set_zarr_metadata(update_dataset)
 
@@ -835,7 +839,7 @@ class Publish(Creation, Metadata):
 
         """
         dataset_time_span = f"1{self.temporal_resolution()[0]}"  # NOTE this won't work for months (returns 1 minute), we could define a more precise method with if/else statements if needed.
-        complete_time_series = pd.Series(update_dataset.time.values)
+        complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value, and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
         starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(
             pd.Timedelta(dataset_time_span * 100)
@@ -856,15 +860,26 @@ class Publish(Creation, Metadata):
         # Calculate a tuple of the start/end indices for each datetime range
         regions_indices = []
         for date_pair in datetime_ranges:
-            start_int = list(original_dataset.time.values).index(
-                original_dataset.sel(time=date_pair[0], method="nearest").time
-            )
-            end_int = (
-                list(original_dataset.time.values).index(
-                    original_dataset.sel(time=date_pair[1], method="nearest").time
+            if not self.forecast:
+                start_int = list(original_dataset[self.time_dim].values).index(
+                    original_dataset.sel(time=date_pair[0], method="nearest").time
                 )
-                + 1
-            )
+                end_int = (
+                    list(original_dataset[self.time_dim].values).index(
+                        original_dataset.sel(time=date_pair[1], method="nearest").time
+                    )
+                    + 1
+                )
+            elif self.forecast:
+                start_int = list(original_dataset[self.time_dim].values).index(
+                    original_dataset.sel(forecast_reference_time=date_pair[0], method="nearest").time
+                )
+                end_int = (
+                    list(original_dataset[self.time_dim].values).index(
+                        original_dataset.sel(forecast_reference_time=date_pair[1], method="nearest").time
+                    )
+                    + 1
+                )
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
