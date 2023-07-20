@@ -55,7 +55,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         s3_bucket_name=None,
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
-        forecast: bool = True,
+        forecast: bool = False,
         debug: bool = False,
         *args,
         **kwargs,
