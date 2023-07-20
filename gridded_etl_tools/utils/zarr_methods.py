@@ -62,7 +62,7 @@ class Creation(Convenience):
                 self.input_files_list = [
                     str(fil)
                     for fil in self.input_files()
-                    if (fil.suffix == ".nc4" or fil.suffix == ".nc")
+                    if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
                 ]
                 self.info(f"Generating Zarr for {len(self.input_files_list)} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(self.input_files_list)))
@@ -76,9 +76,11 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, input_file: str, input_location: str = 'local', var_filter: dict = None, scan_indices: int = 0):
+    def kerchunkify(self, input_file: str, scan_indices: int = 0):
         """
-        Transform input NetCDF into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
+        Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
+
+        Read the input file either locally or remotely from S3, depending on whether an s3 bucket is specified in the file path.
 
         NOTE under the hood there are several versions of GRIB files -- GRIB1 and GRIB2 -- and NetCDF files -- classic, netCDF-4 classic, 64-bit offset, etc.
         Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so presuppose using those.
@@ -89,11 +91,6 @@ class Creation(Convenience):
         ----------
         input_file : str
             A file path to a NetCDF-4 Classic file
-        input_location: str
-            Where the input file will be read from. Accepts 'local' or 'remote'.
-            If local, assumes NETCDF4. If remote, assumes GRIB. Defaults to 'local'
-        var_filter : dict
-            A dictionary of filter arguments to pass to `scan_grib`'s `filter` parameter    
         scan_indices : int, int:int
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned we currently favor the 1st (Default index=0),
@@ -101,22 +98,29 @@ class Creation(Convenience):
             This may need to be amended in the future.
 
         """
-        if input_location == 'local':
+        if 's3://' not in input_file:
             fs = fsspec.filesystem("file")
-            fs_nc = fs.open(input_file)
-            with fs_nc as infile:
-                try:
-                    return SingleHdf5ToZarr(infile, fs_nc.path).translate()
-                except OSError as e:
-                    raise ValueError(
-                        f"Error found with {fs_nc.path}, likely due to incomplete file. Full error message is {e}"
-                    )
-        elif input_location == 'remote':
-            s3_so = {
-                'anon': True, 
-                'skip_instance_cache': True,
-            }
-            scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = var_filter, inline_threshold=20)[scan_indices]
+            try:
+                if self.file_type == 'NetCDF':
+                    fs_nc = fs.open(input_file)
+                    with fs_nc as infile:
+                        return SingleHdf5ToZarr(infile, fs_nc.path).translate()
+                elif self.file_type == 'GRIB':
+                        return scan_grib(input_file, filter = self.grib_filter, inline_threshold=300)[scan_indices]
+            except OSError as e:
+                raise ValueError(
+                    f"Error found with {input_file}, likely due to incomplete file. Full error message is {e}"
+                )
+        elif 's3://' in input_file:
+            if self.file_type == 'NetCDF':
+                with fs_nc as infile:
+                    scanned_zarr_json = SingleHdf5ToZarr(infile, fs_nc.path).translate()
+            elif 'GRIB' in self.file_type:
+                s3_so = {
+                    'anon': True,
+                    'skip_instance_cache': True,
+                }
+                scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             # append to self.zarr_jsons for later use in an ETL's `transform` step
             self.zarr_jsons.append(scanned_zarr_json)
 
