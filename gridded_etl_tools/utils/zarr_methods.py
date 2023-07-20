@@ -744,7 +744,7 @@ class Publish(Creation, Metadata):
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
-                insert_slice.drop(self.standard_dims[:-1]),
+                insert_slice.drop(self.standard_dims[1:]),
                 mapper,
                 region={self.time_dim: slice(region[0], region[1])},
             )
