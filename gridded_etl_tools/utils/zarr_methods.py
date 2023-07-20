@@ -57,18 +57,21 @@ class Creation(Convenience):
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
             start_kerchunking = time.time()
-            # if extracting JSONs from S3 via kerchunk, self.zarr_jsons should already be prepared during the `extract` step
+            # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
             if not hasattr(self, "zarr_jsons"):
-                self.input_files_list = [
+                input_files_list = [
                     str(fil)
                     for fil in self.input_files()
                     if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
                 ]
-                self.info(f"Generating Zarr for {len(self.input_files_list)} files with {multiprocessing.cpu_count()} processors")
-                self.zarr_jsons = list(map(self.kerchunkify, tqdm(self.input_files_list)))
+                self.info(f"Generating Zarr for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
+                self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
+                mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
+            # if remotely extracting JSONs from S3, self.zarr_jsons should already be prepared during the `extract` step
             else:
                 self.info(f"Generating Zarr for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
-            mzz = MultiZarrToZarr(self.zarr_jsons, **self.mzz_opts())
+                mzz = MultiZarrToZarr(path=self.zarr_jsons, **self.mzz_opts())  # There are no file names to pass `path` if reading remotely
+            # Translate the MultiZarr to a master JSON and save that out locally. Will fail if the input JSONs are misspecified.
             mzz.translate(filename=self.zarr_json_path())
             self.info(
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
@@ -104,9 +107,9 @@ class Creation(Convenience):
                 if self.file_type == 'NetCDF':
                     fs_nc = fs.open(input_file)
                     with fs_nc as infile:
-                        return SingleHdf5ToZarr(infile, fs_nc.path).translate()
+                        return SingleHdf5ToZarr(infile, fs_nc.path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        return scan_grib(input_file, filter = self.grib_filter, inline_threshold=300)[scan_indices]
+                        return scan_grib(input_file, filter = self.grib_filter, inline_threshold=1)[scan_indices]
             except OSError as e:
                 raise ValueError(
                     f"Error found with {input_file}, likely due to incomplete file. Full error message is {e}"
