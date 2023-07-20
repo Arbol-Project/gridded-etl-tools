@@ -1,4 +1,3 @@
-import os
 import datetime
 import multiprocessing
 import time
@@ -7,11 +6,9 @@ import re
 import fsspec
 import pprint
 import dask
-import subprocess
 import pathlib
 import glob
 import itertools
-import s3fs
 
 import pandas as pd
 import numpy as np
