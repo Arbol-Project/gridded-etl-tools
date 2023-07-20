@@ -730,6 +730,7 @@ class Publish(Creation, Metadata):
         originaL_chunks : dict
             The dimension:size parameters for the original dataset
         """
+        original_dataset = self.store.dataset()
         append_dataset = self.prep_update_dataset(
             update_dataset, append_times, original_chunks
         )
@@ -739,6 +740,11 @@ class Publish(Creation, Metadata):
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim="time")
+        # If you are backdating data, the time dimension must be sorted or the newly appended records will return at the end of the time dim.
+        if max(append_dataset[self.time_dim]).values <= min(original_dataset[self.time_dim]).values:
+            updated_dataset = self.store.dataset()
+            updated_dataset = updated_dataset.sortby(self.time_dim)
+            self.to_zarr(updated_dataset, mapper, consolidated=True)
 
         self.info(
             f"Appended records for {len(append_dataset.time.values)} datetimes to original zarr"
