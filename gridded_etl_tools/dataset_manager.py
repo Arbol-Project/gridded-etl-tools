@@ -56,7 +56,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         forecast: bool = False,
-        debug: bool = False,
         *args,
         **kwargs,
     ):
@@ -100,7 +99,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
-        self.debug = debug
         self.forecast = forecast
 
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
