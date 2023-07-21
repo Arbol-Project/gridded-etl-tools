@@ -76,7 +76,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, input_file: str, scan_indices: int = 0):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -89,38 +89,37 @@ class Creation(Convenience):
 
         Parameters
         ----------
-        input_file : str
-            A file path to a NetCDF-4 Classic file
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
         scan_indices : int, int:int
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
-            When multiple options are returned we currently favor the 1st (Default index=0),
-            as it represents the shallowest depth / surface layer in ETLs we've written.
-            This may need to be amended in the future.
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
 
         """
-        if 's3://' not in input_file:
-            fs = fsspec.filesystem("file")
+        if not file_path.lower().startswith('s3://'):
             try:
                 if self.file_type == 'NetCDF':
-                    fs_nc = fs.open(input_file)
-                    with fs_nc as infile:
-                        return SingleHdf5ToZarr(infile, fs_nc.path, inline_threshold=5000).translate()
+                    fs = fsspec.filesystem("file")
+                    with fs.open(file_path) as infile:
+                        return SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        return scan_grib(input_file, filter = self.grib_filter, inline_threshold=1)[scan_indices]
+                        return scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
-                    f"Error found with {input_file}, likely due to incomplete file. Full error message is {e}"
+                    f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
                 )
-        elif 's3://' in input_file:
+        elif file_path.lower().startswith('s3://'):
+            s3_so = {
+                'anon': True,
+                'skip_instance_cache': True,
+            }
             if self.file_type == 'NetCDF':
-                with fs_nc as infile:
-                    scanned_zarr_json = SingleHdf5ToZarr(infile, fs_nc.path).translate()
+                fs = fsspec.filesystem("s3")
+                with fs.open(file_path, **s3_so) as infile:
+                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
             elif 'GRIB' in self.file_type:
-                s3_so = {
-                    'anon': True,
-                    'skip_instance_cache': True,
-                }
-                scanned_zarr_json = scan_grib(input_file, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+                scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             # append to self.zarr_jsons for later use in an ETL's `transform` step
             self.zarr_jsons.append(scanned_zarr_json)
 
