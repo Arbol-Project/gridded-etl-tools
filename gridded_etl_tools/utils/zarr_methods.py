@@ -599,7 +599,7 @@ class Publish(Creation, Metadata):
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
         else:
-            self.standard_dims = ["forecast_reference_time", "constant_offset", "latitude", "longitude"]
+            self.standard_dims = ["forecast_reference_time", "forecast_offset", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
 
     # UPDATES
