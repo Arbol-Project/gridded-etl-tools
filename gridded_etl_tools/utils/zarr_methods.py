@@ -869,21 +869,21 @@ class Publish(Creation, Metadata):
         for date_pair in datetime_ranges:
             if not self.forecast:
                 start_int = list(original_dataset[self.time_dim].values).index(
-                    original_dataset.sel(time=date_pair[0], method="nearest").time
+                    original_dataset.sel(time=date_pair[0], method="nearest")[self.time_dim]
                 )
                 end_int = (
                     list(original_dataset[self.time_dim].values).index(
-                        original_dataset.sel(time=date_pair[1], method="nearest").time
+                        original_dataset.sel(time=date_pair[1], method="nearest")[self.time_dim]
                     )
                     + 1
                 )
             elif self.forecast:
                 start_int = list(original_dataset[self.time_dim].values).index(
-                    original_dataset.sel(forecast_reference_time=date_pair[0], method="nearest").time
+                    original_dataset.sel(forecast_reference_time=date_pair[0], method="nearest")[self.time_dim]
                 )
                 end_int = (
                     list(original_dataset[self.time_dim].values).index(
-                        original_dataset.sel(forecast_reference_time=date_pair[1], method="nearest").time
+                        original_dataset.sel(forecast_reference_time=date_pair[1], method="nearest")[self.time_dim]
                     )
                     + 1
                 )
