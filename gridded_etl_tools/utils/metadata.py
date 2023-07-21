@@ -651,28 +651,51 @@ class Metadata(Convenience, IPFS):
             }
         )
         # Encode 'time' dimension with the Climate and Forecast Convention standards used by major climate data providers.
-        dataset.time.encoding.update(
-            {
-                "long_name": "time",
-                "calendar": "gregorian",
-            }
-        )
-        if "units" not in dataset.time.encoding.keys():
-            # reformat the dataset_start_date datetime to a CF compliant string if it exists....
-            if hasattr(self, "dataset_start_date"):
-                dataset.time.encoding.update(
-                    {
-                        "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
-                    }
-                )
-            # otherwise use None to indicate this is unknown at present
-            else:
-                dataset.time.encoding.update(
-                    {
-                        "units": None,
-                    }
-                )
-
+        if "time" in dataset:
+            dataset.time.encoding.update(
+                {
+                    "long_name": "time",
+                    "calendar": "gregorian",
+                }
+            )
+            if "units" not in dataset.time.encoding.keys():
+                # reformat the dataset_start_date datetime to a CF compliant string if it exists....
+                if hasattr(self, "dataset_start_date"):
+                    dataset.time.encoding.update(
+                        {
+                            "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
+                        }
+                    )
+                # otherwise use None to indicate this is unknown at present
+                else:
+                    dataset.time.encoding.update(
+                        {
+                            "units": None,
+                        }
+                    )
+        elif "forecast_reference_time" in dataset:
+            dataset.forecast_reference_time.encoding.update(
+                {
+                    "long_name": "initial time of forecast",
+                    "standard_name" : "forecast_reference_time",
+                    "calendar": "proleptic_gregorian",
+                }
+            )
+            # if hasattr(self, "dataset_start_date"):
+            #     import ipdb; ipdb.set_trace(context=4)
+            #     dataset.forecast_reference_time.encoding.update(
+            #         {
+            #             "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
+            #         }
+            #     )
+            #     import ipdb; ipdb.set_trace(context=4)
+            # # otherwise use existing units
+            # else:
+            #     dataset.forecast_reference_time.encoding.update(
+            #         {
+            #             "units": f"days since {dataset.forecast_reference_time.encoding['units'].replace('T00:00:00', ' 0:0:0 0')}",
+            #         }
+            #     )
         return dataset
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:

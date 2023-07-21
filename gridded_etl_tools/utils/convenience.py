@@ -321,16 +321,21 @@ class Convenience(Attributes):
             A tuple defining the start and end date of a file's time dimension
 
         """
+        # use forecast times if they exist
+        if "forecast_reference_time" in dataset:
+            time_dim = "forecast_reference_time"
+        else:
+            time_dim = "time"
         # if there is only one date, set start and end to the same value
-        if dataset["time"].size == 1:
-            value = dataset["time"].values
+        if dataset[time_dim].size == 1:
+            value = dataset[time_dim].values
             if isinstance(value, np.ndarray):
                 value = value[0]
             start = self.numpydate_to_py(value)
             end = start
         else:
-            start = self.numpydate_to_py(dataset["time"][0].values)
-            end = self.numpydate_to_py(dataset["time"][-1].values)
+            start = self.numpydate_to_py(dataset[time_dim][0].values)
+            end = self.numpydate_to_py(dataset[time_dim][-1].values)
         return start, end
 
     def get_date_range_from_file(
