@@ -780,7 +780,7 @@ class Publish(Creation, Metadata):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
-        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim="time")
+        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         # If you are backdating data, the time dimension must be sorted or the newly appended records will return at the end of the time dim.
         if max(append_dataset[self.time_dim]).values <= min(original_dataset[self.time_dim]).values:
