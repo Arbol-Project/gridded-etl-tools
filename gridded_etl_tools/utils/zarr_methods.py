@@ -737,8 +737,7 @@ class Publish(Creation, Metadata):
             original_dataset, insert_dataset
         )
         for dates, region in zip(date_ranges, regions):
-            sel_kwargs = {self.time_dim : slice(dates[0], dates[1])}
-            insert_slice = insert_dataset.sel(**sel_kwargs)
+            insert_slice = insert_dataset.sel(**{self.time_dim : slice(dates[0], dates[1])})
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
@@ -808,8 +807,7 @@ class Publish(Creation, Metadata):
         """
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
         if self.time_dim in update_dataset.dims:
-            sel_kwargs = {self.time_dim : time_filter_vals}
-            update_dataset = update_dataset.sel(**sel_kwargs).transpose(*self.standard_dims)
+            update_dataset = update_dataset.sel(**{self.time_dim : time_filter_vals}).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
         update_dataset = update_dataset.chunk(new_chunks)
@@ -843,7 +841,8 @@ class Publish(Creation, Metadata):
         """
         dataset_time_span = f"1{self.temporal_resolution()[0]}"  # NOTE this won't work for months (returns 1 minute), we could define a more precise method with if/else statements if needed.
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
-        # Define datetime range starts as anything with > 1 unit diff with the previous value, and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
+        # Define datetime range starts as anything with > 1 unit diff with the previous value,
+        # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
         starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(
             pd.Timedelta(dataset_time_span * 100)
         ) > pd.Timedelta(dataset_time_span)
@@ -853,7 +852,8 @@ class Publish(Creation, Metadata):
         # Filter down the update time series to just the range starts/ends
         insert_datetimes = complete_time_series[starts + ends]
         single_datetime_inserts = complete_time_series[starts & ends]
-        # Add single day insert datetimes once more so they can be represented as ranges, then sort for the correct order. Divide the result into a collection of start/end range arrays
+        # Add single day insert datetimes once more so they can be represented as ranges, then sort for the correct order.
+        # Divide the result into a collection of start/end range arrays
         insert_datetimes = np.sort(
             pd.concat(
                 [insert_datetimes, single_datetime_inserts], ignore_index=True
@@ -863,14 +863,12 @@ class Publish(Creation, Metadata):
         # Calculate a tuple of the start/end indices for each datetime range
         regions_indices = []
         for date_pair in datetime_ranges:
-            start_sel_kwargs = {self.time_dim : date_pair[0], 'method' : 'nearest'}
-            end_sel_kwargs = {self.time_dim : date_pair[1], 'method' : 'nearest'}
-            start_int = list(original_dataset[self.time_dim].values).index(
-                original_dataset.sel(**start_sel_kwargs)[self.time_dim]
+            start_int = list(original_dataset[self.time_dim].values).index(\
+                original_dataset.sel(**{self.time_dim : date_pair[0], 'method' : 'nearest'})[self.time_dim]
             )
             end_int = (
                 list(original_dataset[self.time_dim].values).index(
-                    original_dataset.sel(**end_sel_kwargs)[self.time_dim]
+                    original_dataset.sel(**{self.time_dim : date_pair[1], 'method' : 'nearest'})[self.time_dim]
                 )
                 + 1
             )
