@@ -737,10 +737,8 @@ class Publish(Creation, Metadata):
             original_dataset, insert_dataset
         )
         for dates, region in zip(date_ranges, regions):
-            if not self.forecast:
-                insert_slice = insert_dataset.sel(time=slice(dates[0], dates[1]))
-            elif self.forecast:
-                insert_slice = insert_dataset.sel(forecast_reference_time=slice(dates[0], dates[1]))
+            sel_kwargs = {self.time_dim : slice(dates[0], dates[1])}
+            insert_slice = insert_dataset.sel(**sel_kwargs)
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
@@ -771,6 +769,7 @@ class Publish(Creation, Metadata):
         originaL_chunks : dict
             The dimension:size parameters for the original dataset
         """
+        original_dataset = xr.open_zarr(self.mapper(), chunks=None)
         append_dataset = self.prep_update_dataset(
             update_dataset, append_times, original_chunks
         )
@@ -780,6 +779,13 @@ class Publish(Creation, Metadata):
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
+
+        # If you are backdating data, the time dimension must be sorted or the newly appended records will return at the end of the time dim.
+        if max(append_dataset[self.time_dim]).values <= min(original_dataset[self.time_dim]).values:
+            updated_dataset = self.store.dataset()
+            updated_dataset = updated_dataset.sortby(self.time_dim)
+            import ipdb; ipdb.set_trace(context=4)
+            self.to_zarr(updated_dataset, mapper, consolidated=True, mode='a')
 
         self.info(
             f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr"
@@ -810,10 +816,8 @@ class Publish(Creation, Metadata):
         """
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
         if self.time_dim in update_dataset.dims:
-            if not self.forecast:
-                update_dataset = update_dataset.sel(time=time_filter_vals).transpose(*self.standard_dims)
-            elif self.forecast:
-                update_dataset = update_dataset.sel(forecast_reference_time=time_filter_vals).transpose(*self.standard_dims)
+            sel_kwargs = {self.time_dim : time_filter_vals}
+            update_dataset = update_dataset.sel(**sel_kwargs).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
         update_dataset = update_dataset.chunk(new_chunks)
@@ -867,26 +871,17 @@ class Publish(Creation, Metadata):
         # Calculate a tuple of the start/end indices for each datetime range
         regions_indices = []
         for date_pair in datetime_ranges:
-            if not self.forecast:
-                start_int = list(original_dataset[self.time_dim].values).index(
-                    original_dataset.sel(time=date_pair[0], method="nearest")[self.time_dim]
+            start_sel_kwargs = {self.time_dim : date_pair[0], 'method' : 'nearest'}
+            end_sel_kwargs = {self.time_dim : date_pair[1], 'method' : 'nearest'}
+            start_int = list(original_dataset[self.time_dim].values).index(
+                original_dataset.sel(**start_sel_kwargs)[self.time_dim]
+            )
+            end_int = (
+                list(original_dataset[self.time_dim].values).index(
+                    original_dataset.sel(**end_sel_kwargs)[self.time_dim]
                 )
-                end_int = (
-                    list(original_dataset[self.time_dim].values).index(
-                        original_dataset.sel(time=date_pair[1], method="nearest")[self.time_dim]
-                    )
-                    + 1
-                )
-            elif self.forecast:
-                start_int = list(original_dataset[self.time_dim].values).index(
-                    original_dataset.sel(forecast_reference_time=date_pair[0], method="nearest")[self.time_dim]
-                )
-                end_int = (
-                    list(original_dataset[self.time_dim].values).index(
-                        original_dataset.sel(forecast_reference_time=date_pair[1], method="nearest")[self.time_dim]
-                    )
-                    + 1
-                )
+                + 1
+            )
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
