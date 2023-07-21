@@ -452,6 +452,7 @@ class Publish(Creation, Metadata):
         if not hasattr(self, "metadata"):
             # This will occur when user is only updating metadata and has not parsed
             self.populate_metadata()
+            self.set_key_dims()
 
         # This will do nothing if catalog already exists
         self.create_root_stac_catalog()
