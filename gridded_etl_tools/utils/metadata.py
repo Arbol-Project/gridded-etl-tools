@@ -260,8 +260,8 @@ class Metadata(Convenience, IPFS):
             stac_coll["extent"]["spatial"]["bbox"] = [[minx, miny, maxx, maxy]]
             stac_coll["extent"]["temporal"]["interval"] = [
                 [
-                    self.numpydate_to_py(dataset.time.values.min()).isoformat() + "Z",
-                    self.numpydate_to_py(dataset.time.values.max()).isoformat() + "Z",
+                    self.numpydate_to_py(dataset[self.time_dim].values.min()).isoformat() + "Z",
+                    self.numpydate_to_py(dataset[self.time_dim].values.max()).isoformat() + "Z",
                 ]
             ]
             # Create an href corresponding to the collection in order to note this in the collection and root catalog.
@@ -333,14 +333,16 @@ class Metadata(Convenience, IPFS):
         properties_dict["array_size"] = {
             "latitude": dataset.latitude.size,
             "longitude": dataset.longitude.size,
-            "time": dataset.time.size,
+            self.time_dim : dataset[self.time_dim].size,
         }
+        if self.time_dim == 'forecast_reference_time':
+            properties_dict["array_size"].update({"step" : dataset.step.size})
         # Set up date items in STAC-compliant style
         properties_dict["start_datetime"] = (
-            self.numpydate_to_py(dataset.time.values[0]).isoformat() + "Z"
+            self.numpydate_to_py(dataset[self.time_dim].values[0]).isoformat() + "Z"
         )
         properties_dict["end_datetime"] = (
-            self.numpydate_to_py(dataset.time.values[-1]).isoformat() + "Z"
+            self.numpydate_to_py(dataset[self.time_dim].values[-1]).isoformat() + "Z"
         )
         properties_dict["updated"] = (
             datetime.datetime.utcnow()
@@ -532,8 +534,8 @@ class Metadata(Convenience, IPFS):
         # Update time interval
         stac_coll["extent"]["temporal"]["interval"] = [
             [
-                self.numpydate_to_py(dataset.time.values.min()).isoformat() + "Z",
-                self.numpydate_to_py(dataset.time.values.max()).isoformat() + "Z",
+                self.numpydate_to_py(dataset[self.time_dim].values.min()).isoformat() + "Z",
+                self.numpydate_to_py(dataset[self.time_dim].values.max()).isoformat() + "Z",
             ]
         ]
         # Publish STAC Collection with updated fields
@@ -651,28 +653,36 @@ class Metadata(Convenience, IPFS):
             }
         )
         # Encode 'time' dimension with the Climate and Forecast Convention standards used by major climate data providers.
-        dataset.time.encoding.update(
-            {
-                "long_name": "time",
-                "calendar": "gregorian",
-            }
-        )
-        if "units" not in dataset.time.encoding.keys():
+        if "time" in dataset:
+            dataset.time.encoding.update(
+                {
+                    "long_name": "time",
+                    "calendar": "gregorian",
+                }
+            )
+        elif "forecast_reference_time" in dataset:
+            dataset.forecast_reference_time.encoding.update(
+                {
+                    "long_name": "initial time of forecast",
+                    "standard_name" : "forecast_reference_time",
+                    "calendar": "proleptic_gregorian",
+                }
+            )
+        if "units" not in dataset[self.time_dim].encoding.keys():
             # reformat the dataset_start_date datetime to a CF compliant string if it exists....
             if hasattr(self, "dataset_start_date"):
-                dataset.time.encoding.update(
+                dataset[self.time_dim].encoding.update(
                     {
                         "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
                     }
                 )
             # otherwise use None to indicate this is unknown at present
             else:
-                dataset.time.encoding.update(
+                dataset[self.time_dim].encoding.update(
                     {
                         "units": None,
                     }
                 )
-
         return dataset
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:

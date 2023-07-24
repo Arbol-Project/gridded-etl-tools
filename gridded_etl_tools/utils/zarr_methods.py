@@ -1,4 +1,3 @@
-import os
 import datetime
 import multiprocessing
 import time
@@ -7,7 +6,6 @@ import re
 import fsspec
 import pprint
 import dask
-import subprocess
 import pathlib
 import glob
 import itertools
@@ -19,6 +17,7 @@ import xarray as xr
 from tqdm import tqdm
 from subprocess import Popen
 from kerchunk.hdf import SingleHdf5ToZarr
+from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
 from dask.distributed import Client, LocalCluster
 
@@ -51,21 +50,25 @@ class Creation(Convenience):
             Switch to create (or not) a new JSON at `DatasetManager.zarr_json_path()` even if the path exists
 
         """
-        input_files_list = [
-            str(fil)
-            for fil in self.input_files()
-            if (fil.suffix == ".nc4" or fil.suffix == ".nc")
-        ]
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
         if not self.zarr_json_path().exists() or force_overwrite:
-            self.info(f"Generating Zarr for {len(input_files_list)} files")
             start_kerchunking = time.time()
-            self.info(
-                f"Processing {len(input_files_list)} files with {multiprocessing.cpu_count()} processors"
-            )
-            zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
-            mzz = MultiZarrToZarr(zarr_jsons, **self.mzz_opts())
+            # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
+            if not hasattr(self, "zarr_jsons"):
+                input_files_list = [
+                    str(fil)
+                    for fil in self.input_files()
+                    if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
+                ]
+                self.info(f"Generating Zarr for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
+                self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
+                mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
+            # if remotely extracting JSONs from S3, self.zarr_jsons should already be prepared during the `extract` step
+            else:
+                self.info(f"Generating Zarr for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
+                mzz = MultiZarrToZarr(path=self.zarr_jsons, **self.mzz_opts())  # There are no file names to pass `path` if reading remotely
+            # Translate the MultiZarr to a master JSON and save that out locally. Will fail if the input JSONs are misspecified.
             mzz.translate(filename=self.zarr_json_path())
             self.info(
                 f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
@@ -73,9 +76,11 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, input_file: str):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0):
         """
-        Transform input NetCDF into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
+        Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
+
+        Read the input file either locally or remotely from S3, depending on whether an s3 bucket is specified in the file path.
 
         NOTE under the hood there are several versions of GRIB files -- GRIB1 and GRIB2 -- and NetCDF files -- classic, netCDF-4 classic, 64-bit offset, etc.
         Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so presuppose using those.
@@ -84,19 +89,39 @@ class Creation(Convenience):
 
         Parameters
         ----------
-        input_file : str
-            A file path to a NetCDF-4 Classic file
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
+        scan_indices : int, int:int
+            One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
 
         """
-        fs = fsspec.filesystem("file")
-        fs_nc = fs.open(input_file)
-        with fs_nc as infile:
+        if not file_path.lower().startswith('s3://'):
             try:
-                return SingleHdf5ToZarr(infile, fs_nc.path).translate()
+                if self.file_type == 'NetCDF':
+                    fs = fsspec.filesystem("file")
+                    with fs.open(file_path) as infile:
+                        return SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
+                elif self.file_type == 'GRIB':
+                        return scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
-                    f"Error found with {fs_nc.path}, likely due to incomplete file. Full error message is {e}"
+                    f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
                 )
+        elif file_path.lower().startswith('s3://'):
+            s3_so = {
+                'anon': True,
+                'skip_instance_cache': True,
+            }
+            if self.file_type == 'NetCDF':
+                fs = fsspec.filesystem("s3")
+                with fs.open(file_path, **s3_so) as infile:
+                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
+            elif 'GRIB' in self.file_type:
+                scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+            # append to self.zarr_jsons for later use in an ETL's `transform` step
+            self.zarr_jsons.append(scanned_zarr_json)
 
     @classmethod
     def mzz_opts(cls) -> dict:
@@ -112,6 +137,7 @@ class Creation(Convenience):
         """
         opts = dict(
             remote_protocol=cls.remote_protocol(),
+            remote_options={'anon' : True},
             identical_dims=cls.identical_dims(),
             concat_dims=cls.concat_dims(),
             preprocess=cls.preprocess_kerchunk,
@@ -426,6 +452,7 @@ class Publish(Creation, Metadata):
         if not hasattr(self, "metadata"):
             # This will occur when user is only updating metadata and has not parsed
             self.populate_metadata()
+            self.set_key_dims()
 
         # This will do nothing if catalog already exists
         self.create_root_stac_catalog()
@@ -464,7 +491,7 @@ class Publish(Creation, Metadata):
             if self.store.has_existing:
                 self.info("Pre-writing metadata to indicate an update is in progress")
                 empty_dataset.to_zarr(
-                    self.store.mapper(refresh=True), append_dim="time"
+                    self.store.mapper(refresh=True), append_dim=self.time_dim
                 )
 
         # Write data to Zarr and log duration.
@@ -481,7 +508,7 @@ class Publish(Creation, Metadata):
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            empty_dataset.to_zarr(self.store.mapper(), append_dim="time")
+            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
@@ -535,8 +562,8 @@ class Publish(Creation, Metadata):
         dataset = self.zarr_json_to_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.standard_dims = ["latitude", "longitude", "time"]
-        dataset = dataset.transpose("time", "latitude", "longitude")
+        self.set_key_dims()
+        dataset = dataset.transpose(*self.standard_dims)
 
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
@@ -564,6 +591,18 @@ class Publish(Creation, Metadata):
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
+    def set_key_dims(self):
+        """
+        Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
+        The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
+        """
+        if not self.forecast:
+            self.standard_dims = ["time", "latitude", "longitude"]
+            self.time_dim = "time"
+        else:
+            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+
     # UPDATES
 
     def update_zarr(self):
@@ -575,9 +614,8 @@ class Publish(Creation, Metadata):
         original_dataset = self.store.dataset()
         update_dataset = self.zarr_json_to_dataset()
 
-        # reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.standard_dims = ["latitude", "longitude", "time"]
-
+        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
+        self.set_key_dims()
         self.info(f"Original dataset\n{original_dataset}")
 
         # Prepare inputs for the update operation
@@ -608,13 +646,13 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
-        original_times = set(original_dataset.time.values)
+        original_times = set(original_dataset[self.time_dim].values)
         if (
-            type(update_dataset.time.values) == np.datetime64
+            type(update_dataset[self.time_dim].values) == np.datetime64
         ):  # cannot perform iterative (set) operations on a single numpy.datetime64 value
-            update_times = set([update_dataset.time.values])
+            update_times = set([update_dataset[self.time_dim].values])
         else:  # many values will come as an iterable numpy.ndarray
-            update_times = set(update_dataset.time.values)
+            update_times = set(update_dataset[self.time_dim].values)
         insert_times = sorted(update_times.intersection(original_times))
         append_times = sorted(update_times - original_times)
 
@@ -699,17 +737,17 @@ class Publish(Creation, Metadata):
             original_dataset, insert_dataset
         )
         for dates, region in zip(date_ranges, regions):
-            insert_slice = insert_dataset.sel(time=slice(dates[0], dates[1]))
+            insert_slice = insert_dataset.sel(**{self.time_dim : slice(dates[0], dates[1])})
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
-                insert_slice.drop(self.standard_dims[:2]),
+                insert_slice.drop(self.standard_dims[1:]),
                 mapper,
-                region={"time": slice(region[0], region[1])},
+                region={self.time_dim: slice(region[0], region[1])},
             )
 
         self.info(
-            f"Inserted records for {len(insert_dataset.time.values)} times from {len(regions)} date range(s) to original zarr"
+            f"Inserted records for {len(insert_dataset[self.time_dim].values)} times from {len(regions)} date range(s) to original zarr"
         )
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
@@ -738,10 +776,10 @@ class Publish(Creation, Metadata):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
-        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim="time")
+        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         self.info(
-            f"Appended records for {len(append_dataset.time.values)} datetimes to original zarr"
+            f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr"
         )
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
@@ -768,14 +806,10 @@ class Publish(Creation, Metadata):
             An xr.Dataset filtered to only the time values in `time_filter_vals`, with correct metadata
         """
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update failures.
-        if "time" in update_dataset.dims:
-            update_dataset = update_dataset.sel(time=time_filter_vals).transpose(
-                "time", self.standard_dims[0], self.standard_dims[1]
-            )
+        if self.time_dim in update_dataset.dims:
+            update_dataset = update_dataset.sel(**{self.time_dim : time_filter_vals}).transpose(*self.standard_dims)
         else:
-            update_dataset = update_dataset.expand_dims("time").transpose(
-                "time", self.standard_dims[0], self.standard_dims[1]
-            )
+            update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
         update_dataset = update_dataset.chunk(new_chunks)
         update_dataset = self.set_zarr_metadata(update_dataset)
 
@@ -806,8 +840,9 @@ class Publish(Creation, Metadata):
 
         """
         dataset_time_span = f"1{self.temporal_resolution()[0]}"  # NOTE this won't work for months (returns 1 minute), we could define a more precise method with if/else statements if needed.
-        complete_time_series = pd.Series(update_dataset.time.values)
-        # Define datetime range starts as anything with > 1 unit diff with the previous value, and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
+        complete_time_series = pd.Series(update_dataset[self.time_dim].values)
+        # Define datetime range starts as anything with > 1 unit diff with the previous value,
+        # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
         starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(
             pd.Timedelta(dataset_time_span * 100)
         ) > pd.Timedelta(dataset_time_span)
@@ -817,7 +852,8 @@ class Publish(Creation, Metadata):
         # Filter down the update time series to just the range starts/ends
         insert_datetimes = complete_time_series[starts + ends]
         single_datetime_inserts = complete_time_series[starts & ends]
-        # Add single day insert datetimes once more so they can be represented as ranges, then sort for the correct order. Divide the result into a collection of start/end range arrays
+        # Add single day insert datetimes once more so they can be represented as ranges, then sort for the correct order.
+        # Divide the result into a collection of start/end range arrays
         insert_datetimes = np.sort(
             pd.concat(
                 [insert_datetimes, single_datetime_inserts], ignore_index=True
@@ -827,12 +863,12 @@ class Publish(Creation, Metadata):
         # Calculate a tuple of the start/end indices for each datetime range
         regions_indices = []
         for date_pair in datetime_ranges:
-            start_int = list(original_dataset.time.values).index(
-                original_dataset.sel(time=date_pair[0], method="nearest").time
+            start_int = list(original_dataset[self.time_dim].values).index(\
+                original_dataset.sel(**{self.time_dim : date_pair[0], 'method' : 'nearest'})[self.time_dim]
             )
             end_int = (
-                list(original_dataset.time.values).index(
-                    original_dataset.sel(time=date_pair[1], method="nearest").time
+                list(original_dataset[self.time_dim].values).index(
+                    original_dataset.sel(**{self.time_dim : date_pair[1], 'method' : 'nearest'})[self.time_dim]
                 )
                 + 1
             )
