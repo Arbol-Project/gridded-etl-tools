@@ -336,7 +336,7 @@ class Metadata(Convenience, IPFS):
             self.time_dim : dataset[self.time_dim].size,
         }
         if self.time_dim == 'forecast_reference_time':
-            properties_dict["array_size"].update({"forecast_offset" : dataset.forecast_offset.size})
+            properties_dict["array_size"].update({"step" : dataset.step.size})
         # Set up date items in STAC-compliant style
         properties_dict["start_datetime"] = (
             self.numpydate_to_py(dataset[self.time_dim].values[0]).isoformat() + "Z"
