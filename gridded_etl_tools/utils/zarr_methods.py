@@ -498,7 +498,6 @@ class Publish(Creation, Metadata):
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
-        import ipdb; ipdb.set_trace(context=4)
         dataset.to_zarr(*args, **kwargs)
         self.info(
             f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
