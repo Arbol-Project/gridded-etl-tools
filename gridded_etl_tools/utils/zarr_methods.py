@@ -333,7 +333,7 @@ class Creation(Convenience):
         dataset = xr.open_zarr(mapper)
         return dataset
 
-    def zarr_json_to_dataset(self) -> xr.Dataset:
+    def zarr_json_to_dataset(self, zarr_json_path: str = None) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
 
@@ -343,13 +343,15 @@ class Creation(Convenience):
             Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
 
         """
+        if not zarr_json_path:
+            zarr_json_path = str(self.zarr_json_path())
         dataset = xr.open_dataset(
             "reference://",
             engine="zarr",
             chunks={},
             backend_kwargs={
                 "storage_options": {
-                    "fo": str(self.zarr_json_path()),
+                    "fo": zarr_json_path,
                     "remote_protocol": self.remote_protocol(),
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
@@ -496,6 +498,7 @@ class Publish(Creation, Metadata):
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
+        import ipdb; ipdb.set_trace(context=4)
         dataset.to_zarr(*args, **kwargs)
         self.info(
             f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
