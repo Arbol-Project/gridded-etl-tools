@@ -337,6 +337,12 @@ class Creation(Convenience):
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
 
+        Parameters
+        ----------
+        zarr_json_path : str, optional
+            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
+            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
+
         Returns
         -------
         xr.Dataset
