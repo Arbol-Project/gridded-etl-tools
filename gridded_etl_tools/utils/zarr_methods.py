@@ -333,9 +333,15 @@ class Creation(Convenience):
         dataset = xr.open_zarr(mapper)
         return dataset
 
-    def zarr_json_to_dataset(self) -> xr.Dataset:
+    def zarr_json_to_dataset(self, zarr_json_path: str = None) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
+
+        Parameters
+        ----------
+        zarr_json_path : str, optional
+            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
+            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
 
         Returns
         -------
@@ -343,13 +349,15 @@ class Creation(Convenience):
             Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
 
         """
+        if not zarr_json_path:
+            zarr_json_path = str(self.zarr_json_path())
         dataset = xr.open_dataset(
             "reference://",
             engine="zarr",
             chunks={},
             backend_kwargs={
                 "storage_options": {
-                    "fo": str(self.zarr_json_path()),
+                    "fo": zarr_json_path,
                     "remote_protocol": self.remote_protocol(),
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
