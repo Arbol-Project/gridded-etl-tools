@@ -55,6 +55,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         s3_bucket_name=None,
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
+        dask_dashboard_address: str = "127.0.0.1:8787",
         forecast: bool = False,
         *args,
         **kwargs,
@@ -132,6 +133,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.requested_dask_chunks = requested_dask_chunks
         self.requested_zarr_chunks = requested_zarr_chunks
         self.requested_ipfs_chunker = requested_ipfs_chunker
+
+        # set the dask dashboard address. Defaults to 127.0.0.1:8787 so it's only findable on the local machine
+        self.dask_dashboard_address = dask_dashboard_address
 
         # Dask distributed configuration defaults, mostly related to memory usage
         self.dask_scheduler_worker_saturation = 1.2
