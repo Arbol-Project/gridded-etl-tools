@@ -399,8 +399,7 @@ class Publish(Creation, Metadata):
         # Use a Dask client to open, process, and write the data
         with LocalCluster(
             processes=False,
-            host = "0.0.0.0",  # scheduler listens on all ports. Necessary for an AWS instance to access dashboard hosted by its container.
-            dashboard_address="127.0.0.1:8787",  # specify local IP to prevent exposing the dashboard
+            dashboard_address="0.0.0.0:8787",  # specify local IP to prevent exposing the dashboard
             protocol="inproc://",  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
