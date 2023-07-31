@@ -1,5 +1,11 @@
 # This is necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .. import dataset_manager
+
 import datetime
 import json
 
@@ -24,14 +30,14 @@ class StoreInterface(ABC):
     in a uniform way, regardless of which is being used.
     """
 
-    def __init__(self, dm: DatasetManager):
+    def __init__(self, dm: dataset_manager.DatasetManager):
         """
         Create a new `StoreInterface`. Pass the dataset manager this store is being associated with, so the interface will have access to
         dataset properties.
 
         Parameters
         ----------
-        dm : DatasetManager
+        dm : dataset_manager.DatasetManager
             The dataset to be read or written.
         """
         self.dm = dm
@@ -84,20 +90,20 @@ class S3(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on S3.
 
-    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_json_key].zarr"), create a new S3 object using a `DatasetManager` object
+    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_json_key].zarr"), create a new S3 object using a `dataset_manager.DatasetManager` object
     and bucket name, and define both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the ~/.aws/credentials file or shell environment.
 
     After initialization, use the member functions to access the Zarr. For example, call `S3.mapper` to get a `MutableMapping` that can be passed to
     `xarray.open_zarr` and `xarray.to_zarr`.
     """
 
-    def __init__(self, dm: DatasetManager, bucket: str):
+    def __init__(self, dm: dataset_manager.DatasetManager, bucket: str):
         """
         Get an interface to a dataset's Zarr on S3 in the specified bucket.
 
         Parameters
         ----------
-        dm : DatasetManager
+        dm : dataset_manager.DatasetManager
             The dataset to be read or written.
         bucket : str
             The name of the S3 bucket to connect to (s3://[bucket])
