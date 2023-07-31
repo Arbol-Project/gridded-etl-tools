@@ -1,8 +1,6 @@
-# This is necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
+# The annotations dict and TYPE_CHECKING var are necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
 from __future__ import annotations
-
 from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from .. import dataset_manager
 
