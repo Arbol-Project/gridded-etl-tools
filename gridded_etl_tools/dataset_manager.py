@@ -257,7 +257,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str, forecast_dataset: bool = False) -> type:
+    def get_subclass(cls, name: str) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -273,12 +273,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if forecast_dataset:  # special handling of forecasts which generate multiple keys in a single class
-                if source.json_key() == name:
-                    return source
-            else:
-                if source.name() == name:
-                    return source
+            if source.name() == name:
+                return source
         print(
             f"failed to set manager from name {name}, could not find corresponding class"
         )
