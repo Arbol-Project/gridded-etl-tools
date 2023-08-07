@@ -15,7 +15,7 @@ from .utils.ipfs import IPFS
 from .utils.store import Local, IPLD, S3
 from abc import abstractmethod, ABC
 from collections.abc import Iterator
-
+from typing import Optional
 
 class DatasetManager(Logging, Publish, ABC, IPFS):
     """
@@ -196,11 +196,13 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         ...
 
     @abstractmethod
-    def extract(self):
+    def extract(self, date_range: Optional[tuple[datetime.datetime, datetime.datetime]] = None):
         """
         Check for updates to local input files (usually by checking a remote location where climate data publishers post updated
         data). Highly customized for every ETL.
         """
+        if date_range and date_range[0] < self.dataset_start_date:
+            raise ValueError(f"First datetime requested {date_range[0]} is before the start of the dataset in question. Please request a valid datetime.")
         self.new_files = []
 
     def transform(self):
@@ -255,7 +257,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str, forecast_dataset: bool = False) -> type:
+    def get_subclass(cls, name: str) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -271,12 +273,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if forecast_dataset:  # special handling of forecasts which generate multiple keys in a single class
-                if source.json_key() == name:
-                    return source
-            else:
-                if source.name() == name:
-                    return source
+            if source.name() == name:
+                return source
         print(
             f"failed to set manager from name {name}, could not find corresponding class"
         )
