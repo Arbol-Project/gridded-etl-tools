@@ -643,3 +643,24 @@ class Convenience(Attributes):
         else:
             self.info(f"newest file doesn't have data past our existing end date {compare_date}.")
             return False
+
+    def convert_360_latitudes_to_standard(dataset: xr.Dataset) -> xr.Dataset:
+        """
+        Convert the longitude coordinates of a dataset from 0 - 360 to -180 to 180.
+
+        Parameters
+        ----------
+        xr.Dataset
+            A dataset with longitudes from 0 to 360
+        Returns
+        -------
+        xr.Dataset
+            A dataset with longitudes from -180 to 180
+
+        """
+        # Convert longitudes from 0 - 360 to -180 to 180
+        dataset = dataset.assign_coords(
+            longitude=(((dataset.longitude + 180) % 360) - 180)
+        )
+        # After converting, the longitudes may still start at zero. This reorders the longitude coordinates from -180 to 180 if necessary.
+        return dataset.sortby(["latitude", "longitude"])
