@@ -201,7 +201,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Check for updates to local input files (usually by checking a remote location where climate data publishers post updated
         data). Highly customized for every ETL.
         """
-        if date_range[0] < self.dataset_start_date:
+        if date_range and date_range[0] < self.dataset_start_date:
             raise ValueError(f"First datetime requested {date_range[0]} is before the start of the dataset in question. Please request a valid datetime.")
         self.new_files = []
 
