@@ -15,7 +15,7 @@ from .utils.ipfs import IPFS
 from .utils.store import Local, IPLD, S3
 from abc import abstractmethod, ABC
 from collections.abc import Iterator
-
+from typing import Optional
 
 class DatasetManager(Logging, Publish, ABC, IPFS):
     """
@@ -196,7 +196,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         ...
 
     @abstractmethod
-    def extract(self, date_range: tuple[datetime.datetime, datetime.datetime] = None):
+    def extract(self, date_range: Optional[tuple[datetime.datetime, datetime.datetime]] = None):
         """
         Check for updates to local input files (usually by checking a remote location where climate data publishers post updated
         data). Highly customized for every ETL.
