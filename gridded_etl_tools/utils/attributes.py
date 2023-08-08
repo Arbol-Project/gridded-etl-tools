@@ -147,6 +147,20 @@ class Attributes(ABC):
         """
         return ""
 
+
+    @classmethod
+    def tags(cls) -> list[str]:
+        """
+        Default tag for a dataset. Prevents crashes on parse if no tags assigned.
+
+        Returns
+        -------
+        list[str]
+           Stand-in for a dataset's tags
+
+        """
+        return [""]
+
     @property
     def bbox_rounding_value(self) -> int:
         """
