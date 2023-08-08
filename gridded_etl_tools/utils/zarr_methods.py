@@ -120,8 +120,12 @@ class Creation(Convenience):
                     scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
             elif 'GRIB' in self.file_type:
                 scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
-            # append to self.zarr_jsons for later use in an ETL's `transform` step
-            self.zarr_jsons.append(scanned_zarr_json)
+            # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
+            if type(scanned_zarr_json) == dict:
+                self.zarr_jsons.append(scanned_zarr_json)
+            elif type(scanned_zarr_json) == list:
+                self.zarr_jsons.extend(scanned_zarr_json)
+            return scanned_zarr_json
 
     @classmethod
     def mzz_opts(cls) -> dict:
@@ -143,6 +147,27 @@ class Creation(Convenience):
             preprocess=cls.preprocess_kerchunk,
         )
         return opts
+
+    def zarr_json_to_file(self, zarr_json: dict):
+        """
+        Export a Kerchunked Zarr JSON stored in memory to file
+
+        Parameters
+        ----------
+        zarr_json : dict
+            A JSON created by Kerchunk compatible with / readable as a Zarr JSON.
+
+        """
+        zj_props = json.loads(zarr_json["refs"][f"{self.data_var()}/.zattrs"])
+        local_name = (
+            self.local_input_path() /
+            (
+                self.name()
+                + f"_{str(zj_props['dataDate'])}_{zj_props['endStep']:03}.json"
+            )
+        )
+        with open(local_name, "w") as file:
+            json.dump(zarr_json, file, sort_keys=False, indent=4)
 
     # PRE AND POST PROCESSING
 
