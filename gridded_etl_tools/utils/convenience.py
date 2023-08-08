@@ -645,7 +645,7 @@ class Convenience(Attributes):
             return False
 
     @classmethod
-    def standardize_longitudes(dataset: xr.Dataset) -> xr.Dataset:
+    def standardize_longitudes(cls, dataset: xr.Dataset) -> xr.Dataset:
         """
         Convert the longitude coordinates of a dataset from 0 - 360 to -180 to 180.
 

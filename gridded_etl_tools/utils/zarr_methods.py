@@ -148,7 +148,7 @@ class Creation(Convenience):
         )
         return opts
 
-    def zarr_json_to_file(self, zarr_json: dict):
+    def zarr_json_in_memory_to_file(self, zarr_json: dict):
         """
         Export a Kerchunked Zarr JSON stored in memory to file
 
