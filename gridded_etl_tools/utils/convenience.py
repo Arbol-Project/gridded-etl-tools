@@ -644,6 +644,7 @@ class Convenience(Attributes):
             self.info(f"newest file doesn't have data past our existing end date {compare_date}.")
             return False
 
+    @classmethod
     def standardize_longitudes(dataset: xr.Dataset) -> xr.Dataset:
         """
         Convert the longitude coordinates of a dataset from 0 - 360 to -180 to 180.
