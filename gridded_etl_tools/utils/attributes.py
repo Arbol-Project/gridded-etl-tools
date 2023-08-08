@@ -148,7 +148,7 @@ class Attributes(ABC):
         return ""
 
 
-    @classmethod
+    @property
     def tags(cls) -> list[str]:
         """
         Default tag for a dataset. Prevents crashes on parse if no tags assigned.
