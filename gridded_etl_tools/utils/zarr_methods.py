@@ -102,9 +102,9 @@ class Creation(Convenience):
                 if self.file_type == 'NetCDF':
                     fs = fsspec.filesystem("file")
                     with fs.open(file_path) as infile:
-                        return SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
+                        scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        return scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+                        scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
                     f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
@@ -125,7 +125,8 @@ class Creation(Convenience):
                 self.zarr_jsons.append(scanned_zarr_json)
             elif type(scanned_zarr_json) == list:
                 self.zarr_jsons.extend(scanned_zarr_json)
-            return scanned_zarr_json
+
+        return scanned_zarr_json
 
     @classmethod
     def mzz_opts(cls) -> dict:
@@ -147,27 +148,6 @@ class Creation(Convenience):
             preprocess=cls.preprocess_kerchunk,
         )
         return opts
-
-    def zarr_json_in_memory_to_file(self, zarr_json: dict):
-        """
-        Export a Kerchunked Zarr JSON stored in memory to file
-
-        Parameters
-        ----------
-        zarr_json : dict
-            A JSON created by Kerchunk compatible with / readable as a Zarr JSON.
-
-        """
-        zj_props = json.loads(zarr_json["refs"][f"{self.data_var()}/.zattrs"])
-        local_name = (
-            self.local_input_path() /
-            (
-                self.name()
-                + f"_{str(zj_props['dataDate'])}_{zj_props['endStep']:03}.json"
-            )
-        )
-        with open(local_name, "w") as file:
-            json.dump(zarr_json, file, sort_keys=False, indent=4)
 
     # PRE AND POST PROCESSING
 
