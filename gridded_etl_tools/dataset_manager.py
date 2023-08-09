@@ -56,7 +56,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
-        forecast: bool = False,
         write_local_zarr_jsons: bool = False,
         read_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
@@ -103,7 +102,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
-        self.forecast = forecast
         # Create certain paramters for development and debugging of certain dataset. All default to False.
         self.write_local_zarr_jsons = write_local_zarr_jsons
         self.read_local_zarr_jsons = read_local_zarr_jsons
