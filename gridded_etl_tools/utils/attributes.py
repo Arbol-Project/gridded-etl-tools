@@ -162,6 +162,11 @@ class Attributes(ABC):
         return [""]
 
     @property
+    def forecast(self) -> bool:
+        """Forecast defaults to False, must override for actual forecast datasets"""
+        return False
+
+    @property
     def bbox_rounding_value(self) -> int:
         """
         Value to round bbox values by. Specify within the dataset for very high resolution datasets

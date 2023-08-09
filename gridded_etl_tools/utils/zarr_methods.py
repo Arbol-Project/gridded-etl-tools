@@ -126,12 +126,6 @@ class Creation(Convenience):
             elif type(scanned_zarr_json) == list:
                 self.zarr_jsons.extend(scanned_zarr_json)
 
-        # output individual JSONs for local reading, in order to quickly iterate on MultiZarrtoZarr and postprocessing steps
-        if self.write_local_zarr_jsons:
-            if type(scanned_zarr_json) == list:
-                list(map(self.zarr_json_in_memory_to_file, scanned_zarr_json))
-            else:
-                self.zarr_json_in_memory_to_file(scanned_zarr_json)
         return scanned_zarr_json
 
     @classmethod
@@ -154,29 +148,6 @@ class Creation(Convenience):
             preprocess=cls.preprocess_kerchunk,
         )
         return opts
-
-    def zarr_json_in_memory_to_file(self, zarr_json: dict):
-        """
-        Export a Kerchunked Zarr JSON stored in memory to file
-        NOTE this was developed for NOAA parameters like 'dataDate' and 'endStep', 
-        may need adaptation/generalization to parameters in datasets from different providers
-
-        Parameters
-        ----------
-        zarr_json : dict
-            A JSON created by Kerchunk compatible with / readable as a Zarr JSON.
-
-        """
-        zj_props = json.loads(zarr_json["refs"][f"{self.data_var()}/.zattrs"])
-        local_name = (
-            self.local_input_path() /
-            (
-                self.name()
-                + f"_{str(zj_props['dataDate'])}_{zj_props['endStep']:03}.json"
-            )
-        )
-        with open(local_name, "w") as file:
-            json.dump(zarr_json, file, sort_keys=False, indent=4)
 
     # PRE AND POST PROCESSING
 

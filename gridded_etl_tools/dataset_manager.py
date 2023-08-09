@@ -56,6 +56,10 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
+        forecast: bool = False,
+        write_local_zarr_jsons: bool = False,
+        read_local_zarr_jsons: bool = False,
+        skip_prepare_input_files: bool = False,
         *args,
         **kwargs,
     ):
@@ -99,13 +103,11 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
-        # Create certain paramters for debugging purposes
-        if not hasattr(self, "forecast"):
-            self.forecast = False
-        if not hasattr(self, "write_local_zarr_jsons"):
-            self.write_local_zarr_jsons = False
-        if not hasattr(self, "read_local_zarr_jsons"):
-            self.read_local_zarr_jsons = False
+        self.forecast = forecast
+        # Create certain paramters for development and debugging of certain dataset. All default to False.
+        self.write_local_zarr_jsons = write_local_zarr_jsons
+        self.read_local_zarr_jsons = read_local_zarr_jsons
+        self.skip_prepare_input_files = skip_prepare_input_files
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
         # passed, raise a `ValueError`.
         if store is None or store == "local":
@@ -216,9 +218,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
         self.populate_metadata()
         # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for MultiZarring
-        if hasattr(self, "skip_prepare_input_files") and self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
-            pass
-        else:
+        if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
             self.prepare_input_files()
         # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
         self.create_zarr_json()
