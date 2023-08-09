@@ -211,7 +211,10 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
         self.populate_metadata()
         # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for MultiZarring
-        self.prepare_input_files()
+        if hasattr(self, "skip_prepare_input_files") and self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
+            pass
+        else:
+            self.prepare_input_files()
         # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
         self.create_zarr_json()
 
