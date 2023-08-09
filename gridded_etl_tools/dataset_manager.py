@@ -99,8 +99,13 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
+        # Create certain paramters for debugging purposes
         if not hasattr(self, "forecast"):
             self.forecast = False
+        if not hasattr(self, "write_local_zarr_jsons"):
+            self.write_local_zarr_jsons = False
+        if not hasattr(self, "read_local_zarr_jsons"):
+            self.read_local_zarr_jsons = False
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
         # passed, raise a `ValueError`.
         if store is None or store == "local":
