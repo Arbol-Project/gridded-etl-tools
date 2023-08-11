@@ -112,8 +112,8 @@ class Creation(Convenience):
         elif file_path.lower().startswith('s3://'):
             s3_so = {
                 'anon': True,
-                'skip_instance_cache': True,
-            }
+                "default_cache_type": "readahead"
+                }
             if self.file_type == 'NetCDF':
                 with self.store.fs().open(file_path, **s3_so) as infile:
                     scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
