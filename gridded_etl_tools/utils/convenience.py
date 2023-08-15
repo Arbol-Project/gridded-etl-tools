@@ -47,7 +47,7 @@ class Convenience(Attributes):
         pathlib.Path
             The path to the local final Zarr JSON file
         """
-        return self.local_input_root() / "merged_zarr_jsons" / f"{self.name()}_zarr.json"
+        return self.local_input_root / "merged_zarr_jsons" / f"{self.name()}_zarr.json"
 
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:
