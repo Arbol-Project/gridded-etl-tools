@@ -116,7 +116,7 @@ class Creation(Convenience):
                 }
             if self.file_type == 'NetCDF':
                 with self.store.fs().open(file_path, **s3_so) as infile:
-                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path)
+                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
             elif 'GRIB' in self.file_type:
                 scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
