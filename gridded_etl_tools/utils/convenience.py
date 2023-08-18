@@ -40,14 +40,14 @@ class Convenience(Attributes):
 
     def zarr_json_path(self) -> pathlib.Path:
         """
-        A path to the virtual Zarr
+        A path to the local final Zarr
 
         Returns
         -------
         pathlib.Path
-            The path to the virtual Zarr JSON file
+            The path to the local final Zarr JSON file
         """
-        return self.root_directory() / f"{self.name()}_zarr.json"
+        return self.local_input_root / "merged_zarr_jsons" / f"{self.name()}_zarr.json"
 
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:

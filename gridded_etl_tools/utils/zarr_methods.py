@@ -34,7 +34,7 @@ class Creation(Convenience):
 
     # KERCHUNKING
 
-    def create_zarr_json(self, force_overwrite: bool = False):
+    def create_zarr_json(self, use_existing: bool = False):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
 
@@ -46,13 +46,14 @@ class Creation(Convenience):
 
         Parameters
         ----------
-        force_overwrite : bool, optional
-            Switch to create (or not) a new JSON at `DatasetManager.zarr_json_path()` even if the path exists
+        use_existing : bool, optional
+            Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
+            Defaults to ovewriting any existing JSON under the assumption new data has been found.
 
         """
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, use that.
-        if not self.zarr_json_path().exists() or force_overwrite:
+        if not self.zarr_json_path().exists() or not use_existing:
             start_kerchunking = time.time()
             # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
             if not hasattr(self, "zarr_jsons"):
@@ -91,10 +92,15 @@ class Creation(Convenience):
         ----------
         file_path : str
             A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
-        scan_indices : int, slice(int,int)
+        scan_indices : int, slice(int)
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
             We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+
+        Returns
+        -------
+        scanned_zarr_json : dict
+            A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
 
         """
         if not file_path.lower().startswith('s3://'):
