@@ -59,6 +59,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         write_local_zarr_jsons: bool = False,
         read_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
+        skip_transform: bool = False,
         *args,
         **kwargs,
     ):
@@ -93,6 +94,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date will fail with a
             warning message.
+        write_local_zarr_jsons: bool, optional
+            Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked datasets.
+        read_local_zarr_jsons: bool, optional
+            Read local Zarr JSONs previously written out (per above property) into self.zarr_jsons for combination in a MultiZarr.
+        skip_prepare_input_files: bool, optional
+            Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
+        skip_transform: bool, optional
+            Skip the transform step entirely. Useful when restarting a parse that previously transformed
         """
         # call IPFS init
         super().__init__(host=ipfs_host)
@@ -106,6 +115,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.write_local_zarr_jsons = write_local_zarr_jsons
         self.read_local_zarr_jsons = read_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
+        self.skip_transform = skip_transform
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
         # passed, raise a `ValueError`.
         if store is None or store == "local":
@@ -219,7 +229,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
             self.prepare_input_files()
         # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference from Dask
-        self.create_zarr_json()
+        self.create_zarr_json(use_existing=self.skip_transform)
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):
