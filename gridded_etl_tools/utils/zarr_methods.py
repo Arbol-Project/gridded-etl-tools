@@ -53,7 +53,7 @@ class Creation(Convenience):
         """
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.
-        if not self.zarr_json_path().exists() or not force_overwrite:
+        if not self.zarr_json_path().exists() or force_overwrite:
             start_kerchunking = time.time()
             # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
             if not hasattr(self, "zarr_jsons"):
