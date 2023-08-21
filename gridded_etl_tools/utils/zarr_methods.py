@@ -34,7 +34,7 @@ class Creation(Convenience):
 
     # KERCHUNKING
 
-    def create_zarr_json(self, use_existing: bool = False):
+    def create_zarr_json(self, force_overwrite: bool = True):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
 
@@ -46,14 +46,14 @@ class Creation(Convenience):
 
         Parameters
         ----------
-        use_existing : bool, optional
+        force_overwrite : bool, optional
             Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
 
         """
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
-        # Generate a multizarr if it doesn't exist. If one exists, use that.
-        if not self.zarr_json_path().exists() or not use_existing:
+        # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.
+        if not self.zarr_json_path().exists() or not force_overwrite:
             start_kerchunking = time.time()
             # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
             if not hasattr(self, "zarr_jsons"):
