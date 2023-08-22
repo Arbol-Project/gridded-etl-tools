@@ -470,6 +470,8 @@ class Publish(Creation, Metadata):
         if not hasattr(self, "metadata"):
             # This will occur when user is only updating metadata and has not parsed
             self.populate_metadata()
+        if not hasattr(self, "time_dims"):
+            # ditto above; in some cases metadata will be populated by time dims not
             self.set_key_dims()
 
         # This will do nothing if catalog already exists
