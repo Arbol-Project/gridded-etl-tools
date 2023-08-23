@@ -23,6 +23,7 @@ dask-worker-space/
 
 # Editor/IDE
 *.swp
+.vscode
 
 # Tests temp data
 tests/local_*/
