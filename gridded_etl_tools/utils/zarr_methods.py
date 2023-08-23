@@ -9,6 +9,7 @@ import dask
 import pathlib
 import glob
 import itertools
+import os
 
 import pandas as pd
 import numpy as np
@@ -243,11 +244,14 @@ class Creation(Convenience):
             commands_slice = [ Popen(cmd) for cmd in commands[index:index+100]]
             for command in commands_slice:
                 command.wait()
+                if not keep_originals:
+                    os.remove(command.args[-2])
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
         # Get rid of original files that were converted
-        self.delete_original_files(input_files, keep_originals)
+        if keep_originals:
+            self.archive_original_files(input_files)
         self.info(
             f"Cleanup finished"
         )
@@ -284,7 +288,7 @@ class Creation(Convenience):
         Parameters
         ----------
         keep_originals : bool
-            A flag to preserve the original files for debugging purposes.
+            An optional flag to preserve the original files for debugging purposes. Defaults to False.
         """
         # Build a list of files for manipulation
         raw_files = [pathlib.Path(file) for file in glob.glob(str(self.local_input_path() / "*.nc"))]
@@ -297,29 +301,22 @@ class Creation(Convenience):
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
         self.parallel_subprocess_files(raw_files, command_text, '.nc4', keep_originals)
 
-    def delete_original_files(self, files: list, keep_originals: bool = False):
+    def archive_original_files(self, files: list):
         """
-        Clean up original files
-        Optionally moves the original file to a "<dataset_name>_originals" folder for reference
+        Move each original file to a "<dataset_name>_originals" folder for reference
 
         Parameters
         ----------
         files : list
             A list of original files to delete or save
-
-        keep_originals : bool
-            A boolean indicating whether to preserve the original files (for dev purposes)
         """
         # use the first file to define the originals_dir path
         first_file = files[0]
         originals_dir = first_file.parents[1] / (first_file.stem + "_originals")
+        # move original files to the originals_dir
         for file in files:
-            # keep or get rid of original files
-            if keep_originals:
-                pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
-                file.rename(originals_dir / file.name)
-            else:
-                file.unlink()
+            pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
+            file.rename(originals_dir / file.name)
 
     # RETURN DATASET
 
