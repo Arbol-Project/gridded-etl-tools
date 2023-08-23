@@ -251,7 +251,7 @@ class Creation(Convenience):
         )
         # Get rid of original files that were converted
         if keep_originals:
-            self.clean_up_original_files(input_files)
+            self.archive_original_files(input_files)
         self.info(
             f"Cleanup finished"
         )
@@ -301,9 +301,9 @@ class Creation(Convenience):
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
         self.parallel_subprocess_files(raw_files, command_text, '.nc4', keep_originals)
 
-    def clean_up_original_files(self, files: list):
+    def archive_original_files(self, files: list):
         """
-        Clean up original files, moving each to a "<dataset_name>_originals" folder for reference
+        Move each original file to a "<dataset_name>_originals" folder for reference
 
         Parameters
         ----------
