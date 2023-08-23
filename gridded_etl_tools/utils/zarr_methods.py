@@ -245,7 +245,7 @@ class Creation(Convenience):
             for command in commands_slice:
                 command.wait()
                 if not keep_originals:
-                    os.remove(command[-2])
+                    os.remove(command.args[-2])
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
