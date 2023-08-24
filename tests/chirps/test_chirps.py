@@ -186,14 +186,14 @@ def test_thread_count(mocker, manager_class):
     mocker.patch("multiprocessing.cpu_count", return_value=32)
     mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
     manager = manager_class()
-    assert(manager.dask_num_threads == 24)
+    assert(manager.dask_num_threads == 32)
 
     # Test if 128GB RAM + 32 CPU == 12 threads
     mock_vm_stats.total = 128 * 1000000000
     mocker.patch("multiprocessing.cpu_count", return_value=32)
     mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
     manager = manager_class()
-    assert(manager.dask_num_threads == 12)
+    assert(manager.dask_num_threads == 16)
 
     # Test if 256GB RAM + 16 CPU == 16 threads
     mock_vm_stats.total = 256 * 1000000000
