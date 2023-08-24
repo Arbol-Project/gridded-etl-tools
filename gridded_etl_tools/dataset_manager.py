@@ -50,7 +50,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         custom_latest_hash=None,
         custom_input_path=None,
         console_log=True,
-        global_log_level=logging.DEBUG,
+        global_log_level=logging.INFO,
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
@@ -489,7 +489,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         )
         # Initialize logging for the ETL
         manager.log_to_file()
-        manager.log_to_file(level=logging.DEBUG)
         # Set parse to False by default, unless user specifies `only_parse`. This will be changed to True if new files found by extract
         trigger_parse = only_parse
         # update local files
