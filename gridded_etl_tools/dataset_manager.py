@@ -50,7 +50,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         custom_latest_hash=None,
         custom_input_path=None,
         console_log=True,
-        global_log_level=logging.INFO,
+        global_log_level=logging.DEBUG,
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
@@ -81,7 +81,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         console_log : bool, optional
             Enable logging `logging.INFO` level and higher statements to console. For more customization, see `DatasetManager.log_to_console`
         global_log_level : str, optional
-            The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.INFO`, so all logging
+            The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all logging
             statements will be generated and then logging handlers can decide what to do with them.
         store : str | None
             A string indicating the type of filestore to use (one of, "local", "ipld" or "s3"). A corresponding store object will be initialized.
