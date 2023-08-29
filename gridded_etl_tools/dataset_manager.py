@@ -63,7 +63,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         **kwargs,
     ):
         """
-        Set member variables to defaults. Setup logging to console and any other requested logs.
+        Set member variables to defaults. Set up logging to console and any other requested logs.
 
         Parameters
         ----------
@@ -153,6 +153,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.dask_worker_mem_spill = 0.65
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
+        self.dask_use_process_scheduler = False
+        self.dask_scheduler_protocol = "inproc://"
 
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1

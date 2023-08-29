@@ -413,9 +413,9 @@ class Publish(Creation, Metadata):
         self.dask_configuration()
         # Use a Dask client to open, process, and write the data
         with LocalCluster(
-            processes=False,
+            processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
-            protocol="inproc://",  # otherwise Dask may default to tcp or tls protocols and choke
+            protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
         ) as cluster, Client(
