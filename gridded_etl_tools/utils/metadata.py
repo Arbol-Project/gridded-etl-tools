@@ -792,7 +792,7 @@ class Metadata(Convenience, IPFS):
 
         """
         # Leave compression off for IPLD
-        if self.store == "ipld":
+        if isinstance(self.store, IPLD):
             compressor = None
         else:
             compressor = numcodecs.Blosc()
