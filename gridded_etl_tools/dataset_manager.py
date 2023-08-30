@@ -56,6 +56,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
+        dask_cpu_mem_target_ratio: float = 4 / 32,
         write_local_zarr_jsons: bool = False,
         read_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
@@ -162,9 +163,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Each thread will use a CPU if self.dask_num_workers is 1. The target ratio is 3 threads per 32 GB RAM. If there are not enough cores
         # available to use the target number of threads, use the number of available cores. If the target thread count is less than one, set it
         # to 1.
-        target_ratio = 3 / 32
         total_memory_gb = psutil.virtual_memory().total / 1000000000
-        target_thread_count = int(target_ratio * total_memory_gb)
+        target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
         if target_thread_count > multiprocessing.cpu_count():
             self.dask_num_threads = multiprocessing.cpu_count()
         elif target_thread_count < 1:
