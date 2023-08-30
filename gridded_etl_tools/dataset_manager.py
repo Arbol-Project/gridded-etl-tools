@@ -165,8 +165,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # to 1.
         total_memory_gb = psutil.virtual_memory().total / 1000000000
         target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
-        if target_thread_count > multiprocessing.cpu_count():
-            self.dask_num_threads = multiprocessing.cpu_count()
+        if target_thread_count >= multiprocessing.cpu_count():
+            self.dask_num_threads = multiprocessing.cpu_count() -1
         elif target_thread_count < 1:
             self.dask_num_threads = 1
         else:
