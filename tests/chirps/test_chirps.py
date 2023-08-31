@@ -186,7 +186,7 @@ def test_thread_count(mocker, manager_class):
     mocker.patch("multiprocessing.cpu_count", return_value=32)
     mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
     manager = manager_class()
-    assert(manager.dask_num_threads == 32)
+    assert(manager.dask_num_threads == 31)
 
     # Test if 128GB RAM + 32 CPU == 12 threads
     mock_vm_stats.total = 128 * 1000000000
@@ -200,7 +200,7 @@ def test_thread_count(mocker, manager_class):
     mocker.patch("multiprocessing.cpu_count", return_value=16)
     mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
     manager = manager_class()
-    assert(manager.dask_num_threads == 16)
+    assert(manager.dask_num_threads == 15)
 
     # Test the edge case of targeting less than one CPU == 1 thread
     mock_vm_stats.total = 8 * 1000000000
@@ -214,4 +214,4 @@ def test_thread_count(mocker, manager_class):
     mocker.patch("multiprocessing.cpu_count", return_value=1)
     mocker.patch("psutil.virtual_memory", return_value=mock_vm_stats)
     manager = manager_class()
-    assert(manager.dask_num_threads == 1)
+    assert(manager.dask_num_threads == 0)

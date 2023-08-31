@@ -10,6 +10,7 @@ import pathlib
 import glob
 import itertools
 import os
+import s3fs
 
 import pandas as pd
 import numpy as np
@@ -413,9 +414,9 @@ class Publish(Creation, Metadata):
         self.dask_configuration()
         # Use a Dask client to open, process, and write the data
         with LocalCluster(
-            processes=False,
+            processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
-            protocol="inproc://",  # otherwise Dask may default to tcp or tls protocols and choke
+            protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
         ) as cluster, Client(
@@ -513,6 +514,7 @@ class Publish(Creation, Metadata):
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
+
         dataset.to_zarr(*args, **kwargs)
         self.info(
             f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"

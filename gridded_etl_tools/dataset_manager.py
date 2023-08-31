@@ -56,6 +56,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
+        dask_cpu_mem_target_ratio: float = 4 / 32,
         write_local_zarr_jsons: bool = False,
         read_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
@@ -63,7 +64,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         **kwargs,
     ):
         """
-        Set member variables to defaults. Setup logging to console and any other requested logs.
+        Set member variables to defaults. Set up logging to console and any other requested logs.
 
         Parameters
         ----------
@@ -153,18 +154,19 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.dask_worker_mem_spill = 0.65
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
+        self.dask_use_process_scheduler = False
+        self.dask_scheduler_protocol = "inproc://"
 
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
 
-        # Each thread will use a CPU if self.dask_num_workers is 1. The target ratio is 4 threads per 32 GB RAM. If there are not enough cores
-        # available to use the target number of threads, use the number of available cores. If the target thread count is less than one, set it
-        # to 1.
-        target_ratio = 4 / 32
+        # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB RAM, 
+        # adjust in the init of your manager if you desire a diffeerent ratio.
+        # If there are not enough cores available to use the target number of threads, use the number of available cores.
         total_memory_gb = psutil.virtual_memory().total / 1000000000
-        target_thread_count = int(target_ratio * total_memory_gb)
-        if target_thread_count > multiprocessing.cpu_count():
-            self.dask_num_threads = multiprocessing.cpu_count()
+        target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
+        if target_thread_count >= multiprocessing.cpu_count():
+            self.dask_num_threads = multiprocessing.cpu_count() - 1
         elif target_thread_count < 1:
             self.dask_num_threads = 1
         else:
