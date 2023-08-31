@@ -376,47 +376,6 @@ class Creation(Convenience):
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
 
-    def base_dataset(self, **kwargs: dict) -> xr.Dataset:
-        """
-        Pull the base dataset to be transformed into Xarray
-        Intended for using one Zarr dataset to produce another
-
-        Returns
-        -------
-        base_dataset : xr.Dataset
-            An Xarray Dataset for the base dataset in Arbol's gridded prod bucket
-        """
-        if hasattr(self, "base_dataset_url"):
-            if self.store.fs().exists(self.base_dataset_url):
-                mapper = s3fs.S3Map(root=self.base_dataset_url, s3=self.store.fs(), **kwargs)
-                return xr.open_zarr(mapper)
-            else:
-                raise FileNotFoundError(f"Base dataset not found at {self.base_dataset_url}")
-        else:
-            raise ValueError(f"Base_dataset_url member variable undefined. Please define a reference base dataset before continuing.")
-
-    def extract_from_base_dataset(self, start_date: datetime.datetime, end_date: datetime.datetime) -> xr.Dataset:
-        """
-        Extract a partial dataset from the base dataset using a date range as the filter
-
-        Parameters
-        ----------
-        start_date : datetime.datetime
-            The desired start date for data from the base dataset
-
-        end_date : datetime.datetime
-            The desired end date for data from the base dataset
-
-        Returns
-        -------
-        xr.Dataset
-            A selection of the base dataset between start_date and end_date
-        """
-        if self.forecast:
-            return self.base_dataset().sel(forecast_reference_time=slice(start_date, end_date))
-        else:
-            return self.base_dataset().sel(time=slice(start_date, end_date))
-
 
 class Publish(Creation, Metadata):
     """
