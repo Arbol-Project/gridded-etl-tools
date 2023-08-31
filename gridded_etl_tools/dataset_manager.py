@@ -160,13 +160,13 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
 
-        # Each thread will use a CPU if self.dask_num_workers is 1. The target ratio is 4 threads per 32 GB RAM. If there are not enough cores
-        # available to use the target number of threads, use the number of available cores. If the target thread count is less than one, set it
-        # to 1.
+        # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB RAM, 
+        # adjust in the init of your manager if you desire a diffeerent ratio.
+        # If there are not enough cores available to use the target number of threads, use the number of available cores.
         total_memory_gb = psutil.virtual_memory().total / 1000000000
         target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
         if target_thread_count >= multiprocessing.cpu_count():
-            self.dask_num_threads = multiprocessing.cpu_count() -1
+            self.dask_num_threads = multiprocessing.cpu_count() - 1
         elif target_thread_count < 1:
             self.dask_num_threads = 1
         else:
