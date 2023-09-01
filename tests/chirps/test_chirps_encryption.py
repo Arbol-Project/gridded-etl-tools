@@ -29,7 +29,7 @@ import pytest
 import xarray
 import shutil
 
-from gridded_etl_tools.encryption import generate_encryption_key
+from gridded_etl_tools.utils.encryption import generate_encryption_key
 
 from ..common import *  # import local functions common to all pytests
 

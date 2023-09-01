@@ -4,7 +4,7 @@ import unittest.mock
 import numpy as np
 import pytest
 
-from gridded_etl_tools.encryption import (
+from gridded_etl_tools.utils.encryption import (
     generate_encryption_key,
     EncryptionFilter,
     MissingKeyError,
@@ -89,8 +89,8 @@ class TestEncryptionFilter:
         with pytest.raises(ValueError):
             filter.decode(encrypted)
 
-    @unittest.mock.patch("gridded_etl_tools.encryption.ChaCha20_Poly1305")
-    @unittest.mock.patch("gridded_etl_tools.encryption.get_random_bytes")
+    @unittest.mock.patch("gridded_etl_tools.utils.encryption.ChaCha20_Poly1305")
+    @unittest.mock.patch("gridded_etl_tools.utils.encryption.get_random_bytes")
     def test_encode(self, get_random_bytes, ChaCha20_Poly1305):
         # Unit test
         get_random_bytes.return_value = b"|nonce-----------------|"
@@ -111,7 +111,7 @@ class TestEncryptionFilter:
         cipher.encrypt_and_digest.assert_called_once_with(b"Hello Dad. I'm in jail.")
         cipher.update.assert_called_once_with(filter.header)
 
-    @unittest.mock.patch("gridded_etl_tools.encryption.ChaCha20_Poly1305")
+    @unittest.mock.patch("gridded_etl_tools.utils.encryption.ChaCha20_Poly1305")
     def test_decode(self, ChaCha20_Poly1305):
         # Unit test
         cipher = ChaCha20_Poly1305.new.return_value
