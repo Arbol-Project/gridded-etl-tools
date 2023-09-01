@@ -9,6 +9,7 @@ import argparse
 import datetime
 import psutil
 
+from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.zarr_methods import Publish
 from .utils.ipfs import IPFS
@@ -16,6 +17,7 @@ from .utils.store import Local, IPLD, S3
 from abc import abstractmethod, ABC
 from collections.abc import Iterator
 from typing import Optional
+
 
 class DatasetManager(Logging, Publish, ABC, IPFS):
     """
@@ -60,6 +62,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         write_local_zarr_jsons: bool = False,
         read_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
+        encryption_key: str = None,
         *args,
         **kwargs,
     ):
@@ -100,6 +103,10 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             Read local Zarr JSONs previously written out (per above property) into self.zarr_jsons for combination in a MultiZarr.
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
+        encryption_key : str, optional
+            If provided, data will be encrypted using `encryption_key` with
+            XChaCha20Poly1305. Use :func:`.encryption.generate_encryption_key` to
+            generate a random encryption key to be passed in here.
         """
         # call IPFS init
         super().__init__(host=ipfs_host)
@@ -160,7 +167,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
 
-        # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB RAM, 
+        # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB RAM,
         # adjust in the init of your manager if you desire a diffeerent ratio.
         # If there are not enough cores available to use the target number of threads, use the number of available cores.
         total_memory_gb = psutil.virtual_memory().total / 1000000000
@@ -172,6 +179,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         else:
             self.dask_num_threads = target_thread_count
         self.info(f"Using {self.dask_num_threads} threads on a {multiprocessing.cpu_count()}-core system with {total_memory_gb:.2f}GB RAM")
+
+        self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
 
     # SETUP
 
