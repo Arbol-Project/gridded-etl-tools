@@ -687,9 +687,11 @@ class Metadata(Convenience, IPFS):
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:
-            dataset[self.data_var()].encoding["filters"] = [
-                EncryptionFilter(self.encryption_key)
-            ]
+            encoding = dataset[self.data_var()].encoding
+            filters = encoding.get("filters")
+            if not filters:
+                encoding["filters"] = filters = []
+            filters.append(EncryptionFilter(self.encryption_key))
 
         return dataset
 
