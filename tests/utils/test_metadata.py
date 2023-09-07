@@ -1,7 +1,10 @@
 from unittest import mock
 
+import numcodecs
+
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption
+from gridded_etl_tools.utils import store
 
 
 def unimplemented(*args, **kwargs):
@@ -73,3 +76,11 @@ class TestMetadata:
         assert len(filters) == 2
         assert filters[0] == "SomeOtherFilter"
         assert isinstance(filters[1], encryption.EncryptionFilter)
+
+    def test_remove_unwanted_fields_w_ipld_store(self):
+        dataset = mock.MagicMock()
+        dataset["data"].encoding = {}
+        md = DummyManager()
+        md.store = store.IPLD(md)
+        dataset = md.remove_unwanted_fields(dataset)
+        assert isinstance(dataset["data"].encoding["compressor"], numcodecs.Blosc)
