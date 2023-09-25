@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 
 from shapely import geometry  # must be imported by name or shapely.geometry calls will fail
+from .encryption import EncryptionFilter
 from .ipfs import IPFS
 from .convenience import Convenience
 from .store import IPLD, Local
@@ -603,14 +604,14 @@ class Metadata(Convenience, IPFS):
             self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
             pass
 
+        # Set all fields to uncompressed and remove filters leftover from input files
+        dataset = self.remove_unwanted_fields(dataset)
+
         # Encode data types and missing value indicators for the data variable
         dataset = self.encode_vars(dataset)
 
         # Merge in relevant static / STAC metadata and create additional attributes
         dataset = self.merge_in_outside_metadata(dataset)
-
-        # Set all fields to uncompressed and remove filters leftover from input files
-        dataset = self.remove_unwanted_fields(dataset)
 
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         for attr in dataset.attrs.keys():
@@ -683,6 +684,15 @@ class Metadata(Convenience, IPFS):
                         "units": None,
                     }
                 )
+
+        # Encrypt variable data if requested
+        if self.encryption_key is not None:
+            encoding = dataset[self.data_var()].encoding
+            filters = encoding.get("filters")
+            if not filters:
+                encoding["filters"] = filters = []
+            filters.append(EncryptionFilter(self.encryption_key))
+
         return dataset
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:

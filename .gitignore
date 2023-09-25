@@ -35,6 +35,7 @@ tests/intermediate/
 tests/logging/
 tests/performance_report_*
 tests/*_zarr.json
+.coverage
 
 # Logs
 logs/
