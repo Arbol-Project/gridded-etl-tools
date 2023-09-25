@@ -167,10 +167,8 @@ def test_metadata(manager_class, heads_path):
     # Get a non-rebuild manager for testing metadata creation
     manager = manager_class(store='ipld')
     manager.HASH_HEADS_PATH = heads_path
-    try:
-        manager.publish_metadata()
-    except Exception:
-        manager.fail("Metadata update failed")
+    manager.publish_metadata()
+    assert manager.load_stac_metadata() != {}
 
 def test_thread_count(mocker, manager_class):
     """
