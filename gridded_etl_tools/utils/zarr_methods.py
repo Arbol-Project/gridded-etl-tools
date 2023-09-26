@@ -509,7 +509,7 @@ class Publish(Creation, Metadata):
         times = dataset[self.time_dim].values
         expected_delta = times[1] - times[0]
         if not self.are_times_contiguous(times, expected_delta):
-            raise ValueError("Dataset does not contain contiguous time data in " + dataset[self.time_dim])
+            raise ValueError("Dataset does not contain contiguous time data")
 
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
