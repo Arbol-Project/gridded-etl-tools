@@ -488,6 +488,9 @@ class Publish(Creation, Metadata):
         On S3 and local, pre and post update metadata edits are saved to the Zarr attrs at `Dataset.update_in_progress` to indicate during writing that
         the data is being edited.
 
+        The time dimension of the given dataset must be in contiguous order. The time step of the order will be determined by taking the difference
+        between the first two time entries in the dataset, so the dataset must also have at least two time steps worth of data.
+
         Parameters
         ----------
         dataset
@@ -497,6 +500,17 @@ class Publish(Creation, Metadata):
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
+        # Aggressively assert that the data is in contiguous time order. This is to protect against data corruption, especially during insert and append
+        # operations, but it should probably be replaced with a more sophisticated set of flags that let the user decide how to handle time data at their
+        # own risk.
+        #
+        # The expected delta is taken from the first two timestamps, but it could be improved by using Attributes.temporal_resolution if that function
+        # were edited to return a datetime64.
+        times = dataset[self.time_dim].values
+        expected_delta = times[1] - times[0]
+        if not self.are_times_contiguous(times, expected_delta):
+            raise ValueError("Dataset does not contain contiguous time data")
+
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False?).
@@ -698,6 +712,12 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
+
+        if not self.is_append_contiguous(original_dataset, append_times):
+            raise ValueError(
+                "Append would create out of order or incomplete dataset, aborting"
+            )
+
         # Raise an exception if there is no writable data
         if not insert_times and not append_times:
             raise ValueError(
@@ -894,3 +914,46 @@ class Publish(Creation, Metadata):
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
+
+    def are_times_contiguous(self, times: list[datetime.datetime], expected_delta: datetime.timedelta) -> bool:
+        """
+        Check if the given list of times is contiguous with a given difference between each time.
+
+        @param times            A list of datetime objects
+        @param expected_delta   Amount of time expected to be between each time
+        @return                 True if times are contiguous and have the correct time step, False otherwise
+        """
+        previous_time = times[0]
+        for time in times[1:]:
+            if time - previous_time != expected_delta:
+                return False
+            previous_time = time
+        return True
+
+    def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
+        """
+        Checks that an append will produce a contiguous dataset. Note that this requires `original_dataset` to have 2 or more time steps worth of data.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            dataset being appended to
+        append_times : list
+            list of times forming the time index of the append
+
+        Returns
+        -------
+        bool
+            whether the original and appending datasets form a contiguous time axis
+        """
+        # Use time step of the original dataset to get expected time delta. This could be improved by using Attributes.temporal_resolution
+        # if it were edited to return a numpy.timedelta64 (what if previous dataset has only one time step, for example).
+        last_time_in_original = original_dataset[self.time_dim].values[-1]
+        expected_delta = last_time_in_original - original_dataset[self.time_dim].values[-2]
+
+        # Check if first time in append times is one time step ahead of the last time in the original dataset
+        if append_times[0] - last_time_in_original != expected_delta:
+            return False
+
+        # Check if all times to be appended are contiguous with the correct time step
+        return self.are_times_contiguous(append_times, expected_delta)
