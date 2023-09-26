@@ -698,6 +698,12 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
+
+        if not self.is_append_contiguous(original_dataset, append_times):
+            raise ValueError(
+                "Append would create out of order or incomplete dataset, aborting"
+            )
+
         # Raise an exception if there is no writable data
         if not insert_times and not append_times:
             raise ValueError(
@@ -894,3 +900,26 @@ class Publish(Creation, Metadata):
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
+
+    def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list) -> bool:
+        """Checks that an append will produce a contiguous dataset
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            dataset being appended to
+        append_times : list
+            list of times forming the time index of the append
+
+        Returns
+        -------
+        bool
+            whether the original and appending datasets form a contiguous time axis
+        """
+        last_value_in_original = original_dataset[self.time_dim].values[-1]
+        dataset_freq = last_value_in_original - original_dataset[self.time_dim].values[-2]
+        for offset, actual_time in enumerate(append_times):
+            expected_time = last_value_in_original + (offset + 1) * dataset_freq
+            if expected_time != actual_time:
+                return False
+        return True
