@@ -715,7 +715,7 @@ class Publish(Creation, Metadata):
             Datetimes corresponding to all new records to append to the original dataset
         """
 
-        if not self.is_append_contiguous(original_dataset, append_times):
+        if append_times and not self.is_append_contiguous(original_dataset, append_times):
             raise ValueError(
                 "Append would create out of order or incomplete dataset, aborting"
             )
