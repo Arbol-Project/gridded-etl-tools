@@ -507,9 +507,11 @@ class Publish(Creation, Metadata):
         # The expected delta is taken from the first two timestamps, but it could be improved by using Attributes.temporal_resolution if that function
         # were edited to return a datetime64.
         times = dataset[self.time_dim].values
-        expected_delta = times[1] - times[0]
-        if not self.are_times_contiguous(times, expected_delta):
-            raise ValueError("Dataset does not contain contiguous time data")
+        if len(times) >= 2:
+            # Check is only valid if we have 2 or more values with which to calculate the delta
+            expected_delta = times[1] - times[0]
+            if not self.are_times_contiguous(times, expected_delta):
+                raise ValueError("Dataset does not contain contiguous time data")
 
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
