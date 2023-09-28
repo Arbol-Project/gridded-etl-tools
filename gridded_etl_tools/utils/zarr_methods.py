@@ -631,11 +631,14 @@ class Publish(Creation, Metadata):
         Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
         The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
         """
-        if not self.forecast:
+        if not self.forecast and not self.ensemble:
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-        else:
+        elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+        elif self.ensemble:
+            self.standard_dims = ["ensemble", "forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
 
     # UPDATES
