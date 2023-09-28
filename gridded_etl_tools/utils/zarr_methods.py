@@ -628,8 +628,10 @@ class Publish(Creation, Metadata):
 
     def set_key_dims(self):
         """
-        Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
-        The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
+        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
+        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
+
+        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
         """
         if not self.forecast and not self.ensemble:
             self.standard_dims = ["time", "latitude", "longitude"]
