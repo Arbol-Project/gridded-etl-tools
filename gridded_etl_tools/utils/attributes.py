@@ -167,6 +167,11 @@ class Attributes(ABC):
         return False
 
     @property
+    def ensemble(self) -> bool:
+        """Ensemble defaults to False, must override for actual ensemble datasets"""
+        return False
+
+    @property
     def bbox_rounding_value(self) -> int:
         """
         Value to round bbox values by. Specify within the dataset for very high resolution datasets
