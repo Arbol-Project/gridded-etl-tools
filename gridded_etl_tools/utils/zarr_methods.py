@@ -413,11 +413,11 @@ class Publish(Creation, Metadata):
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
-        # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
-        if isinstance(self.store, IPLD):
-            client = nullcontext()
-        else:
-            client = Client()
+        # # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
+        # if isinstance(self.store, IPLD):
+        #     client = nullcontext()
+        # else:
+        #     client = Client()
         # Use a Dask client to open, process, and write the data
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
@@ -425,38 +425,37 @@ class Publish(Creation, Metadata):
             protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
-        ) as cluster, client(
-            cluster,
-        ) as client:
-            self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
-            try:
-                # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
-                # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
-                # no existing data or allow overwrite has been set, write a new Zarr, overwriting (or in the case of IPLD, not using) any existing
-                # data. If rebuild is requested and there is existing data, but allow overwrite is not set, do not start parsing and issue a warning.
-                if self.store.has_existing and not self.rebuild_requested:
-                    self.info(f"Updating existing data at {self.store}")
-                    self.update_zarr()
-                elif not self.store.has_existing or (
-                    self.rebuild_requested and self.overwrite_allowed
-                ):
-                    if not self.store.has_existing:
-                        self.info(
-                            f"No existing data found. Creating new Zarr at {self.store}."
-                        )
+        ) as cluster:
+            with Client(cluster) if not isinstance(self.store, IPLD) else nullcontext() as client:
+                self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
+                try:
+                    # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
+                    # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
+                    # no existing data or allow overwrite has been set, write a new Zarr, overwriting (or in the case of IPLD, not using) any existing
+                    # data. If rebuild is requested and there is existing data, but allow overwrite is not set, do not start parsing and issue a warning.
+                    if self.store.has_existing and not self.rebuild_requested:
+                        self.info(f"Updating existing data at {self.store}")
+                        self.update_zarr()
+                    elif not self.store.has_existing or (
+                        self.rebuild_requested and self.overwrite_allowed
+                    ):
+                        if not self.store.has_existing:
+                            self.info(
+                                f"No existing data found. Creating new Zarr at {self.store}."
+                            )
+                        else:
+                            self.info(f"Data at {self.store} will be replaced.")
+                        self.write_initial_zarr()
                     else:
-                        self.info(f"Data at {self.store} will be replaced.")
-                    self.write_initial_zarr()
-                else:
-                    raise RuntimeError(
-                        "There is already a zarr at the specified path and a rebuild is requested, "
-                        "but overwrites are not allowed."
+                        raise RuntimeError(
+                            "There is already a zarr at the specified path and a rebuild is requested, "
+                            "but overwrites are not allowed."
+                        )
+                except KeyboardInterrupt:
+                    self.info(
+                        "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
                     )
-            except KeyboardInterrupt:
-                self.info(
-                    "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
-                )
-                client.close()
+                    client.close()
 
         if hasattr(self, "dataset_hash") and self.dataset_hash:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
