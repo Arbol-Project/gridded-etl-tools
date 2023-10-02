@@ -637,7 +637,7 @@ class Publish(Creation, Metadata):
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
         elif self.ensemble:
-            self.standard_dims = ["ensemble", "forecast_reference_time", "step", "latitude", "longitude"]
+            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
         elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
