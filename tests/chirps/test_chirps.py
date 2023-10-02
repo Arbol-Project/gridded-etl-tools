@@ -35,11 +35,11 @@ from ..common import *  # import local functions common to all pytests
 
 
 @pytest.fixture
-def create_input_directories(initial_input_path, appended_input_path):
+def create_input_directories(initial_input_path, appended_input_path, appended_input_path_with_hole):
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (initial_input_path, appended_input_path):
+    for path in (initial_input_path, appended_input_path, appended_input_path_with_hole):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
@@ -61,9 +61,22 @@ def simulate_file_download(root, initial_input_path, appended_input_path):
     print("Simulated downloading input files")
 
 
+@pytest.fixture
+def simulate_file_download_hole(root, initial_input_path, appended_input_path_with_hole):
+    """
+    Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input directories will be
+    deleted during clean up.
+    """
+    # for chirps_init_fil in root.glob("*initial*"):
+    #     shutil.copy(chirps_init_fil, initial_input_path)
+    shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
+    shutil.copy(root / "chirps_append_subset_with_hole.nc", appended_input_path_with_hole)
+    print("Simulated downloading input files hole")
+
+
 @pytest.fixture(scope='function', autouse=True)
-def setup_and_teardown_per_test(mocker, request, initial_input_path, appended_input_path,
-                                create_heads_file_for_testing, create_input_directories, simulate_file_download):
+def setup_and_teardown_per_test(mocker, request, initial_input_path, appended_input_path, appended_input_path_with_hole,
+                                create_heads_file_for_testing, create_input_directories, simulate_file_download, simulate_file_download_hole):
     """
     Call the setup functions first, in a chain ending with `simulate_file_download`.
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
@@ -80,7 +93,7 @@ def setup_and_teardown_per_test(mocker, request, initial_input_path, appended_in
     remove_dask_worker_dir()
     remove_performance_report()
     # now clean up the various files created for each test
-    clean_up_input_paths(initial_input_path, appended_input_path)
+    clean_up_input_paths(initial_input_path, appended_input_path, appended_input_path_with_hole)
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -156,6 +169,23 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     original_value = original_dataset[orig_data_var].sel(
         latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
     assert output_value == original_value
+
+
+def test_bad_append(mocker, request, manager_class, heads_path, test_chunks, appended_input_path_with_hole, root):
+    """
+    Test an update of chirps data by adding new data to the end of existing data.
+    """
+    # Get a non-rebuild manager for testing append
+    manager = manager_class(custom_input_path=appended_input_path_with_hole, store='ipld')
+    manager.HASH_HEADS_PATH = heads_path
+    manager.zarr_chunks = {}
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform()
+    with pytest.raises(ValueError):
+        manager.parse()
 
 
 def test_metadata(manager_class, heads_path):
