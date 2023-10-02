@@ -359,20 +359,17 @@ class Creation(Convenience):
         """
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
-        dataset = xr.open_dataset(
-            "reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
-                "storage_options": {
-                    "fo": zarr_json_path,
-                    "remote_protocol": self.remote_protocol(),
+        mapper = fsspec.filesystem(
+            "reference",
+            fo = zarr_json_path,
+            ref_storage_args= {
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
-                "consolidated": False,
-            },
-        )
+            remote_protocol = self.remote_protocol(),
+            remote_options = {'anon' : True}
+        ).get_mapper()
+        dataset = xr.open_dataset(mapper, chunks={}, engine='zarr', consolidated=False)
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
 
