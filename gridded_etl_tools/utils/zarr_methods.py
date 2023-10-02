@@ -414,11 +414,6 @@ class Publish(Creation, Metadata):
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
         # # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
-        # if isinstance(self.store, IPLD):
-        #     client = nullcontext()
-        # else:
-        #     client = Client()
-        # Use a Dask client to open, process, and write the data
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
