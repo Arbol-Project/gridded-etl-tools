@@ -10,7 +10,6 @@ import pathlib
 import glob
 import itertools
 import os
-import s3fs
 
 import pandas as pd
 import numpy as np
@@ -112,7 +111,7 @@ class Creation(Convenience):
                     with fs.open(file_path) as infile:
                         scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+                    scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
                     f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
@@ -359,6 +358,7 @@ class Creation(Convenience):
         """
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
+
         dataset = xr.open_dataset(
             "reference://",
             engine="zarr",
@@ -628,13 +628,18 @@ class Publish(Creation, Metadata):
 
     def set_key_dims(self):
         """
-        Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
-        The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
+        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
+        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
+
+        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
         """
-        if not self.forecast:
+        if not self.forecast and not self.ensemble:
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-        else:
+        elif self.ensemble:
+            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+        elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
 
