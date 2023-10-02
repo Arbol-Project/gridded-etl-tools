@@ -10,7 +10,6 @@ import pathlib
 import glob
 import itertools
 import os
-import s3fs
 
 import pandas as pd
 import numpy as np
@@ -112,7 +111,7 @@ class Creation(Convenience):
                     with fs.open(file_path) as infile:
                         scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+                    scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
                     f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
@@ -359,6 +358,7 @@ class Creation(Convenience):
         """
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
+
         mapper = fsspec.filesystem(
             "reference",
             fo = zarr_json_path,
@@ -369,6 +369,7 @@ class Creation(Convenience):
             remote_protocol = self.remote_protocol(),
             remote_options = {'anon' : True}
         ).get_mapper()
+
         dataset = xr.open_dataset(mapper, chunks={}, engine='zarr', consolidated=False)
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
