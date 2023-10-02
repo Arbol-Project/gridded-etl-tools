@@ -10,7 +10,6 @@ import pathlib
 import glob
 import itertools
 import os
-import s3fs
 
 import pandas as pd
 import numpy as np
@@ -18,6 +17,7 @@ import xarray as xr
 
 from tqdm import tqdm
 from subprocess import Popen
+from contextlib import nullcontext
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -412,6 +412,11 @@ class Publish(Creation, Metadata):
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
+        # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
+        if isinstance(self.store, IPLD):
+            client = nullcontext()
+        else:
+            client = Client()
         # Use a Dask client to open, process, and write the data
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
@@ -419,7 +424,7 @@ class Publish(Creation, Metadata):
             protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
-        ) as cluster, Client(
+        ) as cluster, client(
             cluster,
         ) as client:
             self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
@@ -555,6 +560,9 @@ class Publish(Creation, Metadata):
         dask.config.set(
             {"distributed.worker.memory.terminate": self.dask_worker_mem_terminate}
         )
+        # IPLD should use the threads scheduler to work around pickling issues with IPLD objects like CIDs
+        if isinstance(self.store, IPLD):
+            dask.config.set({"scheduler" : "threads"})
 
         # OTHER USEFUL SETTINGS, USE IF ENCOUNTERING PROBLEMS WITH PARSES
         # dask.config.set({'scheduler' : 'threads'}) # default distributed scheduler does not allocate memory correctly for some parses
