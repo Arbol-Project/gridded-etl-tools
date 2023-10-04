@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
+from typing import Optional
 from tqdm import tqdm
 from subprocess import Popen
 from itertools import starmap, repeat
@@ -79,7 +80,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: str = None):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[str] = None):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -98,7 +99,7 @@ class Creation(Convenience):
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
             We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
-        local_file_path : str, optional
+        local_file_path : Optional[str], optional
             An optional local file path to save the Kerchunked Zarr JSON to
 
         Returns
@@ -136,6 +137,8 @@ class Creation(Convenience):
                 self.zarr_jsons.extend(scanned_zarr_json)
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
         if self.write_local_zarr_jsons:
+            if not local_file_path:
+                raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
                 memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
                 list(starmap(self.zarr_json_in_memory_to_file, memory_write_args))
@@ -146,15 +149,36 @@ class Creation(Convenience):
 
     def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: str):
         """
-        Export a Kerchunked Zarr JSON to file.
-        Implementations of this method rely on 
+        Export a Kerchunked Zarr JSON to file. 
+        If necessary, create a file name for that JSON in situ based on its attributes.
         """
-        if hasattr(self, "data_driven_zarr_json_name"):
-            local_file_path = self.data_driven_zarr_json_name(scanned_zarr_json)
+        local_file_path = self.data_driven_zarr_json_name(scanned_zarr_json=scanned_zarr_json, local_file_path=local_file_path)
         with open(local_file_path, "w") as file:
             json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
             self.info(f"Wrote local JSON to {local_file_path}")
 
+    def data_driven_zarr_json_name(scanned_zarr_json: dict, local_file_path: str) -> str:
+        """
+        Create a local file path based on attributes of the input Zarr JSON. 
+        Necessary for some datasets that package many forecasts into one single extract, preventing
+        us from passing in a local file path for each forecasts
+
+        Defaults to returning the local_file_path, e.g. doing nothing. 
+        Implement any code creating a new file path within child implementations of this method.
+
+        Parameters
+        ----------
+        scanned_zarr_json
+            The in-memory Zarr JSON returned by Kerchunk
+        local_file_path
+            The existing local file path specified by the user
+        
+        Returns
+        -------
+        str
+            The existing local file path specified by the user
+        """
+        return local_file_path
 
     @classmethod
     def mzz_opts(cls) -> dict:
