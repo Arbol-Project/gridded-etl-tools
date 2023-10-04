@@ -151,13 +151,20 @@ class Creation(Convenience):
         """
         Export a Kerchunked Zarr JSON to file. 
         If necessary, create a file name for that JSON in situ based on its attributes.
+
+        Parameters
+        ----------
+        scanned_zarr_json
+            The in-memory Zarr JSON returned by Kerchunk
+        local_file_path
+            The existing local file path specified by the user
         """
         local_file_path = self.file_path_from_zarr_json_attrs(scanned_zarr_json=scanned_zarr_json, local_file_path=local_file_path)
         with open(local_file_path, "w") as file:
             json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
             self.info(f"Wrote local JSON to {local_file_path}")
 
-    def file_path_from_zarr_json_attrs(self, scanned_zarr_json: dict, local_file_path: str) -> str:
+    def file_path_from_zarr_json_attrs(self, scanned_zarr_json: dict, local_file_path: pathlib.Path) -> pathlib.Path:
         """
         Create a local file path based on attributes of the input Zarr JSON. 
         Necessary for some datasets that package many forecasts into one single extract, preventing
