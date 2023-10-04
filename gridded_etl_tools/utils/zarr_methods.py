@@ -80,7 +80,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[str] = None):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[pathlib.Path] = None):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -147,7 +147,7 @@ class Creation(Convenience):
 
         return scanned_zarr_json
 
-    def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: str):
+    def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
         """
         Export a Kerchunked Zarr JSON to file. 
         If necessary, create a file name for that JSON in situ based on its attributes.
