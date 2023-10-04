@@ -136,7 +136,7 @@ class Creation(Convenience):
             elif type(scanned_zarr_json) == list:
                 self.zarr_jsons.extend(scanned_zarr_json)
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
-        if self.write_local_zarr_jsons:
+        if self.use_local_zarr_jsons:
             if not local_file_path:
                 raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
