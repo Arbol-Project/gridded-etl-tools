@@ -17,6 +17,7 @@ import xarray as xr
 
 from tqdm import tqdm
 from subprocess import Popen
+from itertools import starmap, repeat
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -78,7 +79,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, file_path: str, scan_indices: int = 0):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: str = None):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -97,6 +98,8 @@ class Creation(Convenience):
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
             We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+        local_file_path : str, optional
+            An optional local file path to save the Kerchunked Zarr JSON to
 
         Returns
         -------
@@ -131,8 +134,27 @@ class Creation(Convenience):
                 self.zarr_jsons.append(scanned_zarr_json)
             elif type(scanned_zarr_json) == list:
                 self.zarr_jsons.extend(scanned_zarr_json)
+        # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
+        if self.write_local_zarr_jsons:
+            if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
+                memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
+                list(starmap(self.zarr_json_in_memory_to_file, memory_write_args))
+            else:
+                self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
         return scanned_zarr_json
+
+    def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: str):
+        """
+        Export a Kerchunked Zarr JSON to file.
+        Implementations of this method rely on 
+        """
+        if hasattr(self, "data_driven_zarr_json_name"):
+            local_file_path = self.data_driven_zarr_json_name(scanned_zarr_json)
+        with open(local_file_path, "w") as file:
+            json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
+            self.info(f"Wrote local JSON to {local_file_path}")
+
 
     @classmethod
     def mzz_opts(cls) -> dict:
