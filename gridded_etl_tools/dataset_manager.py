@@ -59,8 +59,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_cpu_mem_target_ratio: float = 4 / 32,
-        write_local_zarr_jsons: bool = False,
-        read_local_zarr_jsons: bool = False,
+        use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         encryption_key: str = None,
         *args,
@@ -97,10 +96,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date will fail with a
             warning message.
-        write_local_zarr_jsons: bool, optional
+        use_local_zarr_jsons: bool, optional
             Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked datasets.
-        read_local_zarr_jsons: bool, optional
-            Read local Zarr JSONs previously written out (per above property) into self.zarr_jsons for combination in a MultiZarr.
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
         encryption_key : str, optional
@@ -117,8 +114,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
         # Create certain paramters for development and debugging of certain dataset. All default to False.
-        self.write_local_zarr_jsons = write_local_zarr_jsons
-        self.read_local_zarr_jsons = read_local_zarr_jsons
+        self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than "local", "ipld", or "s3" is
         # passed, raise a `ValueError`.
