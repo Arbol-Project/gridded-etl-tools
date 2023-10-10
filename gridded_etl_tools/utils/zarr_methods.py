@@ -10,14 +10,16 @@ import pathlib
 import glob
 import itertools
 import os
-import s3fs
 
 import pandas as pd
 import numpy as np
 import xarray as xr
 
+from typing import Optional
 from tqdm import tqdm
 from subprocess import Popen
+from contextlib import nullcontext
+from itertools import starmap, repeat
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -79,7 +81,7 @@ class Creation(Convenience):
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(self, file_path: str, scan_indices: int = 0):
+    def kerchunkify(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[pathlib.Path] = None):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a MultiZarr that Xarray can open natively as a Zarr.
 
@@ -98,6 +100,8 @@ class Creation(Convenience):
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
             We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+        local_file_path : Optional[str], optional
+            An optional local file path to save the Kerchunked Zarr JSON to
 
         Returns
         -------
@@ -112,7 +116,7 @@ class Creation(Convenience):
                     with fs.open(file_path) as infile:
                         scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
                 elif self.file_type == 'GRIB':
-                        scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+                    scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
             except OSError as e:
                 raise ValueError(
                     f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
@@ -132,8 +136,57 @@ class Creation(Convenience):
                 self.zarr_jsons.append(scanned_zarr_json)
             elif type(scanned_zarr_json) == list:
                 self.zarr_jsons.extend(scanned_zarr_json)
+        # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
+        if self.use_local_zarr_jsons:
+            if not local_file_path:
+                raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
+            if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
+                memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
+                list(starmap(self.zarr_json_in_memory_to_file, memory_write_args))
+            else:
+                self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
         return scanned_zarr_json
+
+    def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
+        """
+        Export a Kerchunked Zarr JSON to file. 
+        If necessary, create a file name for that JSON in situ based on its attributes.
+
+        Parameters
+        ----------
+        scanned_zarr_json
+            The in-memory Zarr JSON returned by Kerchunk
+        local_file_path
+            The existing local file path specified by the user
+        """
+        local_file_path = self.file_path_from_zarr_json_attrs(scanned_zarr_json=scanned_zarr_json, local_file_path=local_file_path)
+        with open(local_file_path, "w") as file:
+            json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
+            self.info(f"Wrote local JSON to {local_file_path}")
+
+    def file_path_from_zarr_json_attrs(self, scanned_zarr_json: dict, local_file_path: pathlib.Path) -> pathlib.Path:
+        """
+        Create a local file path based on attributes of the input Zarr JSON. 
+        Necessary for some datasets that package many forecasts into one single extract, preventing
+        us from passing in a local file path for each forecasts
+
+        Defaults to returning the local_file_path, e.g. doing nothing. 
+        Implement any code creating a new file path within child implementations of this method.
+
+        Parameters
+        ----------
+        scanned_zarr_json
+            The in-memory Zarr JSON returned by Kerchunk
+        local_file_path
+            The existing local file path specified by the user
+        
+        Returns
+        -------
+        str
+            The existing local file path specified by the user
+        """
+        return local_file_path
 
     @classmethod
     def mzz_opts(cls) -> dict:
@@ -359,6 +412,7 @@ class Creation(Convenience):
         """
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
+
         dataset = xr.open_dataset(
             "reference://",
             engine="zarr",
@@ -412,45 +466,43 @@ class Publish(Creation, Metadata):
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed
         self.dask_configuration()
-        # Use a Dask client to open, process, and write the data
+        # # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
             protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
-        ) as cluster, Client(
-            cluster,
-        ) as client:
-            self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
-            try:
-                # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
-                # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
-                # no existing data or allow overwrite has been set, write a new Zarr, overwriting (or in the case of IPLD, not using) any existing
-                # data. If rebuild is requested and there is existing data, but allow overwrite is not set, do not start parsing and issue a warning.
-                if self.store.has_existing and not self.rebuild_requested:
-                    self.info(f"Updating existing data at {self.store}")
-                    self.update_zarr()
-                elif not self.store.has_existing or (
-                    self.rebuild_requested and self.overwrite_allowed
-                ):
-                    if not self.store.has_existing:
-                        self.info(
-                            f"No existing data found. Creating new Zarr at {self.store}."
-                        )
+        ) as cluster:
+            with Client(cluster) if not isinstance(self.store, IPLD) else nullcontext() as client:
+                self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
+                try:
+                    # Attempt to find an existing Zarr, using the appropriate method for the store. If there is existing data and there is no
+                    # rebuild requested, start an update. If there is no existing data, start an initial parse. If rebuild is requested and there is
+                    # no existing data or allow overwrite has been set, write a new Zarr, overwriting (or in the case of IPLD, not using) any existing
+                    # data. If rebuild is requested and there is existing data, but allow overwrite is not set, do not start parsing and issue a warning.
+                    if self.store.has_existing and not self.rebuild_requested:
+                        self.info(f"Updating existing data at {self.store}")
+                        self.update_zarr()
+                    elif not self.store.has_existing or (
+                        self.rebuild_requested and self.overwrite_allowed
+                    ):
+                        if not self.store.has_existing:
+                            self.info(
+                                f"No existing data found. Creating new Zarr at {self.store}."
+                            )
+                        else:
+                            self.info(f"Data at {self.store} will be replaced.")
+                        self.write_initial_zarr()
                     else:
-                        self.info(f"Data at {self.store} will be replaced.")
-                    self.write_initial_zarr()
-                else:
-                    raise RuntimeError(
-                        "There is already a zarr at the specified path and a rebuild is requested, "
-                        "but overwrites are not allowed."
+                        raise RuntimeError(
+                            "There is already a zarr at the specified path and a rebuild is requested, "
+                            "but overwrites are not allowed."
+                        )
+                except KeyboardInterrupt:
+                    self.info(
+                        "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
                     )
-            except KeyboardInterrupt:
-                self.info(
-                    "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
-                )
-                client.close()
 
         if hasattr(self, "dataset_hash") and self.dataset_hash:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
@@ -488,6 +540,9 @@ class Publish(Creation, Metadata):
         On S3 and local, pre and post update metadata edits are saved to the Zarr attrs at `Dataset.update_in_progress` to indicate during writing that
         the data is being edited.
 
+        The time dimension of the given dataset must be in contiguous order. The time step of the order will be determined by taking the difference
+        between the first two time entries in the dataset, so the dataset must also have at least two time steps worth of data.
+
         Parameters
         ----------
         dataset
@@ -497,6 +552,19 @@ class Publish(Creation, Metadata):
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
+        # Aggressively assert that the data is in contiguous time order. This is to protect against data corruption, especially during insert and append
+        # operations, but it should probably be replaced with a more sophisticated set of flags that let the user decide how to handle time data at their
+        # own risk.
+        #
+        # The expected delta is taken from the first two timestamps, but it could be improved by using Attributes.temporal_resolution if that function
+        # were edited to return a datetime64.
+        times = dataset[self.time_dim].values
+        if len(times) >= 2:
+            # Check is only valid if we have 2 or more values with which to calculate the delta
+            expected_delta = times[1] - times[0]
+            if not self.are_times_contiguous(times, expected_delta):
+                raise ValueError("Dataset does not contain contiguous time data")
+
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False?).
@@ -555,6 +623,9 @@ class Publish(Creation, Metadata):
         dask.config.set(
             {"distributed.worker.memory.terminate": self.dask_worker_mem_terminate}
         )
+        # IPLD should use the threads scheduler to work around pickling issues with IPLD objects like CIDs
+        if isinstance(self.store, IPLD):
+            dask.config.set({"scheduler" : "threads"})
 
         # OTHER USEFUL SETTINGS, USE IF ENCOUNTERING PROBLEMS WITH PARSES
         # dask.config.set({'scheduler' : 'threads'}) # default distributed scheduler does not allocate memory correctly for some parses
@@ -612,13 +683,18 @@ class Publish(Creation, Metadata):
 
     def set_key_dims(self):
         """
-        Convenience method to set the standard and time dimensions based on whether a dataset is a forecast or not
-        The self.forecast instance variable is set in the `init` of a dataset and defaults to False.
+        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
+        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
+
+        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
         """
-        if not self.forecast:
+        if not self.forecast and not self.ensemble:
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-        else:
+        elif self.ensemble:
+            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+        elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
 
@@ -698,6 +774,12 @@ class Publish(Creation, Metadata):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
+
+        if append_times and not self.is_append_contiguous(original_dataset, append_times):
+            raise ValueError(
+                "Append would create out of order or incomplete dataset, aborting"
+            )
+
         # Raise an exception if there is no writable data
         if not any(insert_times) and not any(append_times):
             raise ValueError(
@@ -894,3 +976,46 @@ class Publish(Creation, Metadata):
             regions_indices.append((start_int, end_int))
 
         return datetime_ranges, regions_indices
+
+    def are_times_contiguous(self, times: list[datetime.datetime], expected_delta: datetime.timedelta) -> bool:
+        """
+        Check if the given list of times is contiguous with a given difference between each time.
+
+        @param times            A list of datetime objects
+        @param expected_delta   Amount of time expected to be between each time
+        @return                 True if times are contiguous and have the correct time step, False otherwise
+        """
+        previous_time = times[0]
+        for time in times[1:]:
+            if time - previous_time != expected_delta:
+                return False
+            previous_time = time
+        return True
+
+    def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
+        """
+        Checks that an append will produce a contiguous dataset. Note that this requires `original_dataset` to have 2 or more time steps worth of data.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            dataset being appended to
+        append_times : list
+            list of times forming the time index of the append
+
+        Returns
+        -------
+        bool
+            whether the original and appending datasets form a contiguous time axis
+        """
+        # Use time step of the original dataset to get expected time delta. This could be improved by using Attributes.temporal_resolution
+        # if it were edited to return a numpy.timedelta64 (what if previous dataset has only one time step, for example).
+        last_time_in_original = original_dataset[self.time_dim].values[-1]
+        expected_delta = last_time_in_original - original_dataset[self.time_dim].values[-2]
+
+        # Check if first time in append times is one time step ahead of the last time in the original dataset
+        if append_times[0] - last_time_in_original != expected_delta:
+            return False
+
+        # Check if all times to be appended are contiguous with the correct time step
+        return self.are_times_contiguous(append_times, expected_delta)

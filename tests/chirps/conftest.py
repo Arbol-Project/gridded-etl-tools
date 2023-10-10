@@ -36,6 +36,10 @@ def initial_input_path(root):
 def appended_input_path(root):
     return root / pathlib.Path("chirps_appended_input")
 
+@pytest.fixture
+def appended_input_path_with_hole(root):
+    return root / pathlib.Path("chirps_appended_input_with_hole")
+
 
 @pytest.fixture
 def manager_class():

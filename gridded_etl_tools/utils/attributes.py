@@ -167,6 +167,21 @@ class Attributes(ABC):
         return False
 
     @property
+    def ensemble(self) -> bool:
+        """Ensemble defaults to False, must override for actual ensemble datasets"""
+        return False
+
+    @property
+    def forecast_hours(self) -> list[int]:
+        """To be overwritten by actual forecast datasets"""
+        return list(None)
+
+    @property
+    def ensemble_numbers(self) -> list[int]:
+        """To be overwritten by actual ensemble datasets"""
+        return list(None)
+
+    @property
     def bbox_rounding_value(self) -> int:
         """
         Value to round bbox values by. Specify within the dataset for very high resolution datasets
