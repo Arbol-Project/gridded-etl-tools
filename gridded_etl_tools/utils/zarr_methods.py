@@ -781,7 +781,7 @@ class Publish(Creation, Metadata):
             )
 
         # Raise an exception if there is no writable data
-        if not insert_times and not append_times:
+        if not any(insert_times) and not any(append_times):
             raise ValueError(
                 "Update started with no new records to insert or append to original zarr."
             )
