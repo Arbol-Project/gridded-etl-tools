@@ -801,7 +801,7 @@ class Metadata(Convenience, IPFS):
             The dataset being published, after metadata update
 
         """
-        compressor = numcodecs.Blosc()
+        compressor = numcodecs.Blosc() if self.use_compression else None
 
         for coord in ["latitude", "longitude"]:
             dataset[coord].attrs.pop("chunks", None)

@@ -84,3 +84,11 @@ class TestMetadata:
         md.store = store.IPLD(md)
         dataset = md.remove_unwanted_fields(dataset)
         assert isinstance(dataset["data"].encoding["compressor"], numcodecs.Blosc)
+
+    def test_remove_unwanted_fields_w_ipld_store_no_compression(self):
+        dataset = mock.MagicMock()
+        dataset["data"].encoding = {}
+        md = DummyManager(use_compression=False)
+        md.store = store.IPLD(md)
+        dataset = md.remove_unwanted_fields(dataset)
+        assert dataset["data"].encoding["compressor"] is None
