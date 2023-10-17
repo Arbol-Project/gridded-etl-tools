@@ -311,7 +311,7 @@ class IPLD(StoreInterface):
                 self._mapper.set_root(self.dm.latest_hash())
         return self._mapper
 
-    def __str__(self) -> str:
+    def __str__(self) -> str | None:
         """
         Returns
         -------
@@ -321,14 +321,14 @@ class IPLD(StoreInterface):
         return self.path
 
     @property
-    def path(self) -> str:
+    def path(self) -> str | None:
         """
-        Get the IPFS-protocol hash pointing to the latest version of the parent `DatasetManager`'s Zarr.
-        Simple wrapper around __str__ method to maintain consistency across stores.
+        Get the IPFS-protocol hash pointing to the latest version of the parent `DatasetManager`'s Zarr,
+        or return None if there is none.
 
         Returns
         -------
-        str
+        str | None
             A URL string starting with "ipfs" followed by the hash of the latest Zarr, if it exists.
         """
         if not self.dm.latest_hash():
