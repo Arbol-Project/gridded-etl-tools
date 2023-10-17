@@ -567,13 +567,12 @@ class Publish(Creation, Metadata):
 
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
-            # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False?).
+            # Briefly open the existing dataset directly via the Zarr library to edit its attributes
             if self.store.has_existing:
                 self.info("Pre-writing metadata to indicate an update is in progress")
-                import ipdb; ipdb.set_trace(context=4)
-                dataset = zarr.open(self.store.mapper, mode='w+')
-                dataset.attrs.update({"update_in_progress" : True})
-                del dataset
+                temp_ds = zarr.open(self.store.path, mode='w+')
+                temp_ds.attrs.update({"update_in_progress" : True})
+                del temp_ds  # remove the write-enabled ds from local memory to avoid problems
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
@@ -585,13 +584,13 @@ class Publish(Creation, Metadata):
 
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
-            # Indicate in metadata that update is complete.
+            # Open in Zarr once more to indicate in metadata that update is complete.
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            dataset = zarr.open(self.store.mapper, mode='w+')
-            dataset.attrs.update({"update_in_progress" : False})
-            del dataset
+            temp_ds = zarr.open(self.store.path, mode='w+')
+            temp_ds.attrs.update({"update_in_progress" : False})
+            del temp_ds  # remove the write-enabled ds from local memory to avoid problems
 
 
     # SETUP

@@ -135,7 +135,7 @@ class S3(StoreInterface):
         return self._fs
 
     @property
-    def url(self) -> str:
+    def path(self) -> str:
         """
         Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
 
@@ -147,7 +147,7 @@ class S3(StoreInterface):
         return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
 
     def __str__(self) -> str:
-        return self.url
+        return self.path
 
     def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
         """
@@ -167,7 +167,7 @@ class S3(StoreInterface):
             A `MutableMapping` which is the S3 key/value store
         """
         if refresh or not hasattr(self, "_mapper"):
-            self._mapper = s3fs.S3Map(root=self.url, s3=self.fs())
+            self._mapper = s3fs.S3Map(root=self.path, s3=self.fs())
         return self._mapper
 
     @property
@@ -178,7 +178,7 @@ class S3(StoreInterface):
         bool
             Return `True` if there is a Zarr at `S3.url`
         """
-        return self.fs().exists(self.url)
+        return self.fs().exists(self.path)
 
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
