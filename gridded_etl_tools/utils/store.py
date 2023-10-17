@@ -311,14 +311,18 @@ class IPLD(StoreInterface):
                 self._mapper.set_root(self.dm.latest_hash())
         return self._mapper
 
-    def __str__(self) -> str | None:
+    def __str__(self) -> str:
         """
         Returns
         -------
         str
-            The path as "/ipfs/[hash]". If the hash has not been determined, just return None.
+            The path as "/ipfs/[hash]". If the hash has not been determined, return "/ipfs/"
         """
-        return self.path
+        if not self.dm.latest_hash():
+            return "/ipfs/"
+        else:
+            return f"/ipfs/{self.dm.latest_hash()}"
+
 
     @property
     def path(self) -> str | None:
