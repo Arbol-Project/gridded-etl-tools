@@ -176,7 +176,7 @@ class S3(StoreInterface):
         Returns
         -------
         bool
-            Return `True` if there is a Zarr at `S3.url`
+            Return `True` if there is a Zarr at `S3.path`
         """
         return self.fs().exists(self.path)
 
