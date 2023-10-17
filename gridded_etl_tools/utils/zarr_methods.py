@@ -8,9 +8,9 @@ import pprint
 import dask
 import pathlib
 import glob
-import itertools
 import os
 
+import zarr
 import pandas as pd
 import numpy as np
 import xarray as xr
@@ -568,17 +568,12 @@ class Publish(Creation, Metadata):
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False?).
-            dataset.attrs["update_in_progress"] = True
-            empty_dataset = dataset
-            for coord in itertools.chain(dataset.coords, dataset.data_vars):
-                empty_dataset = empty_dataset.drop(coord)
-
-            # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the metadata before starting the real write.
             if self.store.has_existing:
                 self.info("Pre-writing metadata to indicate an update is in progress")
-                empty_dataset.to_zarr(
-                    self.store.mapper(refresh=True), append_dim=self.time_dim
-                )
+                import ipdb; ipdb.set_trace(context=4)
+                dataset = zarr.open(self.store.mapper, mode='w+')
+                dataset.attrs.update({"update_in_progress" : True})
+                del dataset
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
@@ -591,11 +586,13 @@ class Publish(Creation, Metadata):
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Indicate in metadata that update is complete.
-            empty_dataset.attrs["update_in_progress"] = False
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
+            dataset = zarr.open(self.store.mapper, mode='w+')
+            dataset.attrs.update({"update_in_progress" : False})
+            del dataset
+
 
     # SETUP
 
