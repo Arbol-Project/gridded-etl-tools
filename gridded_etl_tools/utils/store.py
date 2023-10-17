@@ -66,6 +66,18 @@ class StoreInterface(ABC):
         """
         pass
 
+    @property
+    def path(self) -> str:
+        """
+        Get the IPFS-protocol hash pointing to the latest version of the parent `DatasetManager`'s Zarr .
+
+        Returns
+        -------
+        str
+            A URL string starting with "s3://" followed by the path to the Zarr.
+        """
+        return f"{self.dm.latest_hash()}"
+
     def dataset(self, **kwargs: dict) -> xr.Dataset | None:
         """
         Parameters
