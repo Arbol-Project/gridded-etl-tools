@@ -316,12 +316,9 @@ class IPLD(StoreInterface):
         Returns
         -------
         str
-            The path as "/ipfs/[hash]". If the hash has not been determined, just return "/ipfs/".
+            The path as "/ipfs/[hash]". If the hash has not been determined, just return None.
         """
-        if not self.dm.latest_hash():
-            return "/ipfs/"
-        else:
-            return f"/ipfs/{self.dm.latest_hash()}"
+        return self.path
 
     @property
     def path(self) -> str:
@@ -334,7 +331,11 @@ class IPLD(StoreInterface):
         str
             A URL string starting with "ipfs" followed by the hash of the latest Zarr, if it exists.
         """
-        return self.__str__
+        if not self.dm.latest_hash():
+            return None
+        else:
+            return f"/ipfs/{self.dm.latest_hash()}"
+
 
     @property
     def has_existing(self) -> bool:
