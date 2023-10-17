@@ -359,10 +359,9 @@ class Metadata(Convenience, IPFS):
         )
         if isinstance(self.store, IPLD):
             zarr_href = {"/": self.latest_hash()}
-        elif isinstance(self.store, Local):
-            zarr_href = str(self.store.path)
         else:
-            zarr_href = self.store.url
+            zarr_href = str(self.store.path)
+
         stac_item["assets"]["zmetadata"]["href"] = zarr_href
         stac_item["properties"] = properties_dict
         # Push to backing store w/ link to href

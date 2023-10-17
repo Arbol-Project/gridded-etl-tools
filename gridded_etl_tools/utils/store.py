@@ -135,7 +135,7 @@ class S3(StoreInterface):
         return self._fs
 
     @property
-    def url(self) -> str:
+    def path(self) -> str:
         """
         Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
 
@@ -147,7 +147,7 @@ class S3(StoreInterface):
         return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
 
     def __str__(self) -> str:
-        return self.url
+        return self.path
 
     def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
         """
@@ -167,7 +167,7 @@ class S3(StoreInterface):
             A `MutableMapping` which is the S3 key/value store
         """
         if refresh or not hasattr(self, "_mapper"):
-            self._mapper = s3fs.S3Map(root=self.url, s3=self.fs())
+            self._mapper = s3fs.S3Map(root=self.path, s3=self.fs())
         return self._mapper
 
     @property
@@ -176,9 +176,9 @@ class S3(StoreInterface):
         Returns
         -------
         bool
-            Return `True` if there is a Zarr at `S3.url`
+            Return `True` if there is a Zarr at `S3.path`
         """
-        return self.fs().exists(self.url)
+        return self.fs().exists(self.path)
 
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
@@ -316,12 +316,30 @@ class IPLD(StoreInterface):
         Returns
         -------
         str
-            The path as "/ipfs/[hash]". If the hash has not been determined, just return "/ipfs/".
+            The path as "/ipfs/[hash]". If the hash has not been determined, return "/ipfs/"
         """
         if not self.dm.latest_hash():
             return "/ipfs/"
         else:
             return f"/ipfs/{self.dm.latest_hash()}"
+
+
+    @property
+    def path(self) -> str | None:
+        """
+        Get the IPFS-protocol hash pointing to the latest version of the parent `DatasetManager`'s Zarr,
+        or return None if there is none.
+
+        Returns
+        -------
+        str | None
+            A URL string starting with "ipfs" followed by the hash of the latest Zarr, if it exists.
+        """
+        if not self.dm.latest_hash():
+            return None
+        else:
+            return f"/ipfs/{self.dm.latest_hash()}"
+
 
     @property
     def has_existing(self) -> bool:
