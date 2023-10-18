@@ -2,7 +2,7 @@ import pathlib
 import shutil
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-
+from .conftest import manager_class
 #
 # Functions common to more than one test that can be imported with:
 #
@@ -13,6 +13,42 @@ from gridded_etl_tools.dataset_manager import DatasetManager
 #     from ..common import *
 #
 
+def get_manager(
+    manager_class: DatasetManager,
+    input_path: str = "",
+    store: str = "local",
+    time_chunk: int = 50,
+    **kwargs,
+):
+    """
+    Prepare a manager for testing
+
+    Parameters
+    ----------
+    manager_class
+        A DatasetManager implementation for your chosen dataset
+    input_path
+        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append data.
+    store
+        The manager store to use. 'Local' in most implementations
+    time_chunk
+        Optional paramter to modify the size of time_chunks. Necessary for some ETLs. Defaults to 50.
+
+    Returns
+    -------
+    manager
+        A DatasetManager corresponding to your chosen manager_class
+    """
+    # Get the manager being requested by class_name
+    manager = manager_class(
+        custom_input_path=input_path,
+        s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+        store=store
+    )
+    # Overriding the default (usually very large) time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks["time"] = time_chunk
+    manager.requested_zarr_chunks["time"] = time_chunk
+    return manager
 
 def remove_zarr_json():
     """
