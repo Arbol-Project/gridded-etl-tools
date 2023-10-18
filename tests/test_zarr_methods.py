@@ -56,7 +56,8 @@ def test_preprocess_kerchunk(manager_class, mocker, example_zarr_json):
     mocker.patch("examples.managers.chirps.CHIRPSFinal25.missing_value_indicator", return_value=-8888)
     pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])
     # populate before/after fill value variables
-    modified_fill_value = json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"]
+    modified_fill_value = int(json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"])
     # test that None != -8888
     assert orig_fill_value != modified_fill_value
+    assert modified_fill_value == -8888
 
