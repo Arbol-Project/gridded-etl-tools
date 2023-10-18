@@ -8,16 +8,10 @@ import json
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 from .common import get_manager
-from .conftest import fake_dataset, fake_forecast_dataset, example_zarr_json
-
-def mocked_jz_to_file(zarr_json: dict):
-    zarr_json['refs']['precip/.zattrs']
-
-def mocked_missing_value_indicator():
-    return -8888
+from .conftest import example_zarr_json, fake_original_dataset, fake_complex_update_dataset
 
 
-def test_standard_dims(manager_class, mocker):
+def test_standard_dims(mocker, manager_class: DatasetManager):
     """
     Test that standard dimensions are correctly instantiated for regular, forecast, and ensemble datasets
     """
@@ -38,7 +32,7 @@ def test_standard_dims(manager_class, mocker):
     assert dm.time_dim == "forecast_reference_time"
 
 
-def test_export_zarr_json_in_memory(manager_class, mocker):
+def test_export_zarr_json_in_memory(manager_class: DatasetManager):
     dm = get_manager(manager_class)
     local_file_path = "output_zarr_json.json"
     json_str = str(example_zarr_json)
@@ -47,7 +41,7 @@ def test_export_zarr_json_in_memory(manager_class, mocker):
     os.remove(local_file_path)
 
 
-def test_preprocess_kerchunk(manager_class, mocker, example_zarr_json):
+def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr_json: dict):
     """
     Test that the preprocess_kerchunk method successfully changes the _FillValue attribute of all arrays
     """
@@ -62,7 +56,8 @@ def test_preprocess_kerchunk(manager_class, mocker, example_zarr_json):
     assert orig_fill_value != modified_fill_value
     assert modified_fill_value == -8888
 
-def test_are_times_contiguous(manager_class):
+
+def test_are_times_contiguous(manager_class: DatasetManager):
     """
     Test that the check for non-contiguous times successfully rejects submitted times
     """
@@ -83,4 +78,26 @@ def test_are_times_contiguous(manager_class):
     # Check a set of times that's badly out of order
     out_of_order = [contig[1], contig[2], contig[0], contig[12], contig[3]]
     assert not dm.are_times_contiguous(out_of_order, expected_delta)
-    
+
+
+def test_calculate_update_time_ranges(manager_class: DatasetManager, fake_original_dataset: xr.Dataset, fake_complex_update_dataset: xr.Dataset):
+    """
+    Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated
+    """
+    # prepare a dataset manager
+    dm = get_manager(manager_class)
+    dm.set_key_dims()
+    datetime_ranges, regions_indices = dm.calculate_update_time_ranges(fake_original_dataset, fake_complex_update_dataset)
+    # Test that 7 distinct updates -- 6 inserts and 1 append -- have been prepared
+    assert len(regions_indices) == 7
+    # Test that all of the updates are of the expected sizes
+    insert_range_sizes = []
+    for region in regions_indices:
+        index_range = region[1] - region[0]
+        insert_range_sizes.append(index_range)
+    assert insert_range_sizes == [1, 8, 1, 1, 12, 1, 1]
+    # Test that the append is of the expected size
+    append_update = datetime_ranges[-1]
+    append_size = (append_update[-1] - append_update[0]).astype('timedelta64[D]')
+    assert append_size == np.timedelta64(35,'D')
+
