@@ -567,11 +567,14 @@ class Publish(Creation, Metadata):
 
         # Skip update in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
-            # Briefly open the existing dataset directly via the Zarr library to edit its attributes
+            # Briefly open the existing dataset directly via the Zarr library to edit its attributes and temporarily inidicate an update is in progress
             if self.store.has_existing:
                 self.info("Pre-writing metadata to indicate an update is in progress")
-                temp_ds = zarr.open(self.store.path, mode='w+')
-                temp_ds.attrs.update({"update_in_progress" : True})
+                temp_ds = zarr.open(self.store.path)
+                # Write attrs to .zattrs
+                temp_ds.attrs.update({"update_in_progress": True, "update_is_append_only": dataset.attrs["update_is_append_only"]})
+                # Write attrs to .zmetadata
+                zarr.consolidate_metadata(self.store.path)
                 del temp_ds  # remove the write-enabled ds from local memory to avoid problems
 
         # Write data to Zarr and log duration.
@@ -588,8 +591,11 @@ class Publish(Creation, Metadata):
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            temp_ds = zarr.open(self.store.path, mode='w+')
-            temp_ds.attrs.update({"update_in_progress" : False})
+            temp_ds = zarr.open(self.store.path)
+            # Write attrs to .zattrs
+            temp_ds.attrs.update({"update_in_progress" : False, "update_is_append_only": dataset.attrs["update_is_append_only"]})
+            # Write attrs to .zmetadata
+            zarr.consolidate_metadata(self.store.path)
             del temp_ds  # remove the write-enabled ds from local memory to avoid problems
 
 
