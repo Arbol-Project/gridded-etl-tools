@@ -573,13 +573,13 @@ class Publish(Creation, Metadata):
             empty_dataset = dataset
             for coord in chain(dataset.coords, dataset.data_vars):
                 empty_dataset = empty_dataset.drop(coord)
-                # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the metadata before starting the real write.
-                # Note that update_is_append_only is also written here because it was set outside of to_zarr.
-                if self.store.has_existing:
-                    self.info("Pre-writing metadata to indicate an update is in progress")
-                    empty_dataset.to_zarr(
-                        self.store.mapper(refresh=True), append_dim=self.time_dim
-                    )
+            # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the metadata before starting the real write.
+            # Note that update_is_append_only is also written here because it was set outside of to_zarr.
+            if self.store.has_existing:
+                self.info("Pre-writing metadata to indicate an update is in progress")
+                empty_dataset.to_zarr(
+                    self.store.mapper(refresh=True), append_dim=self.time_dim
+                )
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
