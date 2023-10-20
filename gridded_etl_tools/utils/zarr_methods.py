@@ -19,7 +19,7 @@ from typing import Optional
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
-from itertools import starmap, repeat
+from itertools import starmap, repeat, chain
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -571,7 +571,7 @@ class Publish(Creation, Metadata):
             # zarr.consolidate_metadata?).
             dataset.attrs["update_in_progress"] = True
             empty_dataset = dataset
-            for coord in itertools.chain(dataset.coords, dataset.data_vars):
+            for coord in chain(dataset.coords, dataset.data_vars):
                 empty_dataset = empty_dataset.drop(coord)
                 # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the metadata before starting the real write.
                 # Note that update_is_append_only is also written here because it was set outside of to_zarr.
