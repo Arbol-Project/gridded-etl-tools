@@ -38,7 +38,7 @@ class Creation(Convenience):
 
     # KERCHUNKING
 
-    def create_zarr_json(self, force_overwrite: bool = True):
+    def create_zarr_json(self, force_overwrite: bool = True, file_filter: str = None, outfile_path: str = None):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
 
@@ -53,7 +53,13 @@ class Creation(Convenience):
         force_overwrite : bool, optional
             Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
-
+        file_filter
+            A string used to further filter down input files for kerchunkifying.
+            Useful if you want to kerchunkify only a subset of available files.
+            Defaults to None.
+        outfile_path
+            A custom string path for the final, merged Zarr JSON.
+            Defaults to None, in which case Zarr JSONs are output to self.zarr_json_path.
         """
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.
@@ -66,17 +72,22 @@ class Creation(Convenience):
                     for fil in self.input_files()
                     if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
                 ]
-                self.info(f"Generating Zarr for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
+                # Further filter down which files are processsed using an optional file filter string or integer
+                if file_filter:
+                    input_files_list = [fil for fil in input_files_list if file_filter in fil]
+                self.info(f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
                 mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
             # if remotely extracting JSONs from S3, self.zarr_jsons should already be prepared during the `extract` step
             else:
-                self.info(f"Generating Zarr for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
+                self.info(f"Generating Zarr JSON for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
                 mzz = MultiZarrToZarr(path=self.zarr_jsons, **self.mzz_opts())  # There are no file names to pass `path` if reading remotely
             # Translate the MultiZarr to a master JSON and save that out locally. Will fail if the input JSONs are misspecified.
-            mzz.translate(filename=self.zarr_json_path())
+            if not outfile_path:
+                outfile_path = self.zarr_json_path()
+            mzz.translate(filename=outfile_path)
             self.info(
-                f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
+                f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking)/60,2)} minutes"
             )
         else:
             self.info("Existing Zarr found, using that")
