@@ -649,6 +649,13 @@ class Publish(Creation, Metadata):
 
     # INITIAL PUBLICATION
 
+    def transformed_dataset(self, custom: bool = False):
+        """
+        Overall method to return the fully processed and transformed dataset
+        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
+        """
+        return self.zarr_json_to_dataset()
+
     def pre_initial_dataset(self) -> xr.Dataset:
         """
         Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the virtual Zarr JSON at the
@@ -661,7 +668,7 @@ class Publish(Creation, Metadata):
             The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
         """
         # Transform the JSON Zarr into an xarray Dataset
-        dataset = self.zarr_json_to_dataset()
+        dataset = self.transformed_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
@@ -719,7 +726,7 @@ class Publish(Creation, Metadata):
         STAC Collection.
         """
         original_dataset = self.store.dataset()
-        update_dataset = self.zarr_json_to_dataset()
+        update_dataset = self.transformed_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
