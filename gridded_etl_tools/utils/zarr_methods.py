@@ -19,7 +19,7 @@ from typing import Optional
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
-from itertools import starmap, repeat
+from itertools import starmap, repeat, chain
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -565,14 +565,21 @@ class Publish(Creation, Metadata):
             if not self.are_times_contiguous(times, expected_delta):
                 raise ValueError("Dataset does not contain contiguous time data")
 
-        # Skip update in-progress metadata flag on IPLD
+        # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
-            # Briefly open the existing dataset directly via the Zarr library to edit its attributes
-            if self.store.has_existing:
-                self.info("Pre-writing metadata to indicate an update is in progress")
-                temp_ds = zarr.open(self.store.path, mode='w+')
-                temp_ds.attrs.update({"update_in_progress" : True})
-                del temp_ds  # remove the write-enabled ds from local memory to avoid problems
+            # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False or
+            # zarr.consolidate_metadata?).
+            dataset.attrs["update_in_progress"] = True
+            empty_dataset = dataset
+            for coord in chain(dataset.coords, dataset.data_vars):
+                empty_dataset = empty_dataset.drop(coord)
+                # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the metadata before starting the real write.
+                # Note that update_is_append_only is also written here because it was set outside of to_zarr.
+                if self.store.has_existing:
+                    self.info("Pre-writing metadata to indicate an update is in progress")
+                    empty_dataset.to_zarr(
+                        self.store.mapper(refresh=True), append_dim=self.time_dim
+                    )
 
         # Write data to Zarr and log duration.
         start_writing = time.perf_counter()
@@ -582,16 +589,14 @@ class Publish(Creation, Metadata):
             f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
         )
 
-        # Skip update in-progress metadata flag on IPLD
+        # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
-            # Open in Zarr once more to indicate in metadata that update is complete.
+            # Indicate in metadata that update is complete.
+            empty_dataset.attrs["update_in_progress"] = False
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-            temp_ds = zarr.open(self.store.path, mode='w+')
-            temp_ds.attrs.update({"update_in_progress" : False})
-            del temp_ds  # remove the write-enabled ds from local memory to avoid problems
-
+            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
