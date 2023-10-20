@@ -596,7 +596,7 @@ class Publish(Creation, Metadata):
             self.info(
                 "Re-writing Zarr to indicate in the metadata that update is no longer in process."
             )
-             empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
+            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
