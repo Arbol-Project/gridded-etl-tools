@@ -70,11 +70,12 @@ class Creation(Convenience):
                 input_files_list = [
                     str(fil)
                     for fil in self.input_files()
-                    if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
+                    if any(fil.suffix in file_ext for file_ext in [".nc4", ".nc", ".grib", ".grib1", ".grib2", ".grb2"])
                 ]
                 # Further filter down which files are processsed using an optional file filter string or integer
                 if file_filter:
-                    input_files_list = [fil for fil in input_files_list if file_filter in fil]
+                    input_files_list = [fil for fil in input_files_list if file_filter in str(fil)]
+                # Now prepare the MultiZarr
                 self.info(f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
                 mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
@@ -278,7 +279,8 @@ class Creation(Convenience):
             input_files: list[pathlib.Path],
             command_text: list[str],
             replacement_suffix: str,
-            keep_originals: bool = False
+            keep_originals: bool = False,
+            invert_file_order: bool = False
     ):
         """
         Run a command line operation on a set of input files. In most cases, replace each file with an alternative file.
@@ -300,9 +302,14 @@ class Creation(Convenience):
         commands = []
         for existing_file in input_files:
             new_file = existing_file.with_suffix(replacement_suffix)
-            commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
-                    list(map(str, command_text + [existing_file, new_file]))
-                 )
+            if invert_file_order:
+                commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
+                        list(map(str, command_text + [new_file, existing_file]))
+                    )
+            else:
+                commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
+                        list(map(str, command_text + [existing_file, new_file]))
+                    )
         # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -310,7 +317,10 @@ class Creation(Convenience):
             for command in commands_slice:
                 command.wait()
                 if not keep_originals:
-                    os.remove(command.args[-2])
+                    if not invert_file_order:
+                            os.remove(command.args[-2])
+                    else:
+                            os.remove(command.args[-1])
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
