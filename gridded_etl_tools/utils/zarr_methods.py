@@ -415,7 +415,7 @@ class Creation(Convenience):
         dataset = xr.open_zarr(mapper)
         return dataset
 
-    def zarr_json_to_dataset(self, zarr_json_path: str = None) -> xr.Dataset:
+    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
 
@@ -447,6 +447,7 @@ class Creation(Convenience):
                 },
                 "consolidated": False,
             },
+            decode_times = decode_times
         )
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
