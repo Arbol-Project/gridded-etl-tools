@@ -58,6 +58,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
+        dask_worker_memory_target: float = 0.65,
+        dask_worker_memory_spill: float = 0.65,
         dask_cpu_mem_target_ratio: float = 4 / 32,
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
@@ -153,8 +155,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         # Dask distributed configuration defaults, mostly related to memory usage
         self.dask_scheduler_worker_saturation = 1.2
-        self.dask_worker_mem_target = 0.65
-        self.dask_worker_mem_spill = 0.65
+        self.dask_worker_mem_target = dask_worker_memory_target
+        self.dask_worker_mem_spill = dask_worker_memory_spill
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
         self.dask_use_process_scheduler = False
