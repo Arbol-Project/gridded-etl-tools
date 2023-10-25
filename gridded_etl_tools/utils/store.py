@@ -167,8 +167,8 @@ class S3(StoreInterface):
             A `MutableMapping` which is the S3 key/value store
         """
         if refresh or not hasattr(self, "_mapper"):
-            if self.custom_output_path:
-                url = self.custom_output_path
+            if self.dm.custom_output_path:
+                url = self.dm.custom_output_path
             else:
                 url = self.path
             self._mapper = s3fs.S3Map(root=url, s3=self.fs())
