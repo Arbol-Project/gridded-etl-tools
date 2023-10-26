@@ -172,7 +172,7 @@ class Attributes(ABC):
         return False
 
     @property
-    def hindcaste(self) -> bool:
+    def hindcast(self) -> bool:
         """Hindcast defaults to False, must override for actual hindcast datasets"""
         return False
 
