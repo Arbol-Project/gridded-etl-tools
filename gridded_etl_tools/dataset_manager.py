@@ -62,6 +62,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         encryption_key: str = None,
+        use_compression: bool = True,
         *args,
         **kwargs,
     ):
@@ -104,6 +105,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             If provided, data will be encrypted using `encryption_key` with
             XChaCha20Poly1305. Use :func:`.encryption.generate_encryption_key` to
             generate a random encryption key to be passed in here.
+        use_compression: bool, optional
+            Data in this dataset will be compressed unless this is set to `False`.
         """
         # call IPFS init
         super().__init__(host=ipfs_host)
@@ -177,6 +180,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.info(f"Using {self.dask_num_threads} threads on a {multiprocessing.cpu_count()}-core system with {total_memory_gb:.2f}GB RAM")
 
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
+
+        self.use_compression = use_compression
 
     # SETUP
 
