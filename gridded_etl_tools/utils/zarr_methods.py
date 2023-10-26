@@ -10,7 +10,6 @@ import pathlib
 import glob
 import os
 
-import zarr
 import pandas as pd
 import numpy as np
 import xarray as xr
@@ -30,7 +29,7 @@ from .metadata import Metadata
 from .store import IPLD
 
 
-class Creation(Convenience):
+class Transform(Convenience):
     """
     Base class for transforming a collection of downloaded input files in NetCDF4 Classic format into
     (sequentially) kerchunk JSONs, a MultiZarr Kerchunk JSON, and finally an Xarray Dataset based on that MultiZarr.
@@ -100,7 +99,7 @@ class Creation(Convenience):
         Read the input file either locally or remotely from S3, depending on whether an s3 bucket is specified in the file path.
 
         NOTE under the hood there are several versions of GRIB files -- GRIB1 and GRIB2 -- and NetCDF files -- classic, netCDF-4 classic, 64-bit offset, etc.
-        Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so presuppose using those.
+        Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so test against using those.
 
         The command line tool `nccopy -k 'netCDF-4 classic model' infile.nc outfile.nc` can convert between formats
 
@@ -119,35 +118,11 @@ class Creation(Convenience):
         -------
         scanned_zarr_json : dict
             A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
-
         """
         if not file_path.lower().startswith('s3://'):
-            try:
-                if self.file_type == 'NetCDF':
-                    fs = fsspec.filesystem("file")
-                    with fs.open(file_path) as infile:
-                        scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
-                elif self.file_type == 'GRIB':
-                    scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
-            except OSError as e:
-                raise ValueError(
-                    f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
-                )
+            scanned_zarr_json = self.local_kerchunk(file_path, scan_indices)
         elif file_path.lower().startswith('s3://'):
-            s3_so = {
-                'anon': True,
-                "default_cache_type": "readahead"
-                }
-            if self.file_type == 'NetCDF':
-                with self.store.fs().open(file_path, **s3_so) as infile:
-                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
-            elif 'GRIB' in self.file_type:
-                scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
-            # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
-            if type(scanned_zarr_json) == dict:
-                self.zarr_jsons.append(scanned_zarr_json)
-            elif type(scanned_zarr_json) == list:
-                self.zarr_jsons.extend(scanned_zarr_json)
+            scanned_zarr_json = self.remote_kerchunk(file_path, scan_indices)
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
         if self.use_local_zarr_jsons:
             if not local_file_path:
@@ -158,6 +133,72 @@ class Creation(Convenience):
             else:
                 self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
+        return scanned_zarr_json
+
+    def local_kerchunk(self, file_path: str, scan_indices: int = 0):
+        """
+        Use Kerchunk to scan a file on the local file system
+
+        Parameters
+        ----------
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
+        scan_indices : int, slice(int)
+            One or many indices to filter the JSONS returned by `scan_grib`
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+
+        Returns
+        -------
+        scanned_zarr_json : dict
+            A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+        """
+        try:
+            if self.file_type == 'NetCDF':
+                fs = fsspec.filesystem("file")
+                with fs.open(file_path) as infile:
+                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
+            elif self.file_type == 'GRIB':
+                scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+        except OSError as e:
+            raise ValueError(
+                f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
+            )
+        return scanned_zarr_json
+    
+    def remote_kerchunk(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[pathlib.Path] = None):
+        """
+        Use Kerchunk to scan a file on a remote S3 file system
+
+        Parameters
+        ----------
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
+        scan_indices : int, slice(int)
+            One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+
+        Returns
+        -------
+        scanned_zarr_json : dict
+            A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+        """
+        s3_so = {
+            'anon': True,
+            "default_cache_type": "readahead"
+            }
+        # Scan based on file type
+        if self.file_type == 'NetCDF':
+            with self.store.fs().open(file_path, **s3_so) as infile:
+                scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
+        elif 'GRIB' in self.file_type:
+            scanned_zarr_json = scan_grib(url=file_path, storage_options=s3_so, filter=self.grib_filter, inline_threshold=20)[scan_indices]
+        # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
+        if type(scanned_zarr_json) == dict:
+            self.zarr_jsons.append(scanned_zarr_json)
+        elif type(scanned_zarr_json) == list:  # some remote scans will return a list of GRIBs
+            self.zarr_jsons.extend(scanned_zarr_json)
         return scanned_zarr_json
 
     def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
@@ -183,7 +224,7 @@ class Creation(Convenience):
         Necessary for some datasets that package many forecasts into one single extract, preventing
         us from passing in a local file path for each forecasts
 
-        Defaults to returning the local_file_path, e.g. doing nothing. 
+        Defaults to returning the local_file_path, i.e. doing nothing. 
         Implement any code creating a new file path within child implementations of this method.
 
         Parameters
@@ -453,7 +494,7 @@ class Creation(Convenience):
         return self.postprocess_zarr(dataset)
 
 
-class Publish(Creation, Metadata):
+class Publish(Transform, Metadata):
     """
     Base class for publishing methods -- both initial publication and updates
     """
