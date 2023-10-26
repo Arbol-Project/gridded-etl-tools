@@ -281,7 +281,6 @@ class Transform(Convenience):
         -------
         refs : dict
             Dataset attributes and information, transformed as needed
-
         """
         ref_names = set()
         file_match_pattern = "(.*?)/"
@@ -293,25 +292,6 @@ class Transform(Convenience):
             fill_value_fix["fill_value"] = str(cls.missing_value_indicator())
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
-
-    def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
-        """
-        Method to populate with the specific postprocessing routine of each child class (if relevant)
-
-        If no preprocessing is happening, return the dataset untouched
-
-        Parameters
-        ----------
-        dataset : xr.Dataset
-            The dataset being processed
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            The dataset being processed
-
-        """
-        return dataset
 
     # CONVERT FILES
 
@@ -434,65 +414,6 @@ class Transform(Convenience):
             pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
             file.rename(originals_dir / file.name)
 
-    # RETURN DATASET
-
-    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
-        """
-        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
-
-        Parameters
-        ----------
-        ipfs_hash : str
-            The CID of the dataset
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            Object representing the dataset described by the CID at `self.latest_hash()`
-
-        """
-        mapper = self.store.mapper(set_root=False)
-        mapper.set_root(ipfs_hash)
-        dataset = xr.open_zarr(mapper)
-        return dataset
-
-    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
-        """
-        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
-
-        Parameters
-        ----------
-        zarr_json_path : str, optional
-            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
-            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
-
-        Returns
-        -------
-        xr.Dataset
-            Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
-
-        """
-        if not zarr_json_path:
-            zarr_json_path = str(self.zarr_json_path())
-
-        dataset = xr.open_dataset(
-            "reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
-                "storage_options": {
-                    "fo": zarr_json_path,
-                    "remote_protocol": self.remote_protocol(),
-                    "skip_instance_cache": True,
-                    "default_cache_type": "readahead",
-                },
-                "consolidated": False,
-            },
-            decode_times = decode_times
-        )
-        # Apply any further postprocessing on the way out
-        return self.postprocess_zarr(dataset)
-
 
 class Publish(Transform, Metadata):
     """
@@ -516,15 +437,14 @@ class Publish(Transform, Metadata):
         Parameters
         ----------
         args : list
-            Additional arguments passed from generate.py
+            Additional arguments specified by the user
         kwargs : dict
-            Keyword arguments passed from generate.py
+            Keyword arguments specified by the user
 
         Returns
         -------
         bool
             Flag indicating if new data was / was not parsed
-
         """
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed
@@ -699,14 +619,7 @@ class Publish(Transform, Metadata):
         # DEBUGGING
         self.info(f"dask.config.config is {pprint.pformat(dask.config.config)}")
 
-    # INITIAL PUBLICATION
-
-    def transformed_dataset(self, custom: bool = False):
-        """
-        Overall method to return the fully processed and transformed dataset
-        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
-        """
-        return self.zarr_json_to_dataset()
+    # PREPARATION
 
     def pre_initial_dataset(self) -> xr.Dataset:
         """
@@ -739,18 +652,92 @@ class Publish(Transform, Metadata):
 
         return dataset
 
-    def write_initial_zarr(self):
+    def transformed_dataset(self, custom: bool = False):
         """
-        Writes the first iteration of zarr for the dataset to the store specified at
-        initialization. If the store is `IPLD`, does some additional metadata processing
+        Overall method to return the fully processed and transformed dataset
+        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
         """
-        # Transform the JSON Zar
-        dataset = self.pre_initial_dataset()
-        mapper = self.store.mapper(set_root=False)
+        return self.zarr_json_to_dataset()
 
-        self.to_zarr(dataset, mapper, consolidated=True, mode="w")
-        if isinstance(self.store, IPLD):
-            self.dataset_hash = str(mapper.freeze())
+    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
+        """
+        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
+
+        Parameters
+        ----------
+        ipfs_hash : str
+            The CID of the dataset
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            Object representing the dataset described by the CID at `self.latest_hash()`
+
+        """
+        mapper = self.store.mapper(set_root=False)
+        mapper.set_root(ipfs_hash)
+        dataset = xr.open_zarr(mapper)
+        return dataset
+
+    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
+        """
+        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying
+        any desired postprocessing steps
+
+        Parameters
+        ----------
+        zarr_json_path : str, optional
+            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
+            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
+        decode_times : bool, optional
+            Choose whether to decode the times in inputs file using the CF conventions.
+            In most cases this is desirable and necessary, therefore this defaults to True.
+
+        Returns
+        -------
+        xr.Dataset
+            Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
+
+        """
+        if not zarr_json_path:
+            zarr_json_path = str(self.zarr_json_path())
+
+        dataset = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": zarr_json_path,
+                    "remote_protocol": self.remote_protocol(),
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times = decode_times
+        )
+        # Apply any further postprocessing on the way out
+        return self.postprocess_zarr(dataset)
+
+    def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
+        """
+        Method to populate with the specific postprocessing routine of each child class (if relevant)
+
+        If no preprocessing is happening, return the dataset untouched
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The dataset being processed
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            The dataset being processed
+
+        """
+        return dataset
 
     def set_key_dims(self):
         """
@@ -771,6 +758,21 @@ class Publish(Transform, Metadata):
         elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
+
+    # INITIAL
+
+    def write_initial_zarr(self):
+        """
+        Writes the first iteration of zarr for the dataset to the store specified at
+        initialization. If the store is `IPLD`, does some additional metadata processing
+        """
+        # Transform the JSON Zar
+        dataset = self.pre_initial_dataset()
+        mapper = self.store.mapper(set_root=False)
+
+        self.to_zarr(dataset, mapper, consolidated=True, mode="w")
+        if isinstance(self.store, IPLD):
+            self.dataset_hash = str(mapper.freeze())
 
     # UPDATES
 
