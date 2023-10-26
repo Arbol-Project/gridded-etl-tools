@@ -721,6 +721,9 @@ class Publish(Creation, Metadata):
         if not self.forecast and not self.ensemble:
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
+        elif self.hindcast:
+            self.standard_dims = ["hindcast_reference_time", "forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
+            self.time_dim = "hindcast_reference_time"
         elif self.ensemble:
             self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"

@@ -172,6 +172,11 @@ class Attributes(ABC):
         return False
 
     @property
+    def hindcaste(self) -> bool:
+        """Hindcast defaults to False, must override for actual hindcast datasets"""
+        return False
+
+    @property
     def forecast_hours(self) -> list[int]:
         """To be overwritten by actual forecast datasets"""
         return list(None)
@@ -179,6 +184,11 @@ class Attributes(ABC):
     @property
     def ensemble_numbers(self) -> list[int]:
         """To be overwritten by actual ensemble datasets"""
+        return list(None)
+
+    @property
+    def hindcast_steps(self) -> list[int]:
+        """To be overwritten by actual hindcast datasets"""
         return list(None)
 
     @property
