@@ -69,7 +69,7 @@ class Transform(Convenience):
                 input_files_list = [
                     str(fil)
                     for fil in self.input_files()
-                    if any(fil.suffix in file_ext for file_ext in [".nc4", ".nc", ".grib", ".grib1", ".grib2", ".grb2"])
+                    if any(fil.suffix in file_ext for file_ext in [".nc", ".nc4", ".grib", ".grib1", ".grib2", "grb1", ".grb2"])
                 ]
                 # Further filter down which files are processsed using an optional file filter string or integer
                 if file_filter:
@@ -142,7 +142,7 @@ class Transform(Convenience):
         Parameters
         ----------
         file_path : str
-            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
+            A file path to an input GRIB or NetCDF-4 Classic file on a local file system
         scan_indices : int, slice(int)
             One or many indices to filter the JSONS returned by `scan_grib`
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
@@ -151,7 +151,7 @@ class Transform(Convenience):
         Returns
         -------
         scanned_zarr_json : dict
-            A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+            A JSON representation of a NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
         """
         try:
             if self.file_type == 'NetCDF':
@@ -166,14 +166,14 @@ class Transform(Convenience):
             )
         return scanned_zarr_json
     
-    def remote_kerchunk(self, file_path: str, scan_indices: int = 0, local_file_path: Optional[pathlib.Path] = None):
+    def remote_kerchunk(self, file_path: str, scan_indices: int = 0):
         """
         Use Kerchunk to scan a file on a remote S3 file system
 
         Parameters
         ----------
         file_path : str
-            A file path to an input GRIB or NetCDF-4 Classic file. Can be local or on a remote S3 bucket that accepts anonymous access.
+            A file path to an input GRIB or NetCDF-4 Classic file on a remote S3 bucket that accepts anonymous access.
         scan_indices : int, slice(int)
             One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
             When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
@@ -182,7 +182,7 @@ class Transform(Convenience):
         Returns
         -------
         scanned_zarr_json : dict
-            A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+            A JSON representation of a NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
         """
         s3_so = {
             'anon': True,
