@@ -29,6 +29,7 @@ import pytest
 import xarray
 import shutil
 import psutil
+import glob
 import multiprocessing
 
 from ..common import *  # import local functions common to all pytests
@@ -141,6 +142,24 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     original_value = original_dataset[orig_data_var].sel(
         latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 12)).values
     assert output_value == original_value
+
+
+def test_prepare_input_files(manager_class, mocker, appended_input_path):
+    """
+    Test that the constituent steps of prepare_input_files work, as expressed through the example CHIRPS manager
+    """
+    mocker.patch("examples.managers.chirps.CHIRPSFinal25.local_input_path", return_value=appended_input_path)
+    dm = get_manager(manager_class)
+    # Test that prepare_input_files successfully expands 2 files to 32 files
+    assert len(list(dm.input_files())) == 2
+    dm.convert_to_lowest_common_time_denom(list(dm.input_files()), keep_originals=False)
+    assert len(list(dm.input_files())) == 32
+    # Test that ncs_to_nc4s converts all NC files to NC4s, removing the original NCs in the process
+    dm.ncs_to_nc4s(keep_originals=False)
+    input_ncs = [pathlib.Path(file) for file in glob.glob(str(dm.local_input_path() / "*.nc"))]
+    input_nc4s = dm.input_files()
+    assert len(input_ncs) == 0
+    assert len(list(input_nc4s)) == 32
 
 
 def test_append_only(mocker, request, manager_class, heads_path, test_chunks, appended_input_path, root):

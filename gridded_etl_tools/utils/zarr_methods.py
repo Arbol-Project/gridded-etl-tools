@@ -447,9 +447,8 @@ class Publish(Transform, Metadata):
             Flag indicating if new data was / was not parsed
         """
         self.info("Running parse routine")
-        # adjust default dask configuration parameters as needed
+        # adjust default dask configuration parameters as needed and spin up a LocalCluster
         self.dask_configuration()
-        # # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
@@ -457,6 +456,7 @@ class Publish(Transform, Metadata):
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
         ) as cluster:
+            # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client in these cases
             with Client(cluster) if not isinstance(self.store, IPLD) else nullcontext() as client:
                 self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
                 try:
