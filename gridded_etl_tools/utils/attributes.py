@@ -1,3 +1,4 @@
+import numpy as np
 from abc import ABC, abstractmethod
 from .store import StoreInterface, Local
 
@@ -190,6 +191,14 @@ class Attributes(ABC):
     def hindcast_steps(self) -> list[int]:
         """To be overwritten by actual hindcast datasets"""
         return list(None)
+
+    @property
+    def irregular_update_cadence(self) -> bool | tuple[np.timedelta64, np.timedelta64]:
+        """
+        If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable updates
+        Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with non-monotic update schedules
+        """
+        return False
 
     @property
     def bbox_rounding_value(self) -> int:
