@@ -89,6 +89,7 @@ def test_are_times_contiguous(mocker, manager_class: DatasetManager):
     five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
     assert not dm.are_times_contiguous(five_day_updates)
 
+
 def test_calculate_update_time_ranges(manager_class: DatasetManager, fake_original_dataset: xr.Dataset, fake_complex_update_dataset: xr.Dataset):
     """
     Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated

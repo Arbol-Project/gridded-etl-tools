@@ -540,11 +540,8 @@ class Publish(Transform, Metadata):
         # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
         times = dataset[self.time_dim].values
         if len(times) >= 2:
-            previous_time = times[0]
-            for time in times[1:]:
-                if not self.are_times_contiguous(time, previous_time):
-                    raise ValueError("Dataset does not contain contiguous time data")
-                previous_time = time
+            if not self.are_times_contiguous(times):
+                raise ValueError("Dataset does not contain contiguous time data")
 
         # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
@@ -1077,14 +1074,13 @@ class Publish(Transform, Metadata):
 
     def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
         """
-        Convenience method to run `is_time_contiguous` in a loop, since this is a regular pattern
+        Convenience method to run `is_time_contiguous` in a loop over an ascending ordered list of input times,
+        since this is a regular pattern
 
         Parameters
         ----------
         times
             A datetime.datetime object representing the timestamp being checked
-        previous_time
-            A datetime.datetime object representing the prior timestamp
 
         Returns
         -------
@@ -1105,7 +1101,7 @@ class Publish(Transform, Metadata):
 
         Parameters
         ----------
-        times
+        time
             A datetime.datetime object representing the timestamp being checked
         previous_time
             A datetime.datetime object representing the prior timestamp
