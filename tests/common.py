@@ -1,5 +1,6 @@
 import pathlib
 import shutil
+import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 from .conftest import manager_class
@@ -143,3 +144,6 @@ def patched_root_stac_catalog(self):
             The catalogs and collections describe single providers. Each may contain one or multiple datasets. \
             Each individual dataset has been documented as STAC Items."
         }
+
+def patched_irregular_update_cadence(self):
+    return [np.timedelta64(3,"D"), np.timedelta64(4,"D")]

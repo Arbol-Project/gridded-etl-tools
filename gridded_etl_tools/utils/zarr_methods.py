@@ -1068,19 +1068,38 @@ class Publish(Transform, Metadata):
         bool
             whether the original and appending datasets form a contiguous time axis
         """
-        last_time_in_original = original_dataset[self.time_dim].values[-1]
-
         # Check if first time in append times is one time step ahead of the last time in the original dataset
-        self.are_times_contiguous(append_times[0], last_time_in_original)
+        last_time_in_original = original_dataset[self.time_dim].values[-1]
+        self.is_time_contiguous(append_times[0], last_time_in_original)
 
         # Check if all times to be appended are contiguous with the prior time step in the append time range
-        previous_time = append_times[0]
-        for time in append_times[1:]:
-            self.are_times_contiguous(time, previous_time)
+        self.are_times_contiguous(append_times)
+
+    def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
+        """
+        Convenience method to run `is_time_contiguous` in a loop, since this is a regular pattern
+
+        Parameters
+        ----------
+        times
+            A datetime.datetime object representing the timestamp being checked
+        previous_time
+            A datetime.datetime object representing the prior timestamp
+
+        Returns
+        -------
+        bool | None
+            Returns False for any unacceptable timestamp
+        """
+        previous_time = times[0]
+        for time in times[1:]:
+            if self.is_time_contiguous(time, previous_time) is not None:
+                return False
             previous_time = time
         return True
 
-    def are_times_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
+
+    def is_time_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
         """
         Return false if a given time is out of order and/or does not follow the previous time, or falls outside of an acceptable range of timedeltas
 
@@ -1097,7 +1116,7 @@ class Publish(Transform, Metadata):
             Returns False for any unacceptable timestamp
         """
         if self.irregular_update_cadence:
-            if not self.irregular_update_cadence[0] <= (time - previous_time) <= self.irregular_update_cadence[1]:
+            if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
                 return False
         elif time - previous_time != self.span_to_timedelta():
             return False
