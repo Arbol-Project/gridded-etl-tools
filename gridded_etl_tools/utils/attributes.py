@@ -192,7 +192,7 @@ class Attributes(ABC):
         """To be overwritten by actual hindcast datasets"""
         return list(None)
 
-    @property
+    @classmethod
     def irregular_update_cadence(self) -> bool | tuple[np.timedelta64, np.timedelta64]:
         """
         If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable updates

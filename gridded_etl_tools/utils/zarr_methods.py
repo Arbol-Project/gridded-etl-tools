@@ -1111,7 +1111,7 @@ class Publish(Transform, Metadata):
         bool | None
             Returns False for any unacceptable timestamp
         """
-        if self.irregular_update_cadence:
+        if self.irregular_update_cadence():
             if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
                 return False
         elif time - previous_time != self.span_to_timedelta():
