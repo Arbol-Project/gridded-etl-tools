@@ -144,7 +144,10 @@ class S3(StoreInterface):
         str
             A URL string starting with "s3://" followed by the path to the Zarr.
         """
-        return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
+        if self.dm.custom_output_path:
+            return self.dm.custom_output_path
+        else:
+            return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
 
     def __str__(self) -> str:
         return self.path
@@ -171,11 +174,7 @@ class S3(StoreInterface):
             A `MutableMapping` which is the S3 key/value store
         """
         if refresh or not hasattr(self, "_mapper"):
-            if self.dm.custom_output_path:
-                url = self.dm.custom_output_path
-            else:
-                url = self.path
-            self._mapper = s3fs.S3Map(root=url, s3=self.fs())
+            self._mapper = s3fs.S3Map(root=self.path, s3=self.fs())
         return self._mapper
 
     @property
