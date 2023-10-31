@@ -1,26 +1,3 @@
-"""
-included automatically in the run. The test functions check if CHIRPS data is being generated correctly by the current
-state of the repository using test data saved in data/ that is checked into the repository.
-
-With a running IPFS daemon and Python virtual environment set up as described in
-doc/set_up_python_virtual_environment.md (including all CHIRPS specific dependencies), the tests should complete
-successfully from the tests/ directory.
-
-    $ pytest CHIRPS/
-
-Or just
-
-    $ pytest
-
-When `pytest -s` is run from the root tests/ directory, the test functions in this file will be The test will generate
-a heads.json and input directories in the root defined in ./conftest.py. The input NCs are already checked into that
-root. These NCs are copied into the generated input directories to simulate downloading them from a source. The input
-directories are passed into the CHIRPS instance. During the course of running the manager, hourly files are generated
-in the input directories and originals are copied to the "_originals" directory. After the test completes, the
-"teardown_module" function runs automatically to erase everything that was generated (everything in the default root
-except for the input NCs).
-"""
-
 import os
 import datetime
 import pytest

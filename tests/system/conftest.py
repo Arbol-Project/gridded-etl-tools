@@ -1,11 +1,9 @@
-import pytest
+import json
 import pathlib
 
-from examples.managers.chirps import CHIRPSFinal25
+import pytest
 
-#
-# Configuration fixtures defined here will be automatically loaded and available to tests in this directory
-#
+from examples.managers.chirps import CHIRPSFinal25
 
 
 @pytest.fixture(scope="module")
@@ -56,3 +54,16 @@ def test_chunks():
     Time chunk value to use for tests instead of CHIRPS default
     """
     return {"time": 50, "latitude": 40, "longitude": 40}
+
+
+@pytest.fixture
+def create_heads_file_for_testing(heads_path):
+    """
+    Create the heads file only if it doesn't exist
+    """
+    if not heads_path.exists():
+        with open(heads_path, "w") as heads:
+            json.dump({}, heads)
+        print(f"Created empty heads JSON at {heads_path}")
+    else:
+        print(f"Found existing heads JSON at {heads_path}")

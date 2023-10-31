@@ -4,8 +4,12 @@ import xarray as xr
 import os
 import json
 
+import pandas as pd
+import numpy as np
+import xarray as xr
+
 from gridded_etl_tools.dataset_manager import DatasetManager
-from .common import get_manager, patched_irregular_update_cadence
+from ..common import get_manager, patched_irregular_update_cadence
 from .conftest import example_zarr_json
 
 
@@ -53,7 +57,7 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
     assert dm.time_dim == "hindcast_reference_time"
 
 
-def test_export_zarr_json_in_memory(manager_class: DatasetManager):
+def test_export_zarr_json_in_memory(manager_class: DatasetManager, example_zarr_json):
     dm = get_manager(manager_class)
     local_file_path = "output_zarr_json.json"
     json_str = str(example_zarr_json)
