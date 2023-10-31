@@ -193,12 +193,12 @@ class Attributes(ABC):
         return list(None)
 
     @classmethod
-    def irregular_update_cadence(self) -> bool | tuple[np.timedelta64, np.timedelta64]:
+    def irregular_update_cadence(self) -> None | tuple[np.timedelta64, np.timedelta64]:
         """
         If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable updates
         Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with non-monotic update schedules
         """
-        return False
+        return None
 
     @property
     def bbox_rounding_value(self) -> int:

@@ -99,6 +99,16 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date will fail with a
             warning message.
+        ipfs_host : str
+            The URL of the IPFS host
+        dask_dashboard_address : str
+            The desired URL of the dask dashboard
+        dask_worker_memory_target : float
+            The desired maximum occupancy of available memory by Dask, expressed as a ratio of one
+        dask_worker_memory_spill : float
+            The level beyond which Dask will consider spilling additional objects in memory to disk, expressed as a ratio of one
+        dask_cpu_mem_target_ratio : float
+            The desired fraction of the total available memory assigned to each of Dask's workers
         use_local_zarr_jsons: bool, optional
             Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked datasets.
         skip_prepare_input_files: bool, optional

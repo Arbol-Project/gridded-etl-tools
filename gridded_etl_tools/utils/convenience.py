@@ -672,8 +672,7 @@ class Convenience(Attributes):
 
         Returns
         -------
-        np.timedelta64
-            A numpy timedelta corresponding to a dataset's update cadence
+        A numpy timedelta corresponding to a dataset's update cadence
         """
         span_to_td = {
             cls.SPAN_HOURLY : np.timedelta64(1, 'h'),

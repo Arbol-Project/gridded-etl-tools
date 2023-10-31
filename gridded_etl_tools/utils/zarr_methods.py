@@ -37,7 +37,7 @@ class Transform(Convenience):
 
     # KERCHUNKING
 
-    def create_zarr_json(self, force_overwrite: bool = True, file_filter: str = None, outfile_path: str = None):
+    def create_zarr_json(self, force_overwrite: bool = True, file_filter: str|None = None, outfile_path: str|None = None):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
 
@@ -135,7 +135,7 @@ class Transform(Convenience):
 
         return scanned_zarr_json
 
-    def local_kerchunk(self, file_path: str, scan_indices: int = 0):
+    def local_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
         """
         Use Kerchunk to scan a file on the local file system
 
@@ -166,7 +166,7 @@ class Transform(Convenience):
             )
         return scanned_zarr_json
     
-    def remote_kerchunk(self, file_path: str, scan_indices: int = 0):
+    def remote_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
         """
         Use Kerchunk to scan a file on a remote S3 file system
 
@@ -324,13 +324,12 @@ class Transform(Convenience):
         for existing_file in input_files:
             new_file = existing_file.with_suffix(replacement_suffix)
             if invert_file_order:
-                commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
-                        list(map(str, command_text + [new_file, existing_file]))
-                    )
+                filenames = [new_file, existing_file]
             else:
-                commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
-                        list(map(str, command_text + [existing_file, new_file]))
-                    )
+                filenames = [existing_file, new_file]
+            commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
+                    list(map(str, command_text + filenames))
+                )
         # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -339,9 +338,9 @@ class Transform(Convenience):
                 command.wait()
                 if not keep_originals:
                     if not invert_file_order:
-                            os.remove(command.args[-2])
+                        os.remove(command.args[-2])
                     else:
-                            os.remove(command.args[-1])
+                        os.remove(command.args[-1])
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
@@ -1067,33 +1066,11 @@ class Publish(Transform, Metadata):
         """
         # Check if first time in append times is one time step ahead of the last time in the original dataset
         last_time_in_original = original_dataset[self.time_dim].values[-1]
-        self.is_time_contiguous(append_times[0], last_time_in_original)
+        if not self.is_time_contiguous(append_times[0], last_time_in_original):
+            return False
 
         # Check if all times to be appended are contiguous with the prior time step in the append time range
         self.are_times_contiguous(append_times)
-
-    def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
-        """
-        Convenience method to run `is_time_contiguous` in a loop over an ascending ordered list of input times,
-        since this is a regular pattern
-
-        Parameters
-        ----------
-        times
-            A datetime.datetime object representing the timestamp being checked
-
-        Returns
-        -------
-        bool | None
-            Returns False for any unacceptable timestamp
-        """
-        previous_time = times[0]
-        for time in times[1:]:
-            if self.is_time_contiguous(time, previous_time) is not None:
-                return False
-            previous_time = time
-        return True
-
 
     def is_time_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
         """
@@ -1108,11 +1085,35 @@ class Publish(Transform, Metadata):
 
         Returns
         -------
-        bool | None
-            Returns False for any unacceptable timestamp
+        bool
+            Returns False for any unacceptable timestamp, otherwise True
         """
         if self.irregular_update_cadence():
             if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
                 return False
         elif time - previous_time != self.span_to_timedelta():
             return False
+        return True
+
+    def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
+        """
+        Convenience method to run `is_time_contiguous` in a loop over an ascending ordered list of input times,
+        since this is a regular pattern
+
+        Parameters
+        ----------
+        times
+            A datetime.datetime object representing the timestamp being checked
+
+        Returns
+        -------
+        bool
+            Returns False for any unacceptable timestamp, otherwise True
+        """
+        previous_time = times[0]
+        for time in times[1:]:
+            if not self.is_time_contiguous(time, previous_time):
+                return False
+            previous_time = time
+        return True
+

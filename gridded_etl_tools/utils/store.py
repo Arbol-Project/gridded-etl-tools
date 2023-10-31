@@ -152,7 +152,11 @@ class S3(StoreInterface):
     def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once, when this function is first
-        called. To force a new mapper, set `refresh` to `True`.
+        called. 
+        
+        To force a new mapper, set `refresh` to `True`. 
+        To use an output path other than the default path returned by self.path, set a `custom_output_path` when the DatasetManager is instantiated
+        and it will be passed through to here. This path must be a valid S3 destination for which you have write permissions.
 
         Parameters
         ----------

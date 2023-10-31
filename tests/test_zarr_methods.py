@@ -68,7 +68,7 @@ def test_are_times_contiguous(mocker, manager_class: DatasetManager):
     contig = pd.date_range(start='2023-03-01', end='2023-03-15', freq='1D')
     assert dm.are_times_contiguous(contig)
     # Check a single time -- one good, one not
-    assert dm.is_time_contiguous(contig[1], contig[0]) is None
+    assert dm.is_time_contiguous(contig[1], contig[0])
     assert not dm.is_time_contiguous(contig[2], contig[0])
     # Check a set of times that skips a day
     week_ahead_dt = contig[-1] + pd.Timedelta(days=7)
