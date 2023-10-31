@@ -4,7 +4,7 @@ import subprocess
 
 import nox
 
-# aiohttp is not building on Python 3.12
+# numba is not supported on Python 3.12
 ALL_INTERPRETERS = (
     "3.10",
     "3.11",
