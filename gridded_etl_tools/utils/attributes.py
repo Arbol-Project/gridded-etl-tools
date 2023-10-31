@@ -41,8 +41,8 @@ class Attributes(ABC):
     @property
     def file_type(cls):
         """
-        Class method to populate with a string representing the file type of each child class (and edition if relevant),
-        e.g. GRIB1 for ERA5 data, GRIB2 for RTMA, or NetCDF for Copernicus Marine Service
+        Class method to populate with a string representing the file type of each child class (and edition if
+        relevant), e.g. GRIB1 for ERA5 data, GRIB2 for RTMA, or NetCDF for Copernicus Marine Service
 
         Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
         """
@@ -52,8 +52,8 @@ class Attributes(ABC):
     @abstractmethod
     def remote_protocol(cls):
         """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3' for S3, etc.
-        See fsspec docs for more details.
+        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+        for S3, etc. See fsspec docs for more details.
         """
         ...
 
@@ -61,8 +61,8 @@ class Attributes(ABC):
     @abstractmethod
     def identical_dims(cls):
         """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it read these
-        dimensions only one time, from the first input file
+        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
+        read these dimensions only one time, from the first input file
         """
         ...
 
@@ -70,7 +70,8 @@ class Attributes(ABC):
     @abstractmethod
     def concat_dims(cls):
         """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some other relevant dimension
+        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
+        other relevant dimension
         """
         ...
 
@@ -148,7 +149,6 @@ class Attributes(ABC):
         """
         return ""
 
-
     @property
     def tags(cls) -> list[str]:
         """
@@ -195,8 +195,9 @@ class Attributes(ABC):
     @classmethod
     def irregular_update_cadence(self) -> None | tuple[np.timedelta64, np.timedelta64]:
         """
-        If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable updates
-        Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with non-monotic update schedules
+        If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of
+        acceptable updates Intended to prevent time contiguity checks from short-circuiting valid updates for datasets
+        with non-monotic update schedules
         """
         return None
 

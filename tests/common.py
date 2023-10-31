@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from .conftest import manager_class
+
 #
 # Functions common to more than one test that can be imported with:
 #
@@ -13,6 +13,7 @@ from .conftest import manager_class
 #
 #     from ..common import *
 #
+
 
 def get_manager(
     manager_class: DatasetManager,
@@ -29,7 +30,8 @@ def get_manager(
     manager_class
         A DatasetManager implementation for your chosen dataset
     input_path
-        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append data.
+        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append
+        data.
     store
         The manager store to use. 'Local' in most implementations
     time_chunk
@@ -44,12 +46,13 @@ def get_manager(
     manager = manager_class(
         custom_input_path=input_path,
         s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
-        store=store
+        store=store,
     )
     # Overriding the default (usually very large) time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks["time"] = time_chunk
     manager.requested_zarr_chunks["time"] = time_chunk
     return manager
+
 
 def remove_zarr_json():
     """
@@ -92,6 +95,7 @@ def clean_up_input_paths(*args):
             shutil.rmtree(originals_path, ignore_errors=True)
             print(f"Cleaned up {originals_path}")
 
+
 # Save the original IPNS publish function, so it can be mocked to force offline to True when the patched
 # IPNS publish is applied.
 
@@ -111,6 +115,7 @@ def empty_ipns_publish(self, key, cid, offline=False):
     A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
     """
     return self.info("Skipping IPNS publish to preserve initial test dataset")
+
 
 # Change the json_key used by IPNS publish to clearly mark the dataset as a test in your key list
 # This will allow other tests to reference the test dataset and prevent mixups with production data
@@ -142,8 +147,9 @@ def patched_root_stac_catalog(self):
         "description": f"This catalog contains all the data uploaded by \
             {self.host_organization()} that has been issued STAC-compliant metadata. \
             The catalogs and collections describe single providers. Each may contain one or multiple datasets. \
-            Each individual dataset has been documented as STAC Items."
-        }
+            Each individual dataset has been documented as STAC Items.",
+    }
+
 
 def patched_irregular_update_cadence(self):
-    return [np.timedelta64(3,"D"), np.timedelta64(4,"D")]
+    return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]

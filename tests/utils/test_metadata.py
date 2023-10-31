@@ -30,18 +30,14 @@ class DummyManager(dataset_manager.DatasetManager):
     def name(cls):
         return cls.__name__
 
-    def __init__(
-        self, requested_dask_chunks=None, requested_zarr_chunks=None, *args, **kwargs
-    ):
+    def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, *args, **kwargs):
         if requested_dask_chunks is None:
             requested_dask_chunks = {}
 
         if requested_zarr_chunks is None:
             requested_zarr_chunks = {}
 
-        super().__init__(
-            "ipfshost", requested_dask_chunks, requested_zarr_chunks, *args, **kwargs
-        )
+        super().__init__("ipfshost", requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
 
     def data_var(self):
         return "data"

@@ -1,27 +1,25 @@
-### [test_chirps.py]
-###
-### included automatically in the run. The test functions check if CHIRPS data is being generated
-### correctly by the current state of the repository using test data saved in data/ that is
-### checked into the repository.
-###
-### With a running IPFS daemon and Python virtual environment set up as described in
-### doc/set_up_python_virtual_environment.md (including all CHIRPS specific dependencies), the tests
-### should complete successfully from the tests/ directory.
-###
-###     $ pytest CHIRPS/
-###
-### Or just
-###
-###     $ pytest
-###
-### When `pytest -s` is run from the root tests/ directory, the test functions in this file will be
-### The test will generate a heads.json and input directories in the root defined in ./conftest.py. The input
-### NCs are already checked into that root. These NCs are copied into the generated input directories to
-### simulate downloading them from a source. The input directories are passed into the CHIRPS instance. During
-### the course of running the manager, hourly files are generated in the input directories and originals are
-### copied to the "_originals" directory. After the test completes, the "teardown_module" function runs automatically
-### to erase everything that was generated (everything in the default root except for the input NCs).
+"""
+included automatically in the run. The test functions check if CHIRPS data is being generated correctly by the current
+state of the repository using test data saved in data/ that is checked into the repository.
 
+With a running IPFS daemon and Python virtual environment set up as described in
+doc/set_up_python_virtual_environment.md (including all CHIRPS specific dependencies), the tests should complete
+successfully from the tests/ directory.
+
+    $ pytest CHIRPS/
+
+Or just
+
+    $ pytest
+
+When `pytest -s` is run from the root tests/ directory, the test functions in this file will be The test will generate
+a heads.json and input directories in the root defined in ./conftest.py. The input NCs are already checked into that
+root. These NCs are copied into the generated input directories to simulate downloading them from a source. The input
+directories are passed into the CHIRPS instance. During the course of running the manager, hourly files are generated
+in the input directories and originals are copied to the "_originals" directory. After the test completes, the
+"teardown_module" function runs automatically to erase everything that was generated (everything in the default root
+except for the input NCs).
+"""
 
 import os
 import datetime
@@ -31,7 +29,17 @@ import shutil
 
 from gridded_etl_tools.utils.encryption import generate_encryption_key
 
-from ..common import *  # import local functions common to all pytests
+from ..common import (
+    clean_up_input_paths,
+    empty_ipns_publish,
+    offline_ipns_publish,
+    patched_json_key,
+    patched_root_stac_catalog,
+    patched_zarr_json_path,
+    remove_dask_worker_dir,
+    remove_performance_report,
+    remove_zarr_json,
+)
 
 
 @pytest.fixture
@@ -50,8 +58,8 @@ def create_input_directories(initial_input_path, appended_input_path):
 @pytest.fixture
 def simulate_file_download(root, initial_input_path, appended_input_path):
     """
-    Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input directories will be
-    deleted during clean up.
+    Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
+    directories will be deleted during clean up.
     """
     # for chirps_init_fil in root.glob("*initial*"):
     #     shutil.copy(chirps_init_fil, initial_input_path)
@@ -76,12 +84,8 @@ def setup_and_teardown_per_test(
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
     # Force ipns_publish to use offline mode to make tests run faster
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.json_key", patched_json_key
-    )
-    mocker.patch(
-        "examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test"
-    )
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.json_key", patched_json_key)
+    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
     mocker.patch(
         "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
         patched_zarr_json_path,
@@ -117,11 +121,10 @@ def teardown_module(request, heads_path):
     request.addfinalizer(test_clean)
 
 
-def test_initial(
-    request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root
-):
+def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
-    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with "test_".
+    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
+    "test_".
     """
     # Get the CHIRPS manager with rebuild set
     encryption_key = generate_encryption_key()
@@ -161,21 +164,15 @@ def test_initial(
         )
         .values
     )
-    original_dataset = xarray.open_dataset(
-        root / "chirps_initial_dataset.nc", engine="netcdf4"
-    )
+    original_dataset = xarray.open_dataset(root / "chirps_initial_dataset.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
-        original_dataset[orig_data_var]
-        .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 12))
-        .values
+        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 12)).values
     )
     assert output_value == original_value
 
 
-def test_append_only(
-    mocker, request, manager_class, heads_path, test_chunks, appended_input_path, root
-):
+def test_append_only(mocker, request, manager_class, heads_path, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -190,7 +187,8 @@ def test_append_only(
     manager.transform()
     manager.parse()
     manager.publish_metadata()
-    # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
+    # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
+    # GRIB file
     generated_dataset = manager.zarr_hash_to_dataset(manager.dataset_hash)
     lat, lon = 14.625, -91.375
     # Validate one row of data
@@ -199,13 +197,9 @@ def test_append_only(
         .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
         .values
     )
-    original_dataset = xarray.open_dataset(
-        root / "chirps_append_subset_0.nc", engine="netcdf4"
-    )
+    original_dataset = xarray.open_dataset(root / "chirps_append_subset_0.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
-        original_dataset[orig_data_var]
-        .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
-        .values
+        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
     )
     assert output_value == original_value

@@ -16,7 +16,7 @@ def root():
     return pathlib.Path(__file__).parent / "data"
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def heads_path(root):
     """
     A local heads file for use during testing
@@ -35,6 +35,7 @@ def initial_input_path(root):
 @pytest.fixture
 def appended_input_path(root):
     return root / pathlib.Path("chirps_appended_input")
+
 
 @pytest.fixture
 def appended_input_path_with_hole(root):
