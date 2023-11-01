@@ -1052,8 +1052,6 @@ class Publish(Transform, Metadata):
         ----------
         original_dataset : xr.Dataset
             The existing dataset
-        update_dataset : xr.Dataset
-            A dataset containing all updated (insert) and new (append) records
         insert_times : tuple
             Datetimes corresponding to existing records to be replaced in the original dataset
         append_times : tuple
