@@ -91,7 +91,7 @@ class Convenience(Attributes):
     def relative_path(self) -> str:
         """
         The file folder hierarchy for a set. This should be a relative path so it can be appended to other root paths like
-        `self.local_input_path()` and `self.output_path()`
+        `self.local_input_path()`
 
         Returns
         -------
@@ -168,15 +168,6 @@ class Convenience(Attributes):
         if not omit_root:
             path = self.output_root / path
         return path
-
-    def create_output_path(self):
-        """
-        Make output directory
-        """
-        if self.custom_output_path is not None:
-            pathlib.Path(self.custom_output_path).mkdir(parents=True, exist_ok=True)
-        else:
-            self.output_path().mkdir(parents=True, exist_ok=True)
 
     # DATES
 
