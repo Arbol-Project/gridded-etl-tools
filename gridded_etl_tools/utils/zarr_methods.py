@@ -1068,9 +1068,8 @@ class Publish(Transform, Metadata):
         last_time_in_original = original_dataset[self.time_dim].values[-1]
         if not self.is_time_contiguous(append_times[0], last_time_in_original):
             return False
-
         # Check if all times to be appended are contiguous with the prior time step in the append time range
-        self.are_times_contiguous(append_times)
+        return self.are_times_contiguous(append_times)
 
     def is_time_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
         """
