@@ -660,11 +660,19 @@ class Metadata(Convenience, IPFS):
                     "calendar": "gregorian",
                 }
             )
-        elif "forecast_reference_time" in dataset:
+        elif "forecast_reference_time" in dataset and self.time_dim == "forecast_reference_time":
             dataset.forecast_reference_time.encoding.update(
                 {
                     "long_name": "initial time of forecast",
                     "standard_name" : "forecast_reference_time",
+                    "calendar": "proleptic_gregorian",
+                }
+            )
+        elif "hindcast_reference_time" in dataset and self.time_dim == "hindcast_reference_time":
+            dataset.hindcast_reference_time.encoding.update(
+                {
+                    "long_name": "initial time of forecast",
+                    "standard_name" : "hindcast_reference_time",
                     "calendar": "proleptic_gregorian",
                 }
             )
