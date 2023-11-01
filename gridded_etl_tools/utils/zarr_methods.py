@@ -1109,10 +1109,10 @@ class Publish(Transform, Metadata):
         """
         if self.irregular_update_cadence():
             if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
-                self.info(f"Time value {time} and previous time {previous_time} are not consecutive")
+                self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
                 return False
         elif time - previous_time != self.span_to_timedelta():
-            self.info(f"Time value {time} and previous time {previous_time} are not consecutive")
+            self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
             return False
         return True
 

@@ -79,7 +79,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all available data from beginning
             to end.
         custom_output_path : str, optional
-            Overrides the default path returned by `Convenience.output_path` and `Store.path` for Local and S3 stores.
+            Overrides the default path returned by `Store.path` for Local and S3 stores.
         custom_latest_hash : str, optional
             Overrides the default hash lookup defined in `IPFS.latest_hash`
         custom_input_path : str, optional

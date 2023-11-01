@@ -97,7 +97,6 @@ class Convenience(Attributes):
         -------
         str
             The relative path that should be used for this set's data
-
         """
         return pathlib.Path(".")
 
@@ -165,19 +164,19 @@ class Convenience(Attributes):
         str
             string representing the output directory path where climate data will be written
         """
-        if self.custom_output_path is not None:
-            return self.custom_output_path
-        else:
-            path = self.relative_path()
-            if not omit_root:
-                path = self.output_root / path
-            return path
+        path = self.relative_path()
+        if not omit_root:
+            path = self.output_root / path
+        return path
 
     def create_output_path(self):
         """
         Make output directory
         """
-        os.makedirs(self.output_path(), 0o755, exist_ok=True)
+        if self.custom_output_path is not None:
+            pathlib.Path(self.custom_output_path).mkdir(parents=True, exist_ok=True)
+        else:
+            self.output_path().mkdir(parents=True, exist_ok=True)
 
     # DATES
 

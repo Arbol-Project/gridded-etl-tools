@@ -363,8 +363,8 @@ class Local(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on the local filesystem.
 
-    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used automatically under normal conditions, so this
-    class doesn't provide a way to use any other path.
+    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used automatically under normal conditions, 
+    although it can be overriden by passing the `custom_output_path` parameter to the relevant DatasetManager
     """
 
     def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
