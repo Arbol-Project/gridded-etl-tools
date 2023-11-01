@@ -827,8 +827,8 @@ class Publish(Transform, Metadata):
         self,
         original_dataset: xr.Dataset,
         update_dataset: xr.Dataset,
-        insert_times: list,
-        append_times: list,
+        insert_times: tuple[datetime.datetime],
+        append_times: tuple[datetime.datetime],
     ):
         """
         An enclosing method triggering insert and/or append operations based on the presence of valid records for either.
@@ -839,22 +839,12 @@ class Publish(Transform, Metadata):
             The existing dataset
         update_dataset : xr.Dataset
             A dataset containing all updated (insert) and new (append) records
-        insert_times : list
+        insert_times : tuple
             Datetimes corresponding to existing records to be replaced in the original dataset
-        append_times : list
+        append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
-
-        if append_times and not self.is_append_contiguous(original_dataset, append_times):
-            raise ValueError(
-                "Append would create out of order or incomplete dataset, aborting"
-            )
-
-        # Raise an exception if there is no writable data
-        if not any(insert_times) and not any(append_times):
-            raise ValueError(
-                "Update started with no new records to insert or append to original zarr."
-            )
+        self.update_quality_check(original_dataset, insert_times, append_times)
 
         original_chunks = {
             dim: val_tuple[0] for dim, val_tuple in original_dataset.chunks.items()
@@ -1047,6 +1037,38 @@ class Publish(Transform, Metadata):
 
         return datetime_ranges, regions_indices
 
+    # CHECKS
+
+    def update_quality_check(self,
+                             original_dataset: xr.Dataset,
+                             insert_times: tuple[datetime.datetime],
+                             append_times: tuple[datetime.datetime]
+                             ):
+        """
+        Perform spot checks on the update dataset prior to updating.
+        If successful passes without comment. If unsuccessful raises a descriptive error message.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            The existing dataset
+        update_dataset : xr.Dataset
+            A dataset containing all updated (insert) and new (append) records
+        insert_times : tuple
+            Datetimes corresponding to existing records to be replaced in the original dataset
+        append_times : tuple
+            Datetimes corresponding to all new records to append to the original dataset
+        """
+        if append_times and not self.is_append_contiguous(original_dataset, append_times):
+            raise ValueError(
+                "Append would create out of order or incomplete dataset, aborting"
+            )
+        # Raise an exception if there is no writable data
+        if not any(insert_times) and not any(append_times):
+            raise ValueError(
+                "Update started with no new records to insert or append to original zarr."
+            )
+
     def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
         """
         Checks that an append will produce a contiguous dataset.
@@ -1089,8 +1111,10 @@ class Publish(Transform, Metadata):
         """
         if self.irregular_update_cadence():
             if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
+                self.info(f"Time value {time} and previous time {previous_time} are not consecutive")
                 return False
         elif time - previous_time != self.span_to_timedelta():
+            self.info(f"Time value {time} and previous time {previous_time} are not consecutive")
             return False
         return True
 
