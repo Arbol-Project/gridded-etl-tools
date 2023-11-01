@@ -699,7 +699,6 @@ class Metadata(Convenience, IPFS):
             if not filters:
                 encoding["filters"] = filters = []
             filters.append(EncryptionFilter(self.encryption_key))
-
         return dataset
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:

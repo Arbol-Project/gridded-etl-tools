@@ -30,6 +30,11 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
     dm.set_key_dims()
     assert dm.standard_dims == ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
     assert dm.time_dim == "forecast_reference_time"
+    # Ensemble standard dims
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.hindcast", return_value=True)
+    dm.set_key_dims()
+    assert dm.standard_dims == ["hindcast_reference_time", "forecast_reference_offset", "step", "ensemble", "latitude", "longitude"]
+    assert dm.time_dim == "hindcast_reference_time"
 
 
 def test_export_zarr_json_in_memory(manager_class: DatasetManager):
