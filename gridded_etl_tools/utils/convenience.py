@@ -91,13 +91,12 @@ class Convenience(Attributes):
     def relative_path(self) -> str:
         """
         The file folder hierarchy for a set. This should be a relative path so it can be appended to other root paths like
-        `self.local_input_path()` and `self.output_path()`
+        `self.local_input_path()`
 
         Returns
         -------
         str
             The relative path that should be used for this set's data
-
         """
         return pathlib.Path(".")
 
@@ -165,19 +164,10 @@ class Convenience(Attributes):
         str
             string representing the output directory path where climate data will be written
         """
-        if self.custom_output_path is not None:
-            return self.custom_output_path
-        else:
-            path = self.relative_path()
-            if not omit_root:
-                path = self.output_root / path
-            return path
-
-    def create_output_path(self):
-        """
-        Make output directory
-        """
-        os.makedirs(self.output_path(), 0o755, exist_ok=True)
+        path = self.relative_path()
+        if not omit_root:
+            path = self.output_root / path
+        return path
 
     # DATES
 
@@ -321,21 +311,18 @@ class Convenience(Attributes):
             A tuple defining the start and end date of a file's time dimension
 
         """
-        # use forecast times if they exist
-        if "forecast_reference_time" in dataset:
-            time_dim = "forecast_reference_time"
-        else:
-            time_dim = "time"
+        if not hasattr(self, "time_dim"):
+            self.set_key_dims()
         # if there is only one date, set start and end to the same value
-        if dataset[time_dim].size == 1:
-            value = dataset[time_dim].values
+        if dataset[self.time_dim].size == 1:
+            value = dataset[self.time_dim].values
             if isinstance(value, np.ndarray):
                 value = value[0]
             start = self.numpydate_to_py(value)
             end = start
         else:
-            start = self.numpydate_to_py(dataset[time_dim][0].values)
-            end = self.numpydate_to_py(dataset[time_dim][-1].values)
+            start = self.numpydate_to_py(dataset[self.time_dim][0].values)
+            end = self.numpydate_to_py(dataset[self.time_dim][-1].values)
         return start, end
 
     def get_date_range_from_file(
@@ -665,3 +652,23 @@ class Convenience(Attributes):
         )
         # After converting, the longitudes may still start at zero. This reorders the longitude coordinates from -180 to 180 if necessary.
         return dataset.sortby(["latitude", "longitude"])
+
+    @classmethod
+    def span_to_timedelta(cls) -> np.timedelta64:
+        """
+        Map a dataset's string time span to a corresponding numpy timedelta64 object
+        NOTE only valid for datasets with regular update cadences.
+        See `irregular_update_cadence` attribute for handling irregular cadence.
+
+        Returns
+        -------
+        A numpy timedelta corresponding to a dataset's update cadence
+        """
+        span_to_td = {
+            cls.SPAN_HOURLY : np.timedelta64(1, 'h'),
+            cls.SPAN_DAILY : np.timedelta64(1, 'D'),
+            cls.SPAN_WEEKLY : np.timedelta64(1, 'W'),
+            cls.SPAN_MONTHLY : np.timedelta64(1, 'M'),
+            cls.SPAN_YEARLY : np.timedelta64(1, 'Y'),
+        }
+        return span_to_td[cls.temporal_resolution()]

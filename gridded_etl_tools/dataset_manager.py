@@ -58,6 +58,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite=False,
         ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
+        dask_worker_memory_target: float = 0.65,
+        dask_worker_memory_spill: float = 0.65,
         dask_cpu_mem_target_ratio: float = 4 / 32,
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
@@ -77,7 +79,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all available data from beginning
             to end.
         custom_output_path : str, optional
-            Overrides the default path returned by `Convenience.output_path`
+            Overrides the default path returned by `StoreInterface.path` for Local and S3 stores.
         custom_latest_hash : str, optional
             Overrides the default hash lookup defined in `IPFS.latest_hash`
         custom_input_path : str, optional
@@ -97,6 +99,16 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date will fail with a
             warning message.
+        ipfs_host : str
+            The URL of the IPFS host
+        dask_dashboard_address : str
+            The desired URL of the dask dashboard
+        dask_worker_memory_target : float
+            The desired maximum occupancy of available memory by Dask, expressed as a ratio of one
+        dask_worker_memory_spill : float
+            The level beyond which Dask will consider spilling additional objects in memory to disk, expressed as a ratio of one
+        dask_cpu_mem_target_ratio : float
+            The desired fraction of the total available memory assigned to each of Dask's workers
         use_local_zarr_jsons: bool, optional
             Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked datasets.
         skip_prepare_input_files: bool, optional
@@ -156,8 +168,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         # Dask distributed configuration defaults, mostly related to memory usage
         self.dask_scheduler_worker_saturation = 1.2
-        self.dask_worker_mem_target = 0.65
-        self.dask_worker_mem_spill = 0.65
+        self.dask_worker_mem_target = dask_worker_memory_target
+        self.dask_worker_mem_spill = dask_worker_memory_spill
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
         self.dask_use_process_scheduler = False

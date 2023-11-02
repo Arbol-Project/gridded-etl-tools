@@ -10,7 +10,6 @@ import pathlib
 import glob
 import os
 
-import zarr
 import pandas as pd
 import numpy as np
 import xarray as xr
@@ -30,7 +29,7 @@ from .metadata import Metadata
 from .store import IPLD
 
 
-class Creation(Convenience):
+class Transform(Convenience):
     """
     Base class for transforming a collection of downloaded input files in NetCDF4 Classic format into
     (sequentially) kerchunk JSONs, a MultiZarr Kerchunk JSON, and finally an Xarray Dataset based on that MultiZarr.
@@ -38,7 +37,7 @@ class Creation(Convenience):
 
     # KERCHUNKING
 
-    def create_zarr_json(self, force_overwrite: bool = True):
+    def create_zarr_json(self, force_overwrite: bool = True, file_filter: str|None = None, outfile_path: str|None = None):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
 
@@ -53,7 +52,13 @@ class Creation(Convenience):
         force_overwrite : bool, optional
             Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
-
+        file_filter
+            A string used to further filter down input files for kerchunkifying.
+            Useful if you want to kerchunkify only a subset of available files.
+            Defaults to None.
+        outfile_path
+            A custom string path for the final, merged Zarr JSON.
+            Defaults to None, in which case Zarr JSONs are output to self.zarr_json_path.
         """
         self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.
@@ -64,19 +69,25 @@ class Creation(Convenience):
                 input_files_list = [
                     str(fil)
                     for fil in self.input_files()
-                    if (fil.suffix == ".nc4" or fil.suffix == ".nc" or fil.suffix == '.grib' or fil.suffix == '.grb2')
+                    if any(fil.suffix in file_ext for file_ext in [".nc", ".nc4", ".grib", ".grib1", ".grib2", "grb1", ".grb2"])
                 ]
-                self.info(f"Generating Zarr for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
+                # Further filter down which files are processsed using an optional file filter string or integer
+                if file_filter:
+                    input_files_list = [fil for fil in input_files_list if file_filter in str(fil)]
+                # Now prepare the MultiZarr
+                self.info(f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} processors")
                 self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
                 mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
             # if remotely extracting JSONs from S3, self.zarr_jsons should already be prepared during the `extract` step
             else:
-                self.info(f"Generating Zarr for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
+                self.info(f"Generating Zarr JSON for {len(self.zarr_jsons)} files with {multiprocessing.cpu_count()} processors")
                 mzz = MultiZarrToZarr(path=self.zarr_jsons, **self.mzz_opts())  # There are no file names to pass `path` if reading remotely
             # Translate the MultiZarr to a master JSON and save that out locally. Will fail if the input JSONs are misspecified.
-            mzz.translate(filename=self.zarr_json_path())
+            if not outfile_path:
+                outfile_path = self.zarr_json_path()
+            mzz.translate(filename=outfile_path)
             self.info(
-                f"Kerchunking to Zarr --- {round((time.time() - start_kerchunking)/60,2)} minutes"
+                f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking)/60,2)} minutes"
             )
         else:
             self.info("Existing Zarr found, using that")
@@ -88,7 +99,7 @@ class Creation(Convenience):
         Read the input file either locally or remotely from S3, depending on whether an s3 bucket is specified in the file path.
 
         NOTE under the hood there are several versions of GRIB files -- GRIB1 and GRIB2 -- and NetCDF files -- classic, netCDF-4 classic, 64-bit offset, etc.
-        Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so presuppose using those.
+        Kerchunk will fail on some versions in undocumented ways. We have found consistent success with netCDF-4 classic files so test against using those.
 
         The command line tool `nccopy -k 'netCDF-4 classic model' infile.nc outfile.nc` can convert between formats
 
@@ -107,35 +118,11 @@ class Creation(Convenience):
         -------
         scanned_zarr_json : dict
             A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
-
         """
         if not file_path.lower().startswith('s3://'):
-            try:
-                if self.file_type == 'NetCDF':
-                    fs = fsspec.filesystem("file")
-                    with fs.open(file_path) as infile:
-                        scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
-                elif self.file_type == 'GRIB':
-                    scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
-            except OSError as e:
-                raise ValueError(
-                    f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
-                )
+            scanned_zarr_json = self.local_kerchunk(file_path, scan_indices)
         elif file_path.lower().startswith('s3://'):
-            s3_so = {
-                'anon': True,
-                "default_cache_type": "readahead"
-                }
-            if self.file_type == 'NetCDF':
-                with self.store.fs().open(file_path, **s3_so) as infile:
-                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
-            elif 'GRIB' in self.file_type:
-                scanned_zarr_json = scan_grib(url=file_path, storage_options= s3_so, filter = self.grib_filter, inline_threshold=20)[scan_indices]
-            # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
-            if type(scanned_zarr_json) == dict:
-                self.zarr_jsons.append(scanned_zarr_json)
-            elif type(scanned_zarr_json) == list:
-                self.zarr_jsons.extend(scanned_zarr_json)
+            scanned_zarr_json = self.remote_kerchunk(file_path, scan_indices)
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up dev. work.
         if self.use_local_zarr_jsons:
             if not local_file_path:
@@ -146,6 +133,72 @@ class Creation(Convenience):
             else:
                 self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
+        return scanned_zarr_json
+
+    def local_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
+        """
+        Use Kerchunk to scan a file on the local file system
+
+        Parameters
+        ----------
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file on a local file system
+        scan_indices : int, slice(int)
+            One or many indices to filter the JSONS returned by `scan_grib`
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+
+        Returns
+        -------
+        scanned_zarr_json : dict
+            A JSON representation of a NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+        """
+        try:
+            if self.file_type == 'NetCDF':
+                fs = fsspec.filesystem("file")
+                with fs.open(file_path) as infile:
+                    scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
+            elif self.file_type == 'GRIB':
+                scanned_zarr_json = scan_grib(url=file_path, filter = self.grib_filter, inline_threshold=20)[scan_indices]
+        except OSError as e:
+            raise ValueError(
+                f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}"
+            )
+        return scanned_zarr_json
+    
+    def remote_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
+        """
+        Use Kerchunk to scan a file on a remote S3 file system
+
+        Parameters
+        ----------
+        file_path : str
+            A file path to an input GRIB or NetCDF-4 Classic file on a remote S3 bucket that accepts anonymous access.
+        scan_indices : int, slice(int)
+            One or many indices to filter the JSONS returned by `scan_grib` when scanning remotely.
+            When multiple options are returned that usually means the provider prepares this data variable at multiple depth / surface layers.
+            We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface layer in ETLs we've written.
+
+        Returns
+        -------
+        scanned_zarr_json : dict
+            A JSON representation of a NetCDF or GRIB file produced by Kerchunk and readable by Xarray as a lazy Dataset.
+        """
+        s3_so = {
+            'anon': True,
+            "default_cache_type": "readahead"
+            }
+        # Scan based on file type
+        if self.file_type == 'NetCDF':
+            with self.store.fs().open(file_path, **s3_so) as infile:
+                scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
+        elif 'GRIB' in self.file_type:
+            scanned_zarr_json = scan_grib(url=file_path, storage_options=s3_so, filter=self.grib_filter, inline_threshold=20)[scan_indices]
+        # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
+        if type(scanned_zarr_json) == dict:
+            self.zarr_jsons.append(scanned_zarr_json)
+        elif type(scanned_zarr_json) == list:  # some remote scans will return a list of GRIBs
+            self.zarr_jsons.extend(scanned_zarr_json)
         return scanned_zarr_json
 
     def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
@@ -171,7 +224,7 @@ class Creation(Convenience):
         Necessary for some datasets that package many forecasts into one single extract, preventing
         us from passing in a local file path for each forecasts
 
-        Defaults to returning the local_file_path, e.g. doing nothing. 
+        Defaults to returning the local_file_path, i.e. doing nothing. 
         Implement any code creating a new file path within child implementations of this method.
 
         Parameters
@@ -228,7 +281,6 @@ class Creation(Convenience):
         -------
         refs : dict
             Dataset attributes and information, transformed as needed
-
         """
         ref_names = set()
         file_match_pattern = "(.*?)/"
@@ -241,25 +293,6 @@ class Creation(Convenience):
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 
-    def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
-        """
-        Method to populate with the specific postprocessing routine of each child class (if relevant)
-
-        If no preprocessing is happening, return the dataset untouched
-
-        Parameters
-        ----------
-        dataset : xr.Dataset
-            The dataset being processed
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            The dataset being processed
-
-        """
-        return dataset
-
     # CONVERT FILES
 
     def parallel_subprocess_files(
@@ -267,7 +300,8 @@ class Creation(Convenience):
             input_files: list[pathlib.Path],
             command_text: list[str],
             replacement_suffix: str,
-            keep_originals: bool = False
+            keep_originals: bool = False,
+            invert_file_order: bool = False
     ):
         """
         Run a command line operation on a set of input files. In most cases, replace each file with an alternative file.
@@ -289,9 +323,13 @@ class Creation(Convenience):
         commands = []
         for existing_file in input_files:
             new_file = existing_file.with_suffix(replacement_suffix)
+            if invert_file_order:
+                filenames = [new_file, existing_file]
+            else:
+                filenames = [existing_file, new_file]
             commands.append(  # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib objects
-                    list(map(str, command_text + [existing_file, new_file]))
-                 )
+                    list(map(str, command_text + filenames))
+                )
         # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -299,7 +337,10 @@ class Creation(Convenience):
             for command in commands_slice:
                 command.wait()
                 if not keep_originals:
-                    os.remove(command.args[-2])
+                    if not invert_file_order:
+                        os.remove(command.args[-2])
+                    else:
+                        os.remove(command.args[-1])
         self.info(
             f"{(len(list(input_files)))} conversions finished, cleaning up original files"
         )
@@ -372,66 +413,8 @@ class Creation(Convenience):
             pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
             file.rename(originals_dir / file.name)
 
-    # RETURN DATASET
 
-    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
-        """
-        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
-
-        Parameters
-        ----------
-        ipfs_hash : str
-            The CID of the dataset
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            Object representing the dataset described by the CID at `self.latest_hash()`
-
-        """
-        mapper = self.store.mapper(set_root=False)
-        mapper.set_root(ipfs_hash)
-        dataset = xr.open_zarr(mapper)
-        return dataset
-
-    def zarr_json_to_dataset(self, zarr_json_path: str = None) -> xr.Dataset:
-        """
-        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object
-
-        Parameters
-        ----------
-        zarr_json_path : str, optional
-            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
-            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
-
-        Returns
-        -------
-        xr.Dataset
-            Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
-
-        """
-        if not zarr_json_path:
-            zarr_json_path = str(self.zarr_json_path())
-
-        dataset = xr.open_dataset(
-            "reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
-                "storage_options": {
-                    "fo": zarr_json_path,
-                    "remote_protocol": self.remote_protocol(),
-                    "skip_instance_cache": True,
-                    "default_cache_type": "readahead",
-                },
-                "consolidated": False,
-            },
-        )
-        # Apply any further postprocessing on the way out
-        return self.postprocess_zarr(dataset)
-
-
-class Publish(Creation, Metadata):
+class Publish(Transform, Metadata):
     """
     Base class for publishing methods -- both initial publication and updates
     """
@@ -453,15 +436,14 @@ class Publish(Creation, Metadata):
         Parameters
         ----------
         args : list
-            Additional arguments passed from generate.py
+            Additional arguments specified by the user
         kwargs : dict
-            Keyword arguments passed from generate.py
+            Keyword arguments specified by the user
 
         Returns
         -------
         bool
             Flag indicating if new data was / was not parsed
-
         """
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed and spin up a LocalCluster
@@ -552,17 +534,12 @@ class Publish(Creation, Metadata):
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
-        # Aggressively assert that the data is in contiguous time order. This is to protect against data corruption, especially during insert and append
-        # operations, but it should probably be replaced with a more sophisticated set of flags that let the user decide how to handle time data at their
-        # own risk.
-        #
-        # The expected delta is taken from the first two timestamps, but it could be improved by using Attributes.temporal_resolution if that function
-        # were edited to return a datetime64.
+        # Aggressively assert that the data is in contiguous time order. Only valid if the dataset's time dimension is longer than 1 element
+        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
+        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
         times = dataset[self.time_dim].values
         if len(times) >= 2:
-            # Check is only valid if we have 2 or more values with which to calculate the delta
-            expected_delta = times[1] - times[0]
-            if not self.are_times_contiguous(times, expected_delta):
+            if not self.are_times_contiguous(times):
                 raise ValueError("Dataset does not contain contiguous time data")
 
         # Don't use update-in-progress metadata flag on IPLD
@@ -636,7 +613,7 @@ class Publish(Creation, Metadata):
         # DEBUGGING
         self.info(f"dask.config.config is {pprint.pformat(dask.config.config)}")
 
-    # INITIAL PUBLICATION
+    # PREPARATION
 
     def pre_initial_dataset(self) -> xr.Dataset:
         """
@@ -650,7 +627,7 @@ class Publish(Creation, Metadata):
             The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
         """
         # Transform the JSON Zarr into an xarray Dataset
-        dataset = self.zarr_json_to_dataset()
+        dataset = self.transformed_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
@@ -669,6 +646,115 @@ class Publish(Creation, Metadata):
 
         return dataset
 
+    def transformed_dataset(self, custom: bool = False):
+        """
+        Overall method to return the fully processed and transformed dataset
+        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
+        """
+        return self.zarr_json_to_dataset()
+
+    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
+        """
+        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
+
+        Parameters
+        ----------
+        ipfs_hash : str
+            The CID of the dataset
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            Object representing the dataset described by the CID at `self.latest_hash()`
+
+        """
+        mapper = self.store.mapper(set_root=False)
+        mapper.set_root(ipfs_hash)
+        dataset = xr.open_zarr(mapper)
+        return dataset
+
+    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
+        """
+        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying
+        any desired postprocessing steps
+
+        Parameters
+        ----------
+        zarr_json_path : str, optional
+            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
+            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
+        decode_times : bool, optional
+            Choose whether to decode the times in inputs file using the CF conventions.
+            In most cases this is desirable and necessary, therefore this defaults to True.
+
+        Returns
+        -------
+        xr.Dataset
+            Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
+
+        """
+        if not zarr_json_path:
+            zarr_json_path = str(self.zarr_json_path())
+
+        dataset = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": zarr_json_path,
+                    "remote_protocol": self.remote_protocol(),
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times = decode_times
+        )
+        # Apply any further postprocessing on the way out
+        return self.postprocess_zarr(dataset)
+
+    def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
+        """
+        Method to populate with the specific postprocessing routine of each child class (if relevant)
+
+        If no preprocessing is happening, return the dataset untouched
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The dataset being processed
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            The dataset being processed
+
+        """
+        return dataset
+
+    def set_key_dims(self):
+        """
+        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
+        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
+
+        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
+        """
+        if not self.forecast and not self.ensemble:
+            self.standard_dims = ["time", "latitude", "longitude"]
+            self.time_dim = "time"
+        elif self.hindcast:
+            self.standard_dims = ["hindcast_reference_time", "forecast_reference_offset", "step", "ensemble", "latitude", "longitude"]
+            self.time_dim = "hindcast_reference_time"
+        elif self.ensemble:
+            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+        elif self.forecast:
+            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
+            self.time_dim = "forecast_reference_time"
+
+    # INITIAL
+
     def write_initial_zarr(self):
         """
         Writes the first iteration of zarr for the dataset to the store specified at
@@ -682,23 +768,6 @@ class Publish(Creation, Metadata):
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
-    def set_key_dims(self):
-        """
-        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
-        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
-
-        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
-        """
-        if not self.forecast and not self.ensemble:
-            self.standard_dims = ["time", "latitude", "longitude"]
-            self.time_dim = "time"
-        elif self.ensemble:
-            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
-            self.time_dim = "forecast_reference_time"
-        elif self.forecast:
-            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
-            self.time_dim = "forecast_reference_time"
-
     # UPDATES
 
     def update_zarr(self):
@@ -708,7 +777,7 @@ class Publish(Creation, Metadata):
         STAC Collection.
         """
         original_dataset = self.store.dataset()
-        update_dataset = self.zarr_json_to_dataset()
+        update_dataset = self.transformed_dataset()
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
@@ -758,8 +827,8 @@ class Publish(Creation, Metadata):
         self,
         original_dataset: xr.Dataset,
         update_dataset: xr.Dataset,
-        insert_times: list,
-        append_times: list,
+        insert_times: tuple[datetime.datetime],
+        append_times: tuple[datetime.datetime],
     ):
         """
         An enclosing method triggering insert and/or append operations based on the presence of valid records for either.
@@ -770,22 +839,12 @@ class Publish(Creation, Metadata):
             The existing dataset
         update_dataset : xr.Dataset
             A dataset containing all updated (insert) and new (append) records
-        insert_times : list
+        insert_times : tuple
             Datetimes corresponding to existing records to be replaced in the original dataset
-        append_times : list
+        append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
-
-        if append_times and not self.is_append_contiguous(original_dataset, append_times):
-            raise ValueError(
-                "Append would create out of order or incomplete dataset, aborting"
-            )
-
-        # Raise an exception if there is no writable data
-        if not any(insert_times) and not any(append_times):
-            raise ValueError(
-                "Update started with no new records to insert or append to original zarr."
-            )
+        self.update_quality_check(original_dataset, insert_times, append_times)
 
         original_chunks = {
             dim: val_tuple[0] for dim, val_tuple in original_dataset.chunks.items()
@@ -978,24 +1037,40 @@ class Publish(Creation, Metadata):
 
         return datetime_ranges, regions_indices
 
-    def are_times_contiguous(self, times: list[datetime.datetime], expected_delta: datetime.timedelta) -> bool:
-        """
-        Check if the given list of times is contiguous with a given difference between each time.
+    # CHECKS
 
-        @param times            A list of datetime objects
-        @param expected_delta   Amount of time expected to be between each time
-        @return                 True if times are contiguous and have the correct time step, False otherwise
+    def update_quality_check(self,
+                             original_dataset: xr.Dataset,
+                             insert_times: tuple[datetime.datetime],
+                             append_times: tuple[datetime.datetime]
+                             ):
         """
-        previous_time = times[0]
-        for time in times[1:]:
-            if time - previous_time != expected_delta:
-                return False
-            previous_time = time
-        return True
+        Perform spot checks on the update dataset prior to updating.
+        If successful passes without comment. If unsuccessful raises a descriptive error message.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            The existing dataset
+        insert_times : tuple
+            Datetimes corresponding to existing records to be replaced in the original dataset
+        append_times : tuple
+            Datetimes corresponding to all new records to append to the original dataset
+        """
+        if append_times and not self.is_append_contiguous(original_dataset, append_times):
+            raise ValueError(
+                "Append would create out of order or incomplete dataset, aborting"
+            )
+        # Raise an exception if there is no writable data
+        if not any(insert_times) and not any(append_times):
+            raise ValueError(
+                "Update started with no new records to insert or append to original zarr."
+            )
 
     def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
         """
-        Checks that an append will produce a contiguous dataset. Note that this requires `original_dataset` to have 2 or more time steps worth of data.
+        Checks that an append will produce a contiguous dataset.
+        Prevents data corruption from out of order updates.
 
         Parameters
         ----------
@@ -1009,14 +1084,57 @@ class Publish(Creation, Metadata):
         bool
             whether the original and appending datasets form a contiguous time axis
         """
-        # Use time step of the original dataset to get expected time delta. This could be improved by using Attributes.temporal_resolution
-        # if it were edited to return a numpy.timedelta64 (what if previous dataset has only one time step, for example).
-        last_time_in_original = original_dataset[self.time_dim].values[-1]
-        expected_delta = last_time_in_original - original_dataset[self.time_dim].values[-2]
-
         # Check if first time in append times is one time step ahead of the last time in the original dataset
-        if append_times[0] - last_time_in_original != expected_delta:
+        last_time_in_original = original_dataset[self.time_dim].values[-1]
+        if not self.is_time_contiguous(append_times[0], last_time_in_original):
             return False
+        # Check if all times to be appended are contiguous with the prior time step in the append time range
+        return self.are_times_contiguous(append_times)
 
-        # Check if all times to be appended are contiguous with the correct time step
-        return self.are_times_contiguous(append_times, expected_delta)
+    def is_time_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
+        """
+        Return false if a given time is out of order and/or does not follow the previous time, or falls outside of an acceptable range of timedeltas
+
+        Parameters
+        ----------
+        time
+            A datetime.datetime object representing the timestamp being checked
+        previous_time
+            A datetime.datetime object representing the prior timestamp
+
+        Returns
+        -------
+        bool
+            Returns False for any unacceptable timestamp, otherwise True
+        """
+        if self.irregular_update_cadence():
+            if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
+                self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
+                return False
+        elif time - previous_time != self.span_to_timedelta():
+            self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
+            return False
+        return True
+
+    def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
+        """
+        Convenience method to run `is_time_contiguous` in a loop over an ascending ordered list of input times,
+        since this is a regular pattern
+
+        Parameters
+        ----------
+        times
+            A datetime.datetime object representing the timestamp being checked
+
+        Returns
+        -------
+        bool
+            Returns False for any unacceptable timestamp, otherwise True
+        """
+        previous_time = times[0]
+        for time in times[1:]:
+            if not self.is_time_contiguous(time, previous_time):
+                return False
+            previous_time = time
+        return True
+

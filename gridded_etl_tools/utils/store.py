@@ -144,7 +144,10 @@ class S3(StoreInterface):
         str
             A URL string starting with "s3://" followed by the path to the Zarr.
         """
-        return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
+        if self.dm.custom_output_path:
+            return self.dm.custom_output_path
+        else:
+            return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
 
     def __str__(self) -> str:
         return self.path
@@ -152,7 +155,11 @@ class S3(StoreInterface):
     def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once, when this function is first
-        called. To force a new mapper, set `refresh` to `True`.
+        called. 
+        
+        To force a new mapper, set `refresh` to `True`. 
+        To use an output path other than the default path returned by self.path, set a `custom_output_path` when the DatasetManager is instantiated
+        and it will be passed through to here. This path must be a valid S3 destination for which you have write permissions.
 
         Parameters
         ----------
@@ -356,8 +363,8 @@ class Local(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on the local filesystem.
 
-    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used automatically under normal conditions, so this
-    class doesn't provide a way to use any other path.
+    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used automatically under normal conditions, 
+    although it can be overriden by passing the `custom_output_path` parameter to the relevant DatasetManager
     """
 
     def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
@@ -412,7 +419,10 @@ class Local(StoreInterface):
         pathlib.Path
             Path to the Zarr on the local filesystem
         """
-        return self.dm.output_path().joinpath(f"{self.dm.name()}.zarr")
+        if self.dm.custom_output_path:
+            return self.dm.custom_output_path
+        else:
+            return self.dm.output_path().joinpath(f"{self.dm.name()}.zarr")
 
     @property
     def has_existing(self) -> bool:
