@@ -557,14 +557,17 @@ class Publish(Transform, Metadata):
                 empty_dataset.to_zarr(
                     self.store.mapper(refresh=True), append_dim=self.time_dim
                 )
-
-        # Write data to Zarr and log duration.
-        start_writing = time.perf_counter()
-
-        dataset.to_zarr(*args, **kwargs)
-        self.info(
-            f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
-        )
+        # Exit script if dry_run specified
+        if self.dry_run:
+            self.info("Dry run parameter specified as True so exiting without parsing")
+            return False
+        else:
+            # Write data to Zarr and log duration.
+            start_writing = time.perf_counter()
+            dataset.to_zarr(*args, **kwargs)
+            self.info(
+                f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
+            )
 
         # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
