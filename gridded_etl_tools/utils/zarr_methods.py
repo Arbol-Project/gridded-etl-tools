@@ -1072,57 +1072,6 @@ class Publish(Transform, Metadata):
                 "Update started with no new records to insert or append to original zarr."
             )
 
-    # def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
-    #     """
-    #     Checks that an append will produce a contiguous dataset.
-    #     Prevents data corruption from out of order updates.
-
-    #     Parameters
-    #     ----------
-    #     original_dataset : xr.Dataset
-    #         dataset being appended to
-    #     append_times : list
-    #         list of times forming the time index of the append
-
-    #     Returns
-    #     -------
-    #     bool
-    #         whether the original and appending datasets form a contiguous time axis
-    #     """
-    #     # Check if first time in append times is one time step ahead of the last time in the original dataset
-    #     last_time_in_original = original_dataset[self.time_dim].values[-1]
-
-    #     if not self.check_contiguity(append_times[0], last_time_in_original):
-    #         return False
-    #     # Check if all times to be appended are contiguous with the prior time step in the append time range
-
-    #     return self.are_times_contiguous(append_times)
-
-    # def check_contiguity(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
-    #     """
-    #     Return false if a given time is out of order and/or does not follow the previous time, or falls outside of an acceptable range of timedeltas
-
-    #     Parameters
-    #     ----------
-    #     time
-    #         A datetime.datetime object representing the timestamp being checked
-    #     previous_time
-    #         A datetime.datetime object representing the prior timestamp
-
-    #     Returns
-    #     -------
-    #     bool
-    #         Returns False for any unacceptable timestamp, otherwise True
-    #     """
-    #     if self.irregular_update_cadence() and not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
-    #         self.warn(f"Time value {time} and previous time {previous_time} do not fit within anticipated update cadence {self.irregular_update_cadence()}")
-    #         return False
-    #     # TODO figure out expected delta
-    #     elif time - previous_time != self.span_to_timedelta():
-    #         self.warn(f"Time value {time} and previous time {previous_time} do not fit within expected time delta {self.span_to_timedelta()}")
-    #         return False
-    #     return True
-
     def are_times_contiguous(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
         Convenience method to run `check_contiguity` in a loop over an ascending ordered list of input times,
