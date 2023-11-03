@@ -486,7 +486,7 @@ class Publish(Transform, Metadata):
                         "CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates"
                     )
 
-        if hasattr(self, "dataset_hash") and self.dataset_hash:
+        if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
         return True
@@ -542,6 +542,12 @@ class Publish(Transform, Metadata):
             if not self.are_times_contiguous(times):
                 raise ValueError("Dataset does not contain contiguous time data")
 
+        # Exit script if dry_run specified
+        if self.dry_run:
+            self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
+            self.info(f"Dataset final state pre-parse:\n{dataset}")
+            return False
+
         # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False or
@@ -557,17 +563,13 @@ class Publish(Transform, Metadata):
                 empty_dataset.to_zarr(
                     self.store.mapper(refresh=True), append_dim=self.time_dim
                 )
-        # Exit script if dry_run specified
-        if self.dry_run:
-            self.info("Dry run parameter specified as True so exiting without parsing")
-            return False
-        else:
-            # Write data to Zarr and log duration.
-            start_writing = time.perf_counter()
-            dataset.to_zarr(*args, **kwargs)
-            self.info(
-                f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
-            )
+
+        # Write data to Zarr and log duration.
+        start_writing = time.perf_counter()
+        dataset.to_zarr(*args, **kwargs)
+        self.info(
+            f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}"
+        )
 
         # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):

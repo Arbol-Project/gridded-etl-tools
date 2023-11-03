@@ -112,7 +112,7 @@ def teardown_module(request, heads_path):
 @pytest.mark.order(1)
 def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
-    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with "test_".
+    Test that a dry run parse of CHIRPS data does not, in fact, parse data.
     """
     # Get the CHIRPS manager with rebuild set
     manager = manager_class(
@@ -132,9 +132,8 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     manager.parse()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
-    generated_dataset = manager.zarr_hash_to_dataset(manager.latest_hash())
-    # ASSERT THAT IT WASN'T WRITTEN
-    assert output_value == original_value
+    with pytest.raises(FileNotFoundError):
+        manager.zarr_hash_to_dataset(manager.latest_hash())
 
 @pytest.mark.order(1)
 def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
