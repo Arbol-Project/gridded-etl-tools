@@ -541,7 +541,7 @@ class Publish(Transform, Metadata):
         if len(times) >= 2:
             # Check is only valid if we have 2 or more values with which to calculate the delta
             expected_delta = times[1] - times[0]
-            if not self.are_times_contiguous(times=times, expected_delta=expected_delta):
+            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise ValueError("Dataset does not contain contiguous time data")
 
         # Don't use update-in-progress metadata flag on IPLD
@@ -846,12 +846,12 @@ class Publish(Transform, Metadata):
         append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
+        # First check that the data is not obviously wrong
         self.update_quality_check(original_dataset, insert_times, append_times)
-
+        # Then write out updates to existing data using the 'region=' command...
         original_chunks = {
             dim: val_tuple[0] for dim, val_tuple in original_dataset.chunks.items()
         }
-        # First write out updates to existing data using the 'region=' command...
         if len(insert_times) > 0:
             if not self.overwrite_allowed:
                 self.warn(
@@ -1047,7 +1047,7 @@ class Publish(Transform, Metadata):
                              append_times: tuple[datetime.datetime]
                              ):
         """
-        Perform spot checks on the update dataset prior to updating.
+        Master function containing update-specific quality checks to run on a dataset prior to parsing
         If successful passes without comment. If unsuccessful raises a descriptive error message.
 
         Parameters
@@ -1059,10 +1059,12 @@ class Publish(Transform, Metadata):
         append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
+        # Check that the first value of the append times and the last value of the original dataset are contiguous
         if append_times:
+            # Build a two item list of these values and the expected delta
             original_append_bridge_times = [append_times[0], original_dataset[self.time_dim].values[-1]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
-            if not self.are_times_contiguous(times=original_append_bridge_times, expected_delta=expected_delta):
+            if not self.are_times_in_expected_order(times=original_append_bridge_times, expected_delta=expected_delta):
                 raise ValueError(
                 "Append would create out of order or incomplete dataset, aborting"
             )
@@ -1072,10 +1074,10 @@ class Publish(Transform, Metadata):
                 "Update started with no new records to insert or append to original zarr."
             )
 
-    def are_times_contiguous(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
+    def are_times_in_expected_order(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
-        Convenience method to run `check_contiguity` in a loop over an ascending ordered list of input times,
-        since this is a regular pattern
+        Return false if a given iterable of times is out of order and/or does not follow the previous time,
+        or falls outside of an acceptable range of timedeltas
 
         Parameters
         ----------
@@ -1087,8 +1089,10 @@ class Publish(Transform, Metadata):
         Returns
         -------
         bool
-            Returns False for any unacceptable timestamp, otherwise True
+            Returns False for any unacceptable timestamp order, otherwise True
         """
+        if self.irregular_update_cadence():
+            self.warn(f"Because dataset has irregular cadence {self.irregular_update_cadence} expected delta {expected_delta} is not being used for checking time contiguity")
         previous_time = times[0]
         for time in times[1:]:
             if self.irregular_update_cadence():
