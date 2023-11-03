@@ -534,15 +534,8 @@ class Publish(Transform, Metadata):
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
-        # Aggressively assert that the data is in contiguous time order. Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
-        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
-        times = dataset[self.time_dim].values
-        if len(times) >= 2:
-            # Check is only valid if we have 2 or more values with which to calculate the delta
-            expected_delta = times[1] - times[0]
-            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
-                raise ValueError("Dataset does not contain contiguous time data")
+        # First check that the data makes sense
+        self.parse_quality_check(dataset)
 
         # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
@@ -1041,13 +1034,37 @@ class Publish(Transform, Metadata):
 
     # CHECKS
 
+    def parse_quality_check(self, dataset: xr.Dataset):
+        """
+        Function containing quality checks applicable to all datasets we parse, initial or update
+        Intended to be run on a dataset prior to parsing.
+
+        If successful passes without comment. If unsuccessful raises a descriptive error message.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            The final dataset to be parsed
+        """
+        # Aggressively assert that the time dimension of the data is in the anticipated order. Only valid if the dataset's time dimension is longer than 1 element
+        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
+        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
+        times = dataset[self.time_dim].values
+        if len(times) >= 2:
+            # Check is only valid if we have 2 or more values with which to calculate the delta
+            expected_delta = times[1] - times[0]
+            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
+                raise ValueError("Dataset does not contain contiguous time data")
+
     def update_quality_check(self,
                              original_dataset: xr.Dataset,
                              insert_times: tuple[datetime.datetime],
                              append_times: tuple[datetime.datetime]
                              ):
         """
-        Master function containing update-specific quality checks to run on a dataset prior to parsing
+        Function containing quality checks specific to update parses, either insert or append.
+        Intended to be run on an update dataset prior to parsing.
+
         If successful passes without comment. If unsuccessful raises a descriptive error message.
 
         Parameters
