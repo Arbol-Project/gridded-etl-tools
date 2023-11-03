@@ -534,10 +534,17 @@ class Publish(Transform, Metadata):
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
-        # First check that the data is not obviously wrong
-        self.parsing_quality_check(dataset)
+        # Aggressively assert that the data is in contiguous time order. Only valid if the dataset's time dimension is longer than 1 element
+        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
+        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
+        times = dataset[self.time_dim].values
+        if len(times) >= 2:
+            # Check is only valid if we have 2 or more values with which to calculate the delta
+            expected_delta = times[1] - times[0]
+            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
+                raise ValueError("Dataset does not contain contiguous time data")
 
-        # Note that the data is being updated in the Zarr metadata. Skip this for  on IPLD
+        # Don't use update-in-progress metadata flag on IPLD
         if not isinstance(self.store, IPLD):
             # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do this? compute=False or
             # zarr.consolidate_metadata?).
@@ -1033,26 +1040,6 @@ class Publish(Transform, Metadata):
         return datetime_ranges, regions_indices
 
     # CHECKS
-
-    def parsing_quality_check(self,dataset: xr.Dataset):
-        """
-        Master function containing quality checks general to all datasets
-        If successful passes without comment. If unsuccessful raises a descriptive error message.
-
-        Parameters
-        ----------
-        original_dataset : xr.Dataset
-            The final dataset to be parsed
-        """
-        # Aggressively assert that the data is in contiguous time order. Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
-        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
-        times = dataset[self.time_dim].values
-        if len(times) >= 2:
-            # Check is only valid if we have 2 or more values with which to calculate the delta
-            expected_delta = times[1] - times[0]
-            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
-                raise ValueError("Dataset does not contain contiguous time data")
 
     def update_quality_check(self,
                              original_dataset: xr.Dataset,
