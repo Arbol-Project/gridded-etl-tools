@@ -1091,8 +1091,11 @@ class Publish(Transform, Metadata):
         bool
             Returns False for any unacceptable timestamp order, otherwise True
         """
+        # Warn if not using expected delta
         if self.irregular_update_cadence():
             self.warn(f"Because dataset has irregular cadence {self.irregular_update_cadence} expected delta {expected_delta} is not being used for checking time contiguity")
+        # Check if times meet expected_delta or fall within the anticipated range. 
+        # Raise a warning and return false if so. Raise a descriptive error message in the enclosing function describing the specific operation this failed on.
         previous_time = times[0]
         for time in times[1:]:
             if self.irregular_update_cadence():
@@ -1103,4 +1106,5 @@ class Publish(Transform, Metadata):
                 self.warn(f"Time value {time} and previous time {previous_time} do not fit within expected time delta {expected_delta}")
                 return False
             previous_time = time
+        # Return True if no problems found
         return True
