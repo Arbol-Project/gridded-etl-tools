@@ -62,7 +62,7 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     assert modified_fill_value == -8888
 
 
-def test_are_times_contiguous(mocker, manager_class: DatasetManager):
+def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     """
     Test that the check for non-contiguous times successfully catches bad times
     while letting anticipated irregular times pass
@@ -71,28 +71,31 @@ def test_are_times_contiguous(mocker, manager_class: DatasetManager):
     dm = get_manager(manager_class)
     # Check a set of contiguous times
     contig = pd.date_range(start='2023-03-01', end='2023-03-15', freq='1D')
-    assert dm.are_times_contiguous(contig)
+    expected_delta = contig[1] - contig[0]
+    assert dm.are_times_in_expected_order(contig, expected_delta=expected_delta)
     # Check a single time -- one good, one not
-    assert dm.is_time_contiguous(contig[1], contig[0])
-    assert not dm.is_time_contiguous(contig[2], contig[0])
+    check1 = [contig[0], contig[1]]
+    check2 = [contig[0], contig[2]]
+    assert dm.are_times_in_expected_order(check1, expected_delta=expected_delta)
+    assert not dm.are_times_in_expected_order(check2, expected_delta=expected_delta)
     # Check a set of times that skips a day
     week_ahead_dt = contig[-1] + pd.Timedelta(days=7)
     week_gap = contig.union([week_ahead_dt])
-    assert not dm.are_times_contiguous(week_gap)
+    assert not dm.are_times_in_expected_order(week_gap, expected_delta=expected_delta)
     # Check a set of times that's out of order
     week_behind_dt = contig[0] - pd.Timedelta(days=7)
     week_gap = contig.union([week_behind_dt])
-    assert not dm.are_times_contiguous(week_gap)
+    assert not dm.are_times_in_expected_order(week_gap, expected_delta=expected_delta)
     # Check a set of times that's badly out of order
     out_of_order = [contig[1], contig[2], contig[0], contig[12], contig[3]]
-    assert not dm.are_times_contiguous(out_of_order)
+    assert not dm.are_times_in_expected_order(out_of_order, expected_delta=expected_delta)
     # Check that irregular cadences pass
     mocker.patch("gridded_etl_tools.utils.attributes.Attributes.irregular_update_cadence", patched_irregular_update_cadence)
     three_and_four_day_updates = [contig[0], contig[3], contig[6], contig[10]]
-    assert dm.are_times_contiguous(three_and_four_day_updates)
+    assert dm.are_times_in_expected_order(three_and_four_day_updates, expected_delta=expected_delta)
     # Check that ranges outside the irregular cadence still fail
     five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
-    assert not dm.are_times_contiguous(five_day_updates)
+    assert not dm.are_times_in_expected_order(five_day_updates, expected_delta=expected_delta)
 
 
 def test_calculate_update_time_ranges(manager_class: DatasetManager, fake_original_dataset: xr.Dataset, fake_complex_update_dataset: xr.Dataset):
