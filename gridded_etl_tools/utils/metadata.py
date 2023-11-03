@@ -109,12 +109,12 @@ class Metadata(Convenience, IPFS):
             "STAC Items.",
         }
 
+    @property
     @abstractmethod
     def static_metadata(cls):
         """
         Placeholder for static metadata pertaining to each ETL
         """
-        ...
 
     def check_stac_exists(self, title: str, stac_type: "StacType") -> bool:
         """Check if a STAC entity exists in the backing store
@@ -221,7 +221,6 @@ class Metadata(Convenience, IPFS):
             self.publish_stac(root_catalog["title"], root_catalog, StacType.CATALOG)
         else:
             self.info(f"Root {self.host_organization()} STAC Catalog already exists, building collection")
-            ...
 
     def create_stac_collection(self, dataset: xr.Dataset, rebuild: bool = False):
         """
@@ -467,7 +466,6 @@ class Metadata(Convenience, IPFS):
             if "title" in link_dict.keys()
         ):
             self.info("Found existing STAC Item in STAC Collection")
-            ...
         else:
             self.info("No existing STAC Item found in this dataset's parent collection, inserting a child link")
             # register hrefs in both the Item and Collection and publish updated objects
@@ -536,13 +534,11 @@ class Metadata(Convenience, IPFS):
     # NON-STAC METADATA
 
     def populate_metadata(self):
+        """Override point for managers to populate metadata.
+
+        The default implementation simply uses ``self.static_metadata``.
         """
-        Fill the metadata with values describing this set, using the static_metadata as a base template.
-        """
-        if hasattr(self, "metadata") and self.metadata is not None:
-            self.metadata = self.metadata.update(self.static_metadata)
-        else:
-            self.metadata = self.static_metadata
+        self.metadata = self.static_metadata
 
     def set_zarr_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """

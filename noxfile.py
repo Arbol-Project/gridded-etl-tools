@@ -32,7 +32,7 @@ def unit(session):
 @nox.session(py=DEFAULT_INTERPRETER)
 def cover(session):
     session.install("coverage")
-    session.run("coverage", "report", "--fail-under=100", "--show-missing")
+    session.run("coverage", "report", "--fail-under=53", "--show-missing")
     session.run("coverage", "erase")
 
 

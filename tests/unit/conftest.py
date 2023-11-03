@@ -1,9 +1,12 @@
+import datetime
 import json
 import pathlib
 
 import numpy as np
 import pytest
 import xarray as xr
+
+from gridded_etl_tools import dataset_manager
 
 HERE = pathlib.Path(__file__).parent
 INPUTS = HERE / "inputs"
@@ -34,6 +37,67 @@ def fake_complex_update_dataset():
     data = xr.DataArray(np.random.randn(60, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
 
     return xr.Dataset({"data_var": data})
+
+
+@pytest.fixture
+def manager_class():
+    return DummyManager
+
+
+def unimplemented(*args, **kwargs):  # pragma NO COVER
+    raise NotImplementedError
+
+
+def noop(*args, **kwargs):
+    """Do nothing"""
+
+
+class DummyManager(dataset_manager.DatasetManager):
+    collection = unimplemented
+    concat_dims = unimplemented
+    identical_dims = unimplemented
+    remote_protocol = unimplemented
+
+    prepare_input_files = noop
+
+    unit_of_measurement = "parsecs"
+    requested_zarr_chunks = {}
+    time_dim = "time"
+    encryption_key = None
+    fill_value = ""
+
+    @classmethod
+    def name(cls):
+        return cls.__name__
+
+    def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, *args, **kwargs):
+        if requested_dask_chunks is None:
+            requested_dask_chunks = {}
+
+        if requested_zarr_chunks is None:
+            requested_zarr_chunks = {}
+
+        self._static_metadata = kwargs.pop("static_metadata", {})
+        super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
+
+    def data_var(self):
+        return "data"
+
+    @classmethod
+    def temporal_resolution(cls) -> str:
+        """Increment size along the "time" coordinate axis"""
+        return cls.SPAN_DAILY
+
+    def extract(self, date_range=None):
+        return super().extract(date_range=date_range)
+
+    @property
+    def dataset_start_date(self):
+        return datetime.datetime(1975, 7, 7, 0, 0, 0)
+
+    @property
+    def static_metadata(self):
+        return self._static_metadata
 
 
 original_times = np.array(

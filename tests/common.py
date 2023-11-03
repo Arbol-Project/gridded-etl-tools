@@ -47,6 +47,7 @@ def get_manager(
         custom_input_path=input_path,
         s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
         store=store,
+        **kwargs,
     )
     # Overriding the default (usually very large) time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks["time"] = time_chunk

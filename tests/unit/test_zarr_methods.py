@@ -74,7 +74,7 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     # prepare a dataset manager and preprocess a Zarr JSON
     dm = get_manager(manager_class)
     mocker.patch(
-        "examples.managers.chirps.CHIRPSFinal25.missing_value_indicator",
+        "tests.unit.conftest.DummyManager.missing_value_indicator",
         return_value=-8888,
     )
     pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])

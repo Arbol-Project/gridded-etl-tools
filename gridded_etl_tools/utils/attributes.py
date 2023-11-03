@@ -28,7 +28,6 @@ class Attributes(ABC):
            Name of dataset
 
         """
-        ...
 
     @classmethod
     @abstractmethod
@@ -36,7 +35,6 @@ class Attributes(ABC):
         """'
         Placeholder class for collection name
         """
-        ...
 
     @property
     def file_type(cls):
@@ -46,7 +44,6 @@ class Attributes(ABC):
 
         Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
         """
-        ...
 
     @classmethod
     @abstractmethod
@@ -55,7 +52,6 @@ class Attributes(ABC):
         Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
         for S3, etc. See fsspec docs for more details.
         """
-        ...
 
     @classmethod
     @abstractmethod
@@ -64,7 +60,6 @@ class Attributes(ABC):
         List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
         read these dimensions only one time, from the first input file
         """
-        ...
 
     @classmethod
     @abstractmethod
@@ -73,7 +68,6 @@ class Attributes(ABC):
         List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
         other relevant dimension
         """
-        ...
 
     @property
     def data_var_dtype(self) -> str:
@@ -96,7 +90,6 @@ class Attributes(ABC):
         float
             The spatial resolution of a dataset
         """
-        ...
 
     def spatial_precision(self) -> float:
         """
@@ -107,7 +100,6 @@ class Attributes(ABC):
         float
             The spatial resolution of a dataset
         """
-        ...
 
     @classmethod
     @abstractmethod
@@ -121,7 +113,6 @@ class Attributes(ABC):
            Temporal resolution of the dataset
 
         """
-        ...
 
     @classmethod
     def update_cadence(self) -> str:
@@ -134,7 +125,6 @@ class Attributes(ABC):
         str
             The update frequency of a dataset
         """
-        ...
 
     @classmethod
     def missing_value_indicator(cls) -> str:
