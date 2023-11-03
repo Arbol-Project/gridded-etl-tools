@@ -539,7 +539,9 @@ class Publish(Transform, Metadata):
         # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
         times = dataset[self.time_dim].values
         if len(times) >= 2:
-            if not self.are_times_contiguous(times):
+            # Check is only valid if we have 2 or more values with which to calculate the delta
+            expected_delta = times[1] - times[0]
+            if not self.are_times_contiguous(times=times, expected_delta=expected_delta):
                 raise ValueError("Dataset does not contain contiguous time data")
 
         # Don't use update-in-progress metadata flag on IPLD
@@ -1057,8 +1059,11 @@ class Publish(Transform, Metadata):
         append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
-        if append_times and not self.is_append_contiguous(original_dataset, append_times):
-            raise ValueError(
+        if append_times:
+            original_append_bridge_times = [append_times[0], original_dataset[self.time_dim].values[-1]]
+            expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
+            if not self.are_times_contiguous(times=original_append_bridge_times, expected_delta=expected_delta):
+                raise ValueError(
                 "Append would create out of order or incomplete dataset, aborting"
             )
         # Raise an exception if there is no writable data
@@ -1067,64 +1072,68 @@ class Publish(Transform, Metadata):
                 "Update started with no new records to insert or append to original zarr."
             )
 
-    def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
+    # def is_append_contiguous(self, original_dataset: xr.Dataset, append_times: list[np.datetime64]) -> bool:
+    #     """
+    #     Checks that an append will produce a contiguous dataset.
+    #     Prevents data corruption from out of order updates.
+
+    #     Parameters
+    #     ----------
+    #     original_dataset : xr.Dataset
+    #         dataset being appended to
+    #     append_times : list
+    #         list of times forming the time index of the append
+
+    #     Returns
+    #     -------
+    #     bool
+    #         whether the original and appending datasets form a contiguous time axis
+    #     """
+    #     # Check if first time in append times is one time step ahead of the last time in the original dataset
+    #     last_time_in_original = original_dataset[self.time_dim].values[-1]
+
+    #     if not self.check_contiguity(append_times[0], last_time_in_original):
+    #         return False
+    #     # Check if all times to be appended are contiguous with the prior time step in the append time range
+
+    #     return self.are_times_contiguous(append_times)
+
+    # def check_contiguity(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
+    #     """
+    #     Return false if a given time is out of order and/or does not follow the previous time, or falls outside of an acceptable range of timedeltas
+
+    #     Parameters
+    #     ----------
+    #     time
+    #         A datetime.datetime object representing the timestamp being checked
+    #     previous_time
+    #         A datetime.datetime object representing the prior timestamp
+
+    #     Returns
+    #     -------
+    #     bool
+    #         Returns False for any unacceptable timestamp, otherwise True
+    #     """
+    #     if self.irregular_update_cadence() and not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
+    #         self.warn(f"Time value {time} and previous time {previous_time} do not fit within anticipated update cadence {self.irregular_update_cadence()}")
+    #         return False
+    #     # TODO figure out expected delta
+    #     elif time - previous_time != self.span_to_timedelta():
+    #         self.warn(f"Time value {time} and previous time {previous_time} do not fit within expected time delta {self.span_to_timedelta()}")
+    #         return False
+    #     return True
+
+    def are_times_contiguous(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
-        Checks that an append will produce a contiguous dataset.
-        Prevents data corruption from out of order updates.
-
-        Parameters
-        ----------
-        original_dataset : xr.Dataset
-            dataset being appended to
-        append_times : list
-            list of times forming the time index of the append
-
-        Returns
-        -------
-        bool
-            whether the original and appending datasets form a contiguous time axis
-        """
-        # Check if first time in append times is one time step ahead of the last time in the original dataset
-        last_time_in_original = original_dataset[self.time_dim].values[-1]
-        if not self.is_time_contiguous(append_times[0], last_time_in_original):
-            return False
-        # Check if all times to be appended are contiguous with the prior time step in the append time range
-        return self.are_times_contiguous(append_times)
-
-    def is_time_contiguous(self, time: datetime.datetime, previous_time: datetime.datetime) -> bool:
-        """
-        Return false if a given time is out of order and/or does not follow the previous time, or falls outside of an acceptable range of timedeltas
-
-        Parameters
-        ----------
-        time
-            A datetime.datetime object representing the timestamp being checked
-        previous_time
-            A datetime.datetime object representing the prior timestamp
-
-        Returns
-        -------
-        bool
-            Returns False for any unacceptable timestamp, otherwise True
-        """
-        if self.irregular_update_cadence():
-            if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
-                self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
-                return False
-        elif time - previous_time != self.span_to_timedelta():
-            self.warn(f"Time value {time} and previous time {previous_time} are not consecutive")
-            return False
-        return True
-
-    def are_times_contiguous(self, times: tuple[datetime.datetime]) -> bool:
-        """
-        Convenience method to run `is_time_contiguous` in a loop over an ascending ordered list of input times,
+        Convenience method to run `check_contiguity` in a loop over an ascending ordered list of input times,
         since this is a regular pattern
 
         Parameters
         ----------
         times
             A datetime.datetime object representing the timestamp being checked
+        expected_delta
+            Amount of time expected to be between each time
 
         Returns
         -------
@@ -1133,8 +1142,12 @@ class Publish(Transform, Metadata):
         """
         previous_time = times[0]
         for time in times[1:]:
-            if not self.is_time_contiguous(time, previous_time):
+            if self.irregular_update_cadence():
+                if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
+                    self.warn(f"Time value {time} and previous time {previous_time} do not fit within anticipated update cadence {self.irregular_update_cadence()}")
+                    return False
+            elif time - previous_time != expected_delta:
+                self.warn(f"Time value {time} and previous time {previous_time} do not fit within expected time delta {expected_delta}")
                 return False
             previous_time = time
         return True
-
