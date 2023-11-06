@@ -17,7 +17,8 @@ def teardown():
 
 def test_log():
     """
-    Test that logs are being created at the correct paths in the correct format. Test that multiple objects are not conflicting or
+    Test that logs are being created at the correct paths in the correct format. Test that multiple objects are not
+    conflicting or
     creating unnecessary duplicate log entries.
     """
     # Create and log test statements in a ClimateSet
@@ -45,8 +46,8 @@ def test_log():
     extra_manager = CHIRPSFinal25(console_log=False, global_log_level=logging.DEBUG)
     extra_handler = extra_manager.log_to_file()
 
-    # The handler just added should be the same handler added to the first manager because it is the same path. This check
-    # will make sure a redundant handler isn't being created and writing double log statements.
+    # The handler just added should be the same handler added to the first manager because it is the same path. This
+    # check will make sure a redundant handler isn't being created and writing double log statements.
     assert extra_handler == info_log_handler
 
     # Start another log at a new path. This one should actually create a new handler.

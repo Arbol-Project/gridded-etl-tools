@@ -105,9 +105,7 @@ class TestEncryptionFilter:
 
         assert encrypted == b"|nonce-----------------||tag-----------|encrypted text"
         get_random_bytes.assert_called_once_with(24)
-        ChaCha20_Poly1305.new.assert_called_once_with(
-            key=bytes.fromhex(self.key), nonce=b"|nonce-----------------|"
-        )
+        ChaCha20_Poly1305.new.assert_called_once_with(key=bytes.fromhex(self.key), nonce=b"|nonce-----------------|")
         cipher.encrypt_and_digest.assert_called_once_with(b"Hello Dad. I'm in jail.")
         cipher.update.assert_called_once_with(filter.header)
 
@@ -118,17 +116,11 @@ class TestEncryptionFilter:
         cipher.decrypt_and_verify.return_value = b"Hello Dad. I'm in jail."
         filter = self._make_one()
 
-        decrypted = filter.decode(
-            b"|nonce-----------------||tag-----------|encrypted text"
-        )
+        decrypted = filter.decode(b"|nonce-----------------||tag-----------|encrypted text")
 
         assert decrypted == b"Hello Dad. I'm in jail."
-        ChaCha20_Poly1305.new.assert_called_once_with(
-            key=bytes.fromhex(self.key), nonce=b"|nonce-----------------|"
-        )
-        cipher.decrypt_and_verify.assert_called_once_with(
-            b"encrypted text", b"|tag-----------|"
-        )
+        ChaCha20_Poly1305.new.assert_called_once_with(key=bytes.fromhex(self.key), nonce=b"|nonce-----------------|")
+        cipher.decrypt_and_verify.assert_called_once_with(b"encrypted text", b"|tag-----------|")
         cipher.update.assert_called_once_with(filter.header)
 
     def test_decode_missing_key(self):

@@ -19,19 +19,21 @@ class Logging(Attributes):
         time_format: str = "%Y/%m/%d %H:%M",
     ) -> logging.Handler:
         """
-        Attach a logging.handlers.WatchedFileHandler that will write log statements at `level` or higher to `path` in the requested formats.
-        Since this attaches the constructed handler to the root logger, this is basically a convenience function for creating a standard logging
-        module log handler and attaching it in the standard way. Since it is attached to the root logger, it will log all log statements sent to
-        Python's logging module, including both this application's and its underlying module's. If called with all defaults, this will create a log
-        in the current directory with the name based on this manager's name and the log level.
+        Attach a logging.handlers.WatchedFileHandler that will write log statements at `level` or higher to `path` in
+        the requested formats. Since this attaches the constructed handler to the root logger, this is basically a
+        convenience function for creating a standard logging module log handler and attaching it in the standard way.
+        Since it is attached to the root logger, it will log all log statements sent to Python's logging module,
+        including both this application's and its underlying module's. If called with all defaults, this will create a
+        log in the current directory with the name based on this manager's name and the log level.
 
-        If there is already a handler attached to the root logger writing the same level log statements to the same path, set its formatting to
-        the requested format and do not attach a new handler.
+        If there is already a handler attached to the root logger writing the same level log statements to the same
+        path, set its formatting to the requested format and do not attach a new handler.
 
         Parameters
         ----------
         path : str
-            Path to a regular file to write log statements too, or None to build a default name in the current directory.
+            Path to a regular file to write log statements too, or None to build a default name in the current
+            directory.
         level : str, optional
             Statements this level or higher will be printed (see logging module for levels). Defaults to 'logging.INFO'
         log_format : str, optional.
@@ -43,8 +45,8 @@ class Logging(Attributes):
         Returns
         -------
         str
-            The logging.Handler that will be handling writing to the log file (this can be useful for manually removing the
-            handler from the root logger at a later time).
+            The logging.Handler that will be handling writing to the log file (this can be useful for manually removing
+            the handler from the root logger at a later time).
 
         """
         # If no path was specified, build a path using the manager name and log level in the current directory
@@ -53,8 +55,9 @@ class Logging(Attributes):
 
         formatter = logging.Formatter(log_format, time_format)
 
-        # Search for an existing handler that already satisfies the requirements of the passed arguments so repeat log statements don't get
-        # logged. If an existing handler is found, set its formatting to the requested formatting and exit.
+        # Search for an existing handler that already satisfies the requirements of the passed arguments so repeat log
+        # statements don't get logged. If an existing handler is found, set its formatting to the requested formatting
+        # and exit.
         handler_already_exists = False
         if logging.getLogger().hasHandlers():
             for handler in logging.getLogger().handlers:
@@ -62,8 +65,7 @@ class Logging(Attributes):
                 if (
                     isinstance(handler, logging.handlers.WatchedFileHandler)
                     and handler.level == level
-                    and pathlib.Path(handler.baseFilename).resolve()
-                    == pathlib.Path(path).resolve()
+                    and pathlib.Path(handler.baseFilename).resolve() == pathlib.Path(path).resolve()
                 ):
                     handler_already_exists = True
                     handler.setFormatter(formatter)
@@ -80,10 +82,10 @@ class Logging(Attributes):
             # All log statments requested level or higher will be caught
             handler.setLevel(level)
 
-            # Attach to root logger, catching every logger that doesn't have a handler attached to it, meaning this handler will catch
-            # all log statements from this repository that go through `self.log` (assuming a handler hasn't been added manually somewhere)
-            # and all log statements from Python modules that use standard logging practices (logging through the logging module and not
-            # attaching a handler).
+            # Attach to root logger, catching every logger that doesn't have a handler attached to it, meaning this
+            # handler will catch all log statements from this repository that go through `self.log` (assuming a handler
+            # hasn't been added manually somewhere) and all log statements from Python modules that use standard
+            # logging practices (logging through the logging module and not attaching a handler).
             logging.getLogger().addHandler(handler)
 
         return handler
@@ -95,36 +97,40 @@ class Logging(Attributes):
         log_format: str = "%(levelname)-8s <%(name)s in %(threadName)s> %(message)s",
     ):
         """
-        Attach a logging.StreamHandler that will write log statements at `level` or higher to the console. Since this attaches the stream handler
-        to the root logger, this is basically a convenience function for creating a standard stream handler and attaching it in the standard way.
-        Since it is attached to the root logger, it will log all log statements sent to Python's logging module, including both this application's
-        and its underlying module's.
+        Attach a logging.StreamHandler that will write log statements at `level` or higher to the console. Since this
+        attaches the stream handler to the root logger, this is basically a convenience function for creating a
+        standard stream handler and attaching it in the standard way. Since it is attached to the root logger, it will
+        log all log statements sent to Python's logging module, including both this application's and its underlying
+        module's.
 
-        If there is already a handler attached to the root logger writing to the console, set its formatting to the requested format and do not
-        attach a new handler.
+        If there is already a handler attached to the root logger writing to the console, set its formatting to the
+        requested format and do not attach a new handler.
 
         Parameters
         ----------
         level : str, optional
-            Statements of this level or higher will be printed (see logging module for levels). Defaults to `logging.INFO`.
+            Statements of this level or higher will be printed (see logging module for levels). Defaults to
+            `logging.INFO`.
         log_format : str, optional
-            The format of the log statement (see logging module for formatting options). Defaults to "%(levelname)-8s <%(name)s> %(message)s"
+            The format of the log statement (see logging module for formatting options). Defaults to "%(levelname)-8s
+            <%(name)s> %(message)s"
 
         Returns
         -------
         str
-            The `logging.Handler` that will write the log statements to console (this can be useful for removing the handler
-            from the root logger manually at a later time).
+            The `logging.Handler` that will write the log statements to console (this can be useful for removing the
+            handler from the root logger manually at a later time).
 
         """
         formatter = logging.Formatter(log_format)
 
-        # Search for an existing handler already writing to the console so repeat log statements don't get logged. If an existing handler is found,
-        # set its formatting to the requested formatting and exit.
+        # Search for an existing handler already writing to the console so repeat log statements don't get logged. If
+        # an existing handler is found, set its formatting to the requested formatting and exit.
         handler_already_exists = False
         if logging.getLogger().hasHandlers():
             for handler in logging.getLogger().handlers:
-                # Check if the attached handler has a stream equal to stderr or stdout, meaning it is writing to the console.
+                # Check if the attached handler has a stream equal to stderr or stdout, meaning it is writing to the
+                # console.
                 if (
                     hasattr(handler, "stream")
                     and handler.level >= level
@@ -137,8 +143,8 @@ class Logging(Attributes):
                     break
 
         if not handler_already_exists:
-            # Uses sys.stderr as the stream to write to by default. It would also make sense to write to sys.stdout, but since either stream
-            # could make sense, use the Python logging module default.
+            # Uses sys.stderr as the stream to write to by default. It would also make sense to write to sys.stdout,
+            # but since either stream could make sense, use the Python logging module default.
             handler = logging.StreamHandler()
 
             # Apply requested formatting
@@ -155,9 +161,8 @@ class Logging(Attributes):
     @classmethod
     def default_log_path(cls, level: str):
         """
-        Returns a default log path in a "logs" directory within the current working directory, incorporating level into the name.
-        Creates the "logs" directory if it doesn't already exist.
-        Probably only useful internally.
+        Returns a default log path in a "logs" directory within the current working directory, incorporating level into
+        the name. Creates the "logs" directory if it doesn't already exist. Probably only useful internally.
 
         Parameters
         ----------
@@ -165,19 +170,18 @@ class Logging(Attributes):
             The logging level to use. See logging module for log levels.
 
         """
-        pathlib.Path.mkdir(
-            pathlib.Path("./logs"), mode=0o777, parents=False, exist_ok=True
-        )
+        pathlib.Path.mkdir(pathlib.Path("./logs"), mode=0o777, parents=False, exist_ok=True)
         return pathlib.Path("logs") / f"{cls.name()}_{logging.getLevelName(level)}.log"
 
     @classmethod
     def log(cls, message: str, level: str = logging.INFO, **kwargs):
         """
-        This is basically a convenience function for calling logging.getLogger.log(`level`, `message`). The only difference is this uses
-        the manager name as the name of the log to enable log statements that include the name of the manager instead of "root". Since
-        logging module handlers at the root catch statements from all loggers that don't have a handler attached to them, the handlers
-        attached to the root (either through logging.Logger.addHandler, self.log_to_file, or self.log_to_console) will catch the `message`
-        logged with this function.
+        This is basically a convenience function for calling logging.getLogger.log(`level`, `message`). The only
+        difference is this uses the manager name as the name of the log to enable log statements that include the name
+        of the manager instead of "root". Since logging module handlers at the root catch statements from all loggers
+        that don't have a handler attached to them, the handlers attached to the root (either through
+        logging.Logger.addHandler, self.log_to_file, or self.log_to_console) will catch the `message` logged with this
+        function.
 
         Parameters
         ----------
@@ -186,8 +190,8 @@ class Logging(Attributes):
         level : str
             Level of urgency of the message (see logging module for levels). Defaults to logging.INFO.
         **kwargs : dict
-            Keyword arguments to forward to the logging.Logger. For example, `exc_info=True` can be used to print exception
-            information. See the logging module for all keyword arguments.
+            Keyword arguments to forward to the logging.Logger. For example, `exc_info=True` can be used to print
+            exception information. See the logging module for all keyword arguments.
 
         """
         logging.getLogger(cls.name()).log(level, message, **kwargs)
