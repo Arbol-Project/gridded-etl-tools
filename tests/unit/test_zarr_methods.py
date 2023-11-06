@@ -1,6 +1,3 @@
-import pandas as pd
-import numpy as np
-import xarray as xr
 import os
 import json
 
@@ -10,7 +7,6 @@ import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 from ..common import get_manager, patched_irregular_update_cadence
-from .conftest import example_zarr_json
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
