@@ -199,3 +199,6 @@ class TestDatasetManager:
     def test_get_subclass_not_found():
         with pytest.warns(UserWarning, match="John"):
             assert Ringo.get_subclass("John") is None
+
+        with pytest.warns(UserWarning, match="Pete"):
+            assert Ringo.get_subclass("Pete") is None
