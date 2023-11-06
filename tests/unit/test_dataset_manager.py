@@ -7,6 +7,8 @@ import pytest
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
 
+from .conftest import John, Paul, George, Ringo
+
 
 class TestDatasetManager:
     @staticmethod
@@ -119,6 +121,22 @@ class TestDatasetManager:
             assert str(dm) == "DummyManager"
 
     @staticmethod
+    def test__eq__(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class() == manager_class()
+
+    @staticmethod
+    def test__eq__not_dataset_manager(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class() != object()
+
+    @staticmethod
+    def test__hash__(manager_class):
+        dm = manager_class()
+        with pytest.deprecated_call():
+            assert hash(dm) == hash("DummyManager")
+
+    @staticmethod
     def test_extract(manager_class):
         dm = manager_class()
         dm.extract()
@@ -153,3 +171,31 @@ class TestDatasetManager:
         dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_not_called()
         dm.create_zarr_json.assert_called_once_with()
+
+    @staticmethod
+    def test_get_subclasses(manager_class):
+        assert set(manager_class.get_subclasses()) == {John, Paul, George, Ringo}
+        assert set(John.get_subclasses()) == {George, Ringo}
+        assert set(Paul.get_subclasses()) == {George, Ringo}
+        assert set(George.get_subclasses()) == {Ringo}
+        assert set(Ringo.get_subclasses()) == set()
+
+    @staticmethod
+    def test_get_subclass(manager_class):
+        assert manager_class.get_subclass("John") is John
+        assert manager_class.get_subclass("Paul") is Paul
+        assert manager_class.get_subclass("George") is George
+        assert manager_class.get_subclass("Ringo") is Ringo
+
+        assert John.get_subclass("George") is George
+        assert John.get_subclass("Ringo") is Ringo
+
+        assert Paul.get_subclass("George") is George
+        assert Paul.get_subclass("Ringo") is Ringo
+
+        assert George.get_subclass("Ringo") is Ringo
+
+    @staticmethod
+    def test_get_subclass_not_found():
+        with pytest.warns(UserWarning, match="John"):
+            assert Ringo.get_subclass("John") is None

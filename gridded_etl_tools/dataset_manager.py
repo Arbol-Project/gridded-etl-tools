@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 import datetime
+import typing
+import warnings
 import deprecation
 import logging
 import multiprocessing
@@ -216,6 +218,25 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         return self.name()
 
+    @deprecation.deprecated(details="Compare Dataset types directly")
+    def __eq__(self, other: DatasetManager) -> bool:
+        """
+        All instances of this class will compare equal to each other.
+
+        Returns
+        -------
+        bool
+            If the other `DatasetManager` instance has the same name, return `True`
+        """
+        if isinstance(other, type(self)):
+            return self.name() == other.name()
+
+        return False
+
+    @deprecation.deprecated(details="Hash Dataset's name attribute directly.")
+    def __hash__(self):
+        return hash(str(self))
+
     # MINIMUM ETL METHODS
 
     @abstractmethod
@@ -284,3 +305,32 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Happens after `populate_metadata` and immediately before data publication.
         """
         return super().set_zarr_metadata(dataset)
+
+    @classmethod
+    def get_subclasses(cls) -> typing.Iterator:
+        """Create a generator with all the subclasses and sub-subclasses of a parent class"""
+        for subclass in cls.__subclasses__():
+            yield from subclass.get_subclasses()
+            yield subclass
+
+    @classmethod
+    def get_subclass(cls, name: str) -> type:
+        """
+        Method to return the subclass instance corresponding to the name provided when invoking the ETL
+
+        Parameters
+        ----------
+        name : str
+            The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
+            manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
+
+        Returns
+        -------
+        type
+            A dataset source class
+        """
+        for source in cls.get_subclasses():
+            if source.name() == name:
+                return source
+
+        warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")

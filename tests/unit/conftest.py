@@ -100,6 +100,23 @@ class DummyManager(dataset_manager.DatasetManager):
         return self._static_metadata
 
 
+# Set up overcomplicated mro for testing get_subclass(es)
+class John(DummyManager):
+    ...
+
+
+class Paul(DummyManager):
+    ...
+
+
+class George(John, Paul):
+    ...
+
+
+class Ringo(George):
+    ...
+
+
 original_times = np.array(
     [
         "2021-09-16",
