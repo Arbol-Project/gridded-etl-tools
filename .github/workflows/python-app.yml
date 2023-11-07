@@ -24,7 +24,7 @@ jobs:
         ipfs_version: "0.19.2"
         run_daemon: true
       id: ipfs_setup
-  
+
     - name: Install external dependencies via APT
       run: sudo apt-get update && sudo apt-get install cdo netcdf-bin
 
@@ -35,6 +35,11 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.10"
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.11"
 
     - name: Cache reusable files
       uses: actions/cache@v2
@@ -48,12 +53,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .\[testing,dev]
 
-    - name: Lint with flake8
+    - name: Run nox
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=200 --statistics
-    - name: Test with pytest
-      run: |
-        cd tests
-        pytest
+        nox

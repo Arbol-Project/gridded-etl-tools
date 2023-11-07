@@ -1,0 +1,7 @@
+[run]
+branch = True
+omit =
+    _version.py
+
+[report]
+show_missing = True

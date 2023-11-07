@@ -26,10 +26,7 @@ class IPFS:
     def __init__(
         self,
         host: str,
-        default_hash: str
-        | int
-        | multicodec.Multicodec
-        | multihash.Multihash = "sha2-256",
+        default_hash: str | int | multicodec.Multicodec | multihash.Multihash = "sha2-256",
         default_base: str = "base32",
         default_timeout: int = 600,
     ):
@@ -66,7 +63,8 @@ class IPFS:
 
     def ipfs_put(self, bytes_obj: bytes, should_pin: bool = True) -> str:
         """
-        Turn a bytes object (file type object) into a DAG CBOR object compatible with IPFS and return its corresponding multihash
+        Turn a bytes object (file type object) into a DAG CBOR object compatible with IPFS and return its corresponding
+        multihash
 
         Parameters
         ----------
@@ -131,7 +129,8 @@ class IPFS:
             The hash the key pair will resolve to
         offline : bool, optional
             An optional trigger to disable the publication of this IPNS key and name hash over the IPFS network.
-            Offline mode will be much faster but will not publish the key pair to peers' Distributed Hash Tables on the global network.
+            Offline mode will be much faster but will not publish the key pair to peers' Distributed Hash Tables on the
+            global network.
 
         Returns
         -------
@@ -151,9 +150,7 @@ class IPFS:
         )
         res.raise_for_status()
         ipns_name_hash = res.json()["Name"]
-        self.info(
-            f"Published CID {cid} for key {key} to name hash {ipns_name_hash} and pinned it in the process"
-        )
+        self.info(f"Published CID {cid} for key {key} to name hash {ipns_name_hash} and pinned it in the process")
         return ipns_name_hash
 
     def ipns_key_list(self) -> dict:
@@ -213,7 +210,8 @@ class IPFS:
         key : str
             The IPNS key string referencing a given object
         timeout : int, optional
-            Time in seconds to wait for a response from `ipfs.name.resolve` and `ipfs.dag.get` before failing. Defaults to 30.
+            Time in seconds to wait for a response from `ipfs.name.resolve` and `ipfs.dag.get` before failing. Defaults
+            to 30.
 
         Returns
         -------
@@ -229,14 +227,15 @@ class IPFS:
 
     def latest_hash(self, key: str = None) -> str | None:
         """
-        Get the latest hash of the climate data for this dataset. This hash can be loaded into xarray through xarray.open_zarr if
-        this is a Zarr compatible dataset. This will be the hash contained within the STAC metadata if this is STAC compatible dataset.
+        Get the latest hash of the climate data for this dataset. This hash can be loaded into xarray through
+        xarray.open_zarr if this is a Zarr compatible dataset. This will be the hash contained within the STAC metadata
+        if this is STAC compatible dataset.
 
         Parameters
         ----------
         key : str, optional
-            The name of the dataset in the format it is stored in the IPNS namespace. If `None`, the value of `self.json_key()`
-            will be used.
+            The name of the dataset in the format it is stored in the IPNS namespace. If `None`, the value of
+            `self.json_key()` will be used.
 
         Returns
         -------
@@ -253,11 +252,7 @@ class IPFS:
             elif self.check_stac_on_ipns(key):
                 # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
                 # it finds to a CID object. Convert it back to a hash of type `str``
-                return str(
-                    self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(
-                        base=self._default_base
-                    )
-                )
+                return str(self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(base=self._default_base))
             else:
                 return None
 

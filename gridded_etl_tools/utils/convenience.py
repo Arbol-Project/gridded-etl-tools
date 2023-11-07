@@ -24,8 +24,12 @@ class Convenience(Attributes):
     # BASE DIRECTORIES
 
     def root_directory(self, refresh: bool = False):
-        if refresh or not hasattr(self, "_root_directory"):  # ensure this is only calculated one time, at the beginning of the script
-            self._root_directory = pathlib.Path.cwd()  # Paths are relative to the working directory of the ETL manager, *not* the scripts
+        if refresh or not hasattr(
+            self, "_root_directory"
+        ):  # ensure this is only calculated one time, at the beginning of the script
+            self._root_directory = (
+                pathlib.Path.cwd()
+            )  # Paths are relative to the working directory of the ETL manager, *not* the scripts
         return self._root_directory
 
     @property
@@ -52,8 +56,8 @@ class Convenience(Attributes):
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:
         """
-        Returns the key value that can identify this set in a JSON file. JSON key takes the form of either name-measurement_span or name-today.
-        If `append_date` is True, add today's date to the end of the string
+        Returns the key value that can identify this set in a JSON file. JSON key takes the form of either
+        name-measurement_span or name-today. If `append_date` is True, add today's date to the end of the string
 
         Parameters
         ----------
@@ -75,23 +79,21 @@ class Convenience(Attributes):
 
     def local_input_path(self) -> str:
         """
-        The path to local data is built recursively by appending each derivative's relative path to the previous derivative's
-        path. If a custom input path is set, force return the custom path.
+        The path to local data is built recursively by appending each derivative's relative path to the previous
+        derivative's path. If a custom input path is set, force return the custom path.
         """
         if self.custom_input_path:
             return pathlib.Path(self.custom_input_path)
         else:
-            path = pathlib.Path(self.local_input_root) / pathlib.Path(
-                self.relative_path()
-            )
+            path = pathlib.Path(self.local_input_root) / pathlib.Path(self.relative_path())
             # Create directory if necessary
             path.mkdir(parents=True, mode=0o755, exist_ok=True)
             return path
 
     def relative_path(self) -> str:
         """
-        The file folder hierarchy for a set. This should be a relative path so it can be appended to other root paths like
-        `self.local_input_path()`
+        The file folder hierarchy for a set. This should be a relative path so it can be appended to other root paths
+        like `self.local_input_path()`
 
         Returns
         -------
@@ -112,16 +114,10 @@ class Convenience(Attributes):
         """
         root = pathlib.Path(self.local_input_path())
         for entry in natsort.natsorted(pathlib.Path(root).iterdir()):
-            if (
-                not entry.name.startswith(".")
-                and not entry.name.endswith(".idx")
-                and entry.is_file()
-            ):
+            if not entry.name.startswith(".") and not entry.name.endswith(".idx") and entry.is_file():
                 yield pathlib.Path(root / entry.name)
 
-    def get_folder_path_from_date(
-        self, date: datetime.datetime, omit_root: bool = False
-    ) -> str:
+    def get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
         """
         Return a folder path inside `self.output_root` with the folder name based on `self.temporal_resolution()`
         and the passed `datetime`. If `omit_root` is set, remove `self.output_root` from the path.
@@ -131,7 +127,8 @@ class Convenience(Attributes):
         date : datetime.datetime
             datetime.datetime object representing the date to be appended to the folder name
         omit_root : bool, optional
-            If False, prepent `self.output_root` to the beginning of the path, otherwise leave it off. Defaults to False
+            If False, prepent `self.output_root` to the beginning of the path, otherwise leave it off. Defaults to
+            False
 
         Returns
         -------
@@ -150,9 +147,9 @@ class Convenience(Attributes):
 
     def output_path(self, omit_root: bool = False) -> str:
         """
-        Return the path to a directory where parsed climate data will be written, automatically determining the end date and
-        base on that. If `omit_root` is set, remove `self.output_root` from the path. Override with `self.custom_output_path`
-        if that member variable is set.
+        Return the path to a directory where parsed climate data will be written, automatically determining the end
+        date and base on that. If `omit_root` is set, remove `self.output_root` from the path. Override with
+        `self.custom_output_path` if that member variable is set.
 
         Parameters
         ----------
@@ -189,40 +186,28 @@ class Convenience(Attributes):
             # Use STAC
             metadata = self.load_stac_metadata()
             return {
-                "start": datetime.datetime.strptime(
-                    metadata["properties"]["date range"][0], date_format
-                ),
-                "end": datetime.datetime.strptime(
-                    metadata["properties"]["date range"][1], date_format
-                ),
+                "start": datetime.datetime.strptime(metadata["properties"]["date range"][0], date_format),
+                "end": datetime.datetime.strptime(metadata["properties"]["date range"][1], date_format),
             }
         else:
             # Use existing Zarr attrs or raise an exception if there is no usable date attribute
             if self.store.has_existing:
                 dataset = self.store.dataset()
                 if "date range" in dataset.attrs:
-                    # Assume attr format is ['%Y%m%d%H', '%Y%m%d%H'], translate to datetime objects, then transform into a dict with "start" and "end" keys
+                    # Assume attr format is ['%Y%m%d%H', '%Y%m%d%H'], translate to datetime objects, then transform
+                    # into a dict with "start" and "end" keys
                     return dict(
                         zip(
                             ("start", "end"),
-                            (
-                                datetime.datetime.strptime(d, date_format)
-                                for d in dataset.attrs["date range"]
-                            ),
+                            (datetime.datetime.strptime(d, date_format) for d in dataset.attrs["date range"]),
                         )
                     )
                 else:
-                    raise ValueError(
-                        f"Existing date range not found in {dataset} attributes"
-                    )
+                    raise ValueError(f"Existing date range not found in {dataset} attributes")
             else:
-                raise ValueError(
-                    f"No existing dataset found to get date range from at {self.store}"
-                )
+                raise ValueError(f"No existing dataset found to get date range from at {self.store}")
 
-    def convert_date_range(
-        self, date_range: list
-    ) -> tuple[datetime.datetime, datetime.datetime]:
+    def convert_date_range(self, date_range: list) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Convert a JSON text/isoformat date range into a python datetime object range
 
@@ -238,10 +223,7 @@ class Convenience(Attributes):
 
         """
         if re.match(".+/.+/.+", date_range[0]):
-            start, end = [
-                datetime.datetime.strptime(d, self.DATE_FORMAT_METADATA)
-                for d in date_range
-            ]
+            start, end = [datetime.datetime.strptime(d, self.DATE_FORMAT_METADATA) for d in date_range]
         else:
             start, end = [datetime.datetime.fromisoformat(d) for d in date_range]
         return start, end
@@ -294,9 +276,7 @@ class Convenience(Attributes):
 
     # DATE RANGES
 
-    def get_date_range_from_dataset(
-        self, dataset: xr.Dataset
-    ) -> tuple[datetime.datetime, datetime.datetime]:
+    def get_date_range_from_dataset(self, dataset: xr.Dataset) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Return the start and end date in a dataset's "time" dimension
 
@@ -329,7 +309,8 @@ class Convenience(Attributes):
         self, path: str, backend_kwargs: dict = None
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
-        Open file and return the start and end date of the data. The dimension name used to store dates should be passed as `dimension`.
+        Open file and return the start and end date of the data. The dimension name used to store dates should be
+        passed as `dimension`.
 
         Parameters
         ----------
@@ -387,8 +368,9 @@ class Convenience(Attributes):
 
     def _coord_reformat(self, *args, pretty: bool = False, padding: int = 0) -> str:
         """
-        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With `pretty` set
-        to False, return a string that can be used for a file name. With `pretty` set to True, return formatted coordinate string
+        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With
+        `pretty` set to False, return a string that can be used for a file name. With `pretty` set to True, return
+        formatted coordinate string
 
         Parameters
         ----------
@@ -421,8 +403,9 @@ class Convenience(Attributes):
 
     def coord_str(self, *args, pretty: bool = False, padding=0) -> str:
         """
-        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With `pretty` set
-        to False, return a string that can be used for a file name. With `pretty` set to True, return formatted coordinate string
+        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With
+        `pretty` set to False, return a string that can be used for a file name. With `pretty` set to True, return
+        formatted coordinate string
 
 
         Parameters
@@ -458,9 +441,9 @@ class Convenience(Attributes):
         include_size_check: bool = False,
     ):
         """
-        Connect to `server` (currently only supports anonymous login), change to `directory_path`, pull new and updated files
-        that match `file_match_pattern` in that directory into `self.local_input_path()`. Store a list of newly downloaded
-        files in a member variable.
+        Connect to `server` (currently only supports anonymous login), change to `directory_path`, pull new and updated
+        files that match `file_match_pattern` in that directory into `self.local_input_path()`. Store a list of newly
+        downloaded files in a member variable.
 
         Parameters
         ----------
@@ -476,11 +459,7 @@ class Convenience(Attributes):
         """
         # Login to remote FTP server
         with ftplib.FTP(server) as ftp:
-            self.info(
-                "checking {}:{} for files that match {}".format(
-                    server, directory_path, file_match_pattern
-                )
-            )
+            self.info("checking {}:{} for files that match {}".format(server, directory_path, file_match_pattern))
             ftp.login()
             ftp.cwd(directory_path)
             # Loop through directory listing
@@ -488,33 +467,22 @@ class Convenience(Attributes):
                 if re.match(file_match_pattern, file_name):
                     # path on our local filesystem
                     local_file_path = pathlib.Path(self.local_input_path()) / file_name
-                    modification_timestamp = ftp.sendcmd("MDTM {}".format(file_name))[
-                        4:
-                    ].strip()
-                    modification_time = datetime.datetime.strptime(
-                        modification_timestamp, "%Y%m%d%H%M%S"
-                    )
+                    modification_timestamp = ftp.sendcmd("MDTM {}".format(file_name))[4:].strip()
+                    modification_time = datetime.datetime.strptime(modification_timestamp, "%Y%m%d%H%M%S")
                     # Retrieve this file unless we find conditions not to
                     retrieve = True
                     # Compare to local file of same name
                     if local_file_path.exists():
                         local_file_attributes = os.stat(local_file_path)
-                        local_file_mtime = datetime.datetime.fromtimestamp(
-                            local_file_attributes.st_mtime
-                        )
+                        local_file_mtime = datetime.datetime.fromtimestamp(local_file_attributes.st_mtime)
                         local_file_size = local_file_attributes.st_size
                         # Set to binary transfer mode
                         ftp.sendcmd("TYPE I")
                         remote_file_size = ftp.size(file_name)
                         if modification_time <= local_file_mtime and (
-                            not include_size_check
-                            or remote_file_size == local_file_size
+                            not include_size_check or remote_file_size == local_file_size
                         ):
-                            self.debug(
-                                "local file {} does not need updating".format(
-                                    local_file_path
-                                )
-                            )
+                            self.debug("local file {} does not need updating".format(local_file_path))
                             retrieve = False
                         elif modification_time > local_file_mtime:
                             self.debug(
@@ -525,21 +493,13 @@ class Convenience(Attributes):
                                 )
                             )
                         else:
-                            self.debug(
-                                "mismatch between local and remote size for file {}".format(
-                                    local_file_path
-                                )
-                            )
+                            self.debug("mismatch between local and remote size for file {}".format(local_file_path))
                     else:
                         self.debug("new remote file found {}".format(file_name))
                     # Write this file locally
                     if retrieve:
                         self.new_files.append(self.local_input_path() / file_name)
-                        self.info(
-                            "downloading remote file {} to {}".format(
-                                file_name, local_file_path
-                            )
-                        )
+                        self.info("downloading remote file {} to {}".format(file_name, local_file_path))
                         with open(local_file_path, "wb") as fp:
                             ftp.retrbinary("RETR {}".format(file_name), fp.write)
 
@@ -608,8 +568,8 @@ class Convenience(Attributes):
         Parameters
         ==========
         compare_date : datetime.datetime
-            A cutoff date to compare against downloaded data; if any downloaded data is newer, move ahead with the parse.
-            When updating, refers to the last datetime available in the existing dataset.
+            A cutoff date to compare against downloaded data; if any downloaded data is newer, move ahead with the
+            parse. When updating, refers to the last datetime available in the existing dataset.
 
         Returns
         =======
@@ -621,7 +581,9 @@ class Convenience(Attributes):
         try:
             newest_file_end_date = self.get_newest_file_date_range()[1]
         except IndexError as e:
-            self.info(f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}")
+            self.info(
+                f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}"
+            )
             return False
         self.info(f"newest file ends at {newest_file_end_date}")
         if newest_file_end_date >= compare_date:
@@ -647,10 +609,9 @@ class Convenience(Attributes):
 
         """
         # Convert longitudes from 0 - 360 to -180 to 180
-        dataset = dataset.assign_coords(
-            longitude=(((dataset.longitude + 180) % 360) - 180)
-        )
-        # After converting, the longitudes may still start at zero. This reorders the longitude coordinates from -180 to 180 if necessary.
+        dataset = dataset.assign_coords(longitude=(((dataset.longitude + 180) % 360) - 180))
+        # After converting, the longitudes may still start at zero. This reorders the longitude coordinates from -180
+        # to 180 if necessary.
         return dataset.sortby(["latitude", "longitude"])
 
     @classmethod
@@ -665,10 +626,10 @@ class Convenience(Attributes):
         A numpy timedelta corresponding to a dataset's update cadence
         """
         span_to_td = {
-            cls.SPAN_HOURLY : np.timedelta64(1, 'h'),
-            cls.SPAN_DAILY : np.timedelta64(1, 'D'),
-            cls.SPAN_WEEKLY : np.timedelta64(1, 'W'),
-            cls.SPAN_MONTHLY : np.timedelta64(1, 'M'),
-            cls.SPAN_YEARLY : np.timedelta64(1, 'Y'),
+            cls.SPAN_HOURLY: np.timedelta64(1, "h"),
+            cls.SPAN_DAILY: np.timedelta64(1, "D"),
+            cls.SPAN_WEEKLY: np.timedelta64(1, "W"),
+            cls.SPAN_MONTHLY: np.timedelta64(1, "M"),
+            cls.SPAN_YEARLY: np.timedelta64(1, "Y"),
         }
         return span_to_td[cls.temporal_resolution()]
