@@ -124,11 +124,7 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     Test that a dry run parse of CHIRPS data does not, in fact, parse data.
     """
     # Get the CHIRPS manager with rebuild set
-    manager = manager_class(
-        custom_input_path=initial_input_path,
-        rebuild_requested=True,
-        dry_run=True,
-        store='ipld')
+    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, dry_run=True, store="ipld")
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
     if manager.json_key() not in manager.ipns_key_list():
@@ -143,6 +139,7 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
     with pytest.raises(FileNotFoundError):
         manager.zarr_hash_to_dataset(manager.latest_hash())
+
 
 @pytest.mark.order(1)
 def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
@@ -188,6 +185,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 12)).values
     )
     assert output_value == original_value
+
 
 def test_prepare_input_files(manager_class, mocker, appended_input_path):
     """
