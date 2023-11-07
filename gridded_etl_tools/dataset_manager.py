@@ -68,6 +68,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         skip_prepare_input_files: bool = False,
         encryption_key: str = None,
         use_compression: bool = True,
+        dry_run: bool = False,
         *args,
         **kwargs,
     ):
@@ -127,6 +128,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             :func:`.encryption.generate_encryption_key` to generate a random encryption key to be passed in here.
         use_compression: bool, optional
             Data in this dataset will be compressed unless this is set to `False`.
+        dry_run: bool, optional
+            Run the dataset manager all the way through but never write anything via `to_zarr`.
+            Intended for development purposes
         """
         # call IPFS init
         super().__init__(host=ipfs_host)
@@ -207,6 +211,11 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
         self.use_compression = use_compression
+
+        # Instantiate a dry run parameter
+        self.dry_run = dry_run
+
+    # SETUP
 
     @deprecation.deprecated(details="Use Dataset's name attribute directly.")
     def __str__(self) -> str:

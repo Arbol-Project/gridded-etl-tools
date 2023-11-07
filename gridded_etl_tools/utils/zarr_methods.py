@@ -509,7 +509,7 @@ class Publish(Transform, Metadata):
                 except KeyboardInterrupt:
                     self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
 
-        if hasattr(self, "dataset_hash") and self.dataset_hash:
+        if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
         return True
@@ -570,33 +570,37 @@ class Publish(Transform, Metadata):
             if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise ValueError("Dataset does not contain contiguous time data")
 
-        # Don't use update-in-progress metadata flag on IPLD
-        if not isinstance(self.store, IPLD):
-            # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do
-            # this? compute=False or zarr.consolidate_metadata?).
-            dataset.attrs["update_in_progress"] = True
-            empty_dataset = dataset
-            for coord in chain(dataset.coords, dataset.data_vars):
-                empty_dataset = empty_dataset.drop(coord)
-            # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the
-            # metadata before starting the real write. Note that update_is_append_only is also written here because it
-            # was set outside of to_zarr.
-            if self.store.has_existing:
-                self.info("Pre-writing metadata to indicate an update is in progress")
-                empty_dataset.to_zarr(self.store.mapper(refresh=True), append_dim=self.time_dim)
+        # Exit script if dry_run specified
+        if self.dry_run:
+            self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
+            self.info(f"Dataset final state pre-parse:\n{dataset}")
+        else:
+            # Don't use update-in-progress metadata flag on IPLD
+            if not isinstance(self.store, IPLD):
+                # Create an empty dataset that will be used to just write the metadata
+                # (there's probably a better way to dothis? compute=False or zarr.consolidate_metadata?).
+                dataset.attrs["update_in_progress"] = True
+                empty_dataset = dataset
+                for coord in chain(dataset.coords, dataset.data_vars):
+                    empty_dataset = empty_dataset.drop(coord)
+                # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the
+                # metadata before starting the real write.
+                # Note that update_is_append_only is also written here because it was set outside of to_zarr.
+                if self.store.has_existing:
+                    self.info("Pre-writing metadata to indicate an update is in progress")
+                    empty_dataset.to_zarr(self.store.mapper(refresh=True), append_dim=self.time_dim)
 
-        # Write data to Zarr and log duration.
-        start_writing = time.perf_counter()
+            # Write data to Zarr and log duration.
+            start_writing = time.perf_counter()
+            dataset.to_zarr(*args, **kwargs)
+            self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
-        dataset.to_zarr(*args, **kwargs)
-        self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
-
-        # Don't use update-in-progress metadata flag on IPLD
-        if not isinstance(self.store, IPLD):
-            # Indicate in metadata that update is complete.
-            empty_dataset.attrs["update_in_progress"] = False
-            self.info("Re-writing Zarr to indicate in the metadata that update is no longer in process.")
-            empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
+            # Don't use update-in-progress metadata flag on IPLD
+            if not isinstance(self.store, IPLD):
+                # Indicate in metadata that update is complete.
+                empty_dataset.attrs["update_in_progress"] = False
+                self.info("Re-writing Zarr to indicate in the metadata that update is no longer in process.")
+                empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
@@ -1100,7 +1104,7 @@ class Publish(Transform, Metadata):
             # Warn if not using expected delta
             if self.irregular_update_cadence():
                 self.warn(
-                    f"Because dataset has irregular cadence {self.irregular_update_cadence} expected delta "
+                    f"Because dataset has irregular cadence {self.irregular_update_cadence()} expected delta "
                     f"{expected_delta} is not being used for checking time contiguity"
                 )
                 if (

@@ -118,6 +118,31 @@ def teardown_module(request, heads_path):
     request.addfinalizer(test_clean)
 
 
+@pytest.mark.order(1)
+def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+    """
+    Test that a dry run parse of CHIRPS data does not, in fact, parse data.
+    """
+    # Get the CHIRPS manager with rebuild set
+    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, dry_run=True, store="ipld")
+    manager.HASH_HEADS_PATH = heads_path
+    # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
+    if manager.json_key() not in manager.ipns_key_list():
+        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish", offline_ipns_publish)
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform()
+    manager.parse()
+    manager.zarr_json_path().unlink(missing_ok=True)
+    # Open the head with ipldstore + xarray.open_zarr and compare two data points
+    # with the same data points in a local GRIB file
+    with pytest.raises(FileNotFoundError):
+        manager.zarr_hash_to_dataset(manager.latest_hash())
+
+
+@pytest.mark.order(1)
 def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
     Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
