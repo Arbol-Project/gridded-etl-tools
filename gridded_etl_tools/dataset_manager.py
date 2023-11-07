@@ -129,7 +129,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         use_compression: bool, optional
             Data in this dataset will be compressed unless this is set to `False`.
         dry_run: bool, optional
-            Run the dataset manager all the way through but never write anything via `to_zarr`. For development purposes
+            Run the dataset manager all the way through but never write anything via `to_zarr`.
+            Intended for development purposes
         """
         # call IPFS init
         super().__init__(host=ipfs_host)

@@ -136,7 +136,8 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     manager.transform()
     manager.parse()
     manager.zarr_json_path().unlink(missing_ok=True)
-    # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local GRIB file
+    # Open the head with ipldstore + xarray.open_zarr and compare two data points
+    # with the same data points in a local GRIB file
     with pytest.raises(FileNotFoundError):
         manager.zarr_hash_to_dataset(manager.latest_hash())
 
