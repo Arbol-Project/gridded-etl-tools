@@ -36,3 +36,6 @@ write_to = "gridded_etl_tools/_version.py"
 
 [project.urls]
 Homepage = "https://arbol.io/"
+
+[tool.black]
+line-length = 119

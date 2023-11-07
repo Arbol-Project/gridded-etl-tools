@@ -1,13 +1,14 @@
-# The annotations dict and TYPE_CHECKING var are necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
+# The annotations dict and TYPE_CHECKING var are necessary for referencing types that aren't fully imported yet. See
+# https://peps.python.org/pep-0563/
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from .. import dataset_manager
 
 import datetime
 import json
 
-import os
 import shutil
 import s3fs
 import xarray as xr
@@ -23,15 +24,15 @@ class StoreInterface(ABC):
     """
     Base class for an interface that can be used to access a dataset's Zarr.
 
-    Zarrs can be stored in different types of data stores, for example IPLD, S3, and the local filesystem, each of which is accessed slightly
-    differently in Python. This class abstracts the access to the underlying data store by providing functions that access the Zarr on the store
-    in a uniform way, regardless of which is being used.
+    Zarrs can be stored in different types of data stores, for example IPLD, S3, and the local filesystem, each of
+    which is accessed slightly differently in Python. This class abstracts the access to the underlying data store by
+    providing functions that access the Zarr on the store in a uniform way, regardless of which is being used.
     """
 
     def __init__(self, dm: dataset_manager.DatasetManager):
         """
-        Create a new `StoreInterface`. Pass the dataset manager this store is being associated with, so the interface will have access to
-        dataset properties.
+        Create a new `StoreInterface`. Pass the dataset manager this store is being associated with, so the interface
+        will have access to dataset properties.
 
         Parameters
         ----------
@@ -71,7 +72,8 @@ class StoreInterface(ABC):
         Parameters
         ----------
         **kwargs
-            Implementation specific keyword arguments to forward to `StoreInterface.mapper`. S3 and Local accept `refresh`, and IPLD accepts `set_root`.
+            Implementation specific keyword arguments to forward to `StoreInterface.mapper`. S3 and Local accept
+            `refresh`, and IPLD accepts `set_root`.
 
         Returns
         -------
@@ -88,11 +90,12 @@ class S3(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on S3.
 
-    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_json_key].zarr"), create a new S3 object using a `dataset_manager.DatasetManager` object
-    and bucket name, and define both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the ~/.aws/credentials file or shell environment.
+    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_json_key].zarr"), create a new S3 object using a
+    `dataset_manager.DatasetManager` object and bucket name, and define both `AWS_ACCESS_KEY_ID` and
+    `AWS_SECRET_ACCESS_KEY` in the ~/.aws/credentials file or shell environment.
 
-    After initialization, use the member functions to access the Zarr. For example, call `S3.mapper` to get a `MutableMapping` that can be passed to
-    `xarray.open_zarr` and `xarray.to_zarr`.
+    After initialization, use the member functions to access the Zarr. For example, call `S3.mapper` to get a
+    `MutableMapping` that can be passed to `xarray.open_zarr` and `xarray.to_zarr`.
     """
 
     def __init__(self, dm: dataset_manager.DatasetManager, bucket: str):
@@ -113,11 +116,11 @@ class S3(StoreInterface):
 
     def fs(self, refresh: bool = False) -> s3fs.S3FileSystem:
         """
-        Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be performed according to the rules
-        at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
+        Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
+        performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
 
-        By default, the filesystem is only created once, the first time this function is called. To force it create a new one, set `refresh`
-        to `True`.
+        By default, the filesystem is only created once, the first time this function is called. To force it create a
+        new one, set `refresh` to `True`.
 
         Parameters
         ----------
@@ -131,7 +134,10 @@ class S3(StoreInterface):
         """
         if refresh or not hasattr(self, "_fs"):
             self._fs = s3fs.S3FileSystem()
-            self.dm.info("Initialized S3 filesystem. Credentials will be looked up according to rules at https://s3fs.readthedocs.io/en/latest/#credentials")
+            self.dm.info(
+                "Initialized S3 filesystem. Credentials will be looked up according to rules at "
+                "https://s3fs.readthedocs.io/en/latest/#credentials"
+            )
         return self._fs
 
     @property
@@ -154,12 +160,12 @@ class S3(StoreInterface):
 
     def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
         """
-        Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once, when this function is first
-        called. 
-        
-        To force a new mapper, set `refresh` to `True`. 
-        To use an output path other than the default path returned by self.path, set a `custom_output_path` when the DatasetManager is instantiated
-        and it will be passed through to here. This path must be a valid S3 destination for which you have write permissions.
+        Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once,
+        when this function is first called.
+
+        To force a new mapper, set `refresh` to `True`. To use an output path other than the default path returned by
+        self.path, set a `custom_output_path` when the DatasetManager is instantiated and it will be passed through to
+        here. This path must be a valid S3 destination for which you have write permissions.
 
         Parameters
         ----------
@@ -279,27 +285,28 @@ class IPLD(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on IPLD.
 
-    If there is existing data for the dataset, it is assumed to be stored at the hash returned by `IPLD.dm.latest_hash`, and the mapper will
-    return a hash that can be used to retrieve the data. If there is no existing data, or the mapper is called without `set_root`, an unrooted
-    IPFS mapper will be returned that can be used to write new data to IPFS and generate a new recursive hash.
+    If there is existing data for the dataset, it is assumed to be stored at the hash returned by
+    `IPLD.dm.latest_hash`, and the mapper will return a hash that can be used to retrieve the data. If there is no
+    existing data, or the mapper is called without `set_root`, an unrooted IPFS mapper will be returned that can be
+    used to write new data to IPFS and generate a new recursive hash.
     """
 
     def mapper(self, set_root: bool = True, refresh: bool = False, **kwargs: dict) -> ipldstore.IPLDStore:
         """
-        Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the associated dataset's
-        `requested_ipfs_chunker` property has been set.
+        Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the
+        associated dataset's `requested_ipfs_chunker` property has been set.
 
-        If `set_root` is `False`, the root will not be set to the latest hash, so the mapper can be used to open a new Zarr on the IPLD
-        datastore. Otherwise, `DatasetManager.latest_hash` will be used to get the latest hash (which is stored in the STAC at the IPNS key
-        for the dataset).
+        If `set_root` is `False`, the root will not be set to the latest hash, so the mapper can be used to open a new
+        Zarr on the IPLD datastore. Otherwise, `DatasetManager.latest_hash` will be used to get the latest hash (which
+        is stored in the STAC at the IPNS key for the dataset).
 
         Parameters
         ----------
         set_root : bool
             Return a mapper rooted at the dataset's latest hash if `True`, otherwise return a new mapper.
         refresh : bool
-            Force getting a new mapper by checking the latest IPNS hash. Without this set, the mapper will only be set the first time this
-            function is called.
+            Force getting a new mapper by checking the latest IPNS hash. Without this set, the mapper will only be set
+            the first time this function is called.
         **kwargs
             Arbitrary keyword args supported for compatibility with S3 and Local.
 
@@ -330,7 +337,6 @@ class IPLD(StoreInterface):
         else:
             return f"/ipfs/{self.dm.latest_hash()}"
 
-
     @property
     def path(self) -> str | None:
         """
@@ -347,7 +353,6 @@ class IPLD(StoreInterface):
         else:
             return f"/ipfs/{self.dm.latest_hash()}"
 
-
     @property
     def has_existing(self) -> bool:
         """
@@ -363,19 +368,21 @@ class Local(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on the local filesystem.
 
-    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used automatically under normal conditions, 
-    although it can be overriden by passing the `custom_output_path` parameter to the relevant DatasetManager
+    The path of the Zarr is assumed to be the return value of `Local.dm.output_path`. That is the path used
+    automatically under normal conditions, although it can be overriden by passing the `custom_output_path` parameter
+    to the relevant DatasetManager
     """
 
     def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
         """
-        Get an `fsspec.implementations.local.LocalFileSystem` object. By default, the filesystem is only created once, the first time this function is
-        called. To force it create a new one, set `refresh` to `True`.
+        Get an `fsspec.implementations.local.LocalFileSystem` object. By default, the filesystem is only created once,
+        the first time this function is called. To force it create a new one, set `refresh` to `True`.
 
         Parameters
         ----------
         refresh : bool
-            If set to `True`, a new `fsspec.implementations.local.LocalFileSystem` will be created even if this object has one already
+            If set to `True`, a new `fsspec.implementations.local.LocalFileSystem` will be created even if this object
+            has one already
 
         Returns
         -------
@@ -452,15 +459,8 @@ class Local(StoreInterface):
         metadata_path = self.get_metadata_path(title, stac_type)
         if pathlib.Path.exists(metadata_path):
             # Generate history file
-            old_mod_time = datetime.datetime.fromtimestamp(
-                metadata_path.stat().st_mtime
-            )
-            history_path = (
-                pathlib.Path()
-                / "history"
-                / title
-                / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
-            )
+            old_mod_time = datetime.datetime.fromtimestamp(metadata_path.stat().st_mtime)
+            history_path = pathlib.Path() / "history" / title / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
             history_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy(metadata_path, history_path)
 
