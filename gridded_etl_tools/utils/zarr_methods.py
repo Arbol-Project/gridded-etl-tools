@@ -577,15 +577,15 @@ class Publish(Transform, Metadata):
         else:
             # Don't use update-in-progress metadata flag on IPLD
             if not isinstance(self.store, IPLD):
-                # Create an empty dataset that will be used to just write the metadata (there's probably a better way to do
-                # this? compute=False or zarr.consolidate_metadata?).
+                # Create an empty dataset that will be used to just write the metadata
+                # (there's probably a better way to dothis? compute=False or zarr.consolidate_metadata?).
                 dataset.attrs["update_in_progress"] = True
                 empty_dataset = dataset
                 for coord in chain(dataset.coords, dataset.data_vars):
                     empty_dataset = empty_dataset.drop(coord)
                 # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the
-                # metadata before starting the real write. Note that update_is_append_only is also written here because it
-                # was set outside of to_zarr.
+                # metadata before starting the real write.
+                # Note that update_is_append_only is also written here because it was set outside of to_zarr.
                 if self.store.has_existing:
                     self.info("Pre-writing metadata to indicate an update is in progress")
                     empty_dataset.to_zarr(self.store.mapper(refresh=True), append_dim=self.time_dim)
