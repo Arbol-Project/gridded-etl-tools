@@ -1102,7 +1102,7 @@ class Publish(Transform, Metadata):
         for time in times[1:]:
         # Warn if not using expected delta
             if self.irregular_update_cadence():
-                self.warn(f"Because dataset has irregular cadence {self.irregular_update_cadence} expected delta {expected_delta} is not being used for checking time contiguity")
+                self.warn(f"Because dataset has irregular cadence {self.irregular_update_cadence()} expected delta {expected_delta} is not being used for checking time contiguity")
                 if not self.irregular_update_cadence()[0] <= (time - previous_time) <= self.irregular_update_cadence()[1]:
                     self.warn(f"Time value {time} and previous time {previous_time} do not fit within anticipated update cadence {self.irregular_update_cadence()}")
                     return False
