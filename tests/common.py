@@ -126,14 +126,14 @@ original_json_key = DatasetManager.json_key
 
 
 def patched_json_key(self):
-    return f"{self.name()}-{self.temporal_resolution()}_test_initial"
+    return f"{self.dataset_name}-{self.temporal_resolution()}_test_initial"
 
 
 original_zarr_json_path = DatasetManager.zarr_json_path
 
 
 def patched_zarr_json_path(self):
-    return pathlib.Path(".") / f"{self.name()}_zarr.json"
+    return pathlib.Path(".") / f"{self.dataset_name}_zarr.json"
 
 
 original_root_stac_catalog = DatasetManager.default_root_stac_catalog

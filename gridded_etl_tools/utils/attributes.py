@@ -1,6 +1,30 @@
-import numpy as np
 from abc import ABC, abstractmethod
+import warnings
+
+import deprecation
+import numpy as np
+
 from .store import StoreInterface, Local
+
+_NO_FALLBACK = object()
+
+
+class abstract_class_property(property):
+    def __init__(self, fallback=None):
+        self.fallback = fallback
+
+    def __get__(self, obj, cls):
+        if self.fallback is not None:
+            fallback = getattr(cls, self.fallback, None)
+            if fallback is not None:
+                warnings.warn(
+                    f"{cls.__name__}.{self.fallback}() is deprecated. Use {cls.__name__}.{self.name}.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                return fallback()
+
+        raise TypeError(f"No value in {cls.__name__} for abstract class attribute {self.name}")
 
 
 class Attributes(ABC):
@@ -9,6 +33,39 @@ class Attributes(ABC):
     These can be overriden in the ETL managers for a given ETL as needed
     """
 
+    def __init_subclass__(cls, **kwargs):
+        """Setup for abstract class properties."""
+        super().__init_subclass__(**kwargs)
+        for name, obj in list(cls.__dict__.items()):
+            if isinstance(obj, abstract_class_property):
+                # Tell property its own name
+                obj.name = name
+
+    @classmethod
+    def _check_abstract_class_properties(cls):
+        """Check that a subclass has provided concrete values for all required abstract class properties."""
+        for superclass in cls.mro():
+            for name, obj in superclass.__dict__.items():
+                if isinstance(obj, abstract_class_property):
+                    getattr(cls, name)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._check_abstract_class_properties()
+
+    @classmethod
+    def _find_fallback(cls, attr):
+        # There would have to be a class with an empty mro for branch coverage to be happy
+        for superclass in cls.mro():  # pragma NO BRANCH
+            value = superclass.__dict__.get(attr, _NO_FALLBACK)
+            if value is not _NO_FALLBACK:
+                if isinstance(value, abstract_class_property):
+                    break
+
+                return value
+
+        raise TypeError(f"No value in {cls.__name__} for abstract class attribute {attr}")
+
     @classmethod
     def host_organization(self) -> str:
         """
@@ -16,18 +73,15 @@ class Attributes(ABC):
         """
         return ""  # e.g. "Arbol"
 
+    dataset_name = abstract_class_property(fallback="name")
+    """
+    The name of each ETL is built recursively by appending each child class name to the inherited name
+    """
+
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the dataset_name attribute")
     def name(cls) -> str:
-        """
-        The name of each ETL is built recursively by appending each child class name to the inherited name
-
-        Returns
-        -------
-        str
-           Name of dataset
-
-        """
+        return cls._find_fallback("dataset_name")
 
     @classmethod
     @abstractmethod
@@ -240,3 +294,7 @@ class Attributes(ABC):
             self._store = value
         else:
             raise ValueError(f"Store must be an instance of {StoreInterface}")
+
+
+# Won't get called automatically, because Attributes isn't a subclass of itself
+Attributes.__init_subclass__()

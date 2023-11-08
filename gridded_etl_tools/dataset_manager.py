@@ -225,7 +225,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         str
             The name of the dataset
         """
-        return self.name()
+        return self.dataset_name
 
     @deprecation.deprecated(details="Compare Dataset types directly")
     def __eq__(self, other: DatasetManager) -> bool:
@@ -238,7 +238,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             If the other `DatasetManager` instance has the same name, return `True`
         """
         if isinstance(other, type(self)):
-            return self.name() == other.name()
+            return self.dataset_name == other.dataset_name
 
         return False
 
@@ -339,7 +339,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if source.name() == name:
+            if source.dataset_name == name:
                 return source
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")

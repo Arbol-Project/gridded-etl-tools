@@ -35,14 +35,14 @@ class Metadata(Convenience, IPFS):
         return {
             "stac_version": "1.0.0",
             "type": "Feature",
-            "id": cls.name(),
+            "id": cls.dataset_name,
             "collection": cls.collection(),
             "links": [],
             "assets": {
                 "zmetadata": {
-                    "title": cls.name(),
+                    "title": cls.dataset_name,
                     "type": "application/json",
-                    "description": f"Consolidated metadata file for {cls.name()} Zarr store, readable as a Zarr "
+                    "description": f"Consolidated metadata file for {cls.dataset_name} Zarr store, readable as a Zarr "
                     "dataset by Xarray",
                     "roles": ["metadata", "zarr-consolidated-metadata"],
                 }
@@ -453,7 +453,7 @@ class Metadata(Convenience, IPFS):
                 "rel": "self",
                 "href": str(href),
                 "type": "application/geo+json",
-                "title": f"{self.name()} metadata",
+                "title": f"{self.dataset_name} metadata",
             }
         )
         # push final STAC Item to backing store
