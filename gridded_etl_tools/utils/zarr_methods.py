@@ -512,6 +512,8 @@ class Publish(Transform, Metadata):
         if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
+        self.post_parse_quality_check()
+
         return True
 
     def publish_metadata(self):
@@ -560,7 +562,7 @@ class Publish(Transform, Metadata):
             Keyword arguments to forward to `xr.Dataset.to_zarr`
         """
         # First check that the data makes sense
-        self.parse_quality_check(dataset)
+        self.pre_parse_quality_check(dataset)
 
         # Exit script if dry_run specified
         if self.dry_run:
@@ -1041,7 +1043,7 @@ class Publish(Transform, Metadata):
 
     # CHECKS
 
-    def parse_quality_check(self, dataset: xr.Dataset):
+    def pre_parse_quality_check(self, dataset: xr.Dataset):
         """
         Function containing quality checks applicable to all datasets we parse, initial or update
         Intended to be run on a dataset prior to parsing.
@@ -1062,6 +1064,24 @@ class Publish(Transform, Metadata):
             expected_delta = times[1] - times[0]
             if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise ValueError("Dataset does not contain contiguous time data")
+
+        # Check 100 values for NAs and extreme values
+        random_vals = {}
+        for i in range(100):
+            random_coords = self.get_random_coords(dataset)
+            random_val = dataset[self.data_var()].sel(**random_coords).values
+            # Check NaNs
+            if np.isnan(random_val):
+                raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
+            # Check extreme values if they are defined
+            unit = dataset[self.data_var()].units
+            if unit in self.extreme_values_by_unit.keys():
+                limit_vals = self.extreme_values_by_unit[unit]
+                if not limit_vals[0] <= random_val <= limit_vals[1]:
+                    raise ValueError(f"Value {random_val} falls outside acceptable range {limit_vals} for data in units {unit}. Found at {random_coords}")
+            # Build a dictionary of checked values to compare against after parsing
+            random_vals.update({ i : {random_coords : random_val}})
+
 
     def update_quality_check(self,
                              original_dataset: xr.Dataset,
@@ -1141,3 +1161,10 @@ class Publish(Transform, Metadata):
             previous_time = instant
         # Return True if no problems found
         return True
+
+    def post_parse_quality_check(self):
+        """
+        Run tests of dataset quality on the recently parsed dataset
+        """
+        ## Test 1 -- Values vs. raw data?
+        ## Test 2 -- API Retrieval Check

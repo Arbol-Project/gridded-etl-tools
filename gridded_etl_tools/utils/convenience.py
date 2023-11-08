@@ -7,10 +7,13 @@ import re
 import ftplib
 import io
 import json
+import random
 
 import pandas as pd
 import numpy as np
 import xarray as xr
+
+from typing import Any
 
 from .attributes import Attributes
 from .store import IPLD
@@ -632,4 +635,30 @@ class Convenience(Attributes):
             cls.SPAN_MONTHLY: np.timedelta64(1, "M"),
             cls.SPAN_YEARLY: np.timedelta64(1, "Y"),
         }
-        return span_to_td[cls.temporal_resolution()]
+        return span_to_td
+
+    def get_random_coords(self, dataset: xr.Dataset) -> dict[str, Any]:
+        """
+        Derive a dictionary of random coordinates, one for each coordinate in the input dataset
+
+        Parameters
+        ----------
+        dataset
+            An Xarray dataset
+        """
+        coords_dict = {}
+        for coord in dataset.coords():
+            coords_dict.update({coord : random.choice(dataset[coord].values)})
+        return coords_dict
+    
+    @property
+    def extreme_values_by_unit(self):
+        """
+        Define minimum and maximum permissible values for common units
+        """
+        units_dict = {
+            "C" : (-100, 60),
+            "K" : (263.15, 333.15),
+            "F" : (-148, 140)
+        }
+        return units_dict
