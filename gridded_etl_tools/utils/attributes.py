@@ -1,11 +1,9 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 import typing
 import warnings
 
 import deprecation
 import numpy as np
-
-from .store import StoreInterface, Local
 
 _NO_FALLBACK = object()
 
@@ -175,7 +173,7 @@ class Attributes(ABC):
     def missing_value_indicator(cls) -> str:
         return cls.missing_value
 
-    tags: list[str] == [""]
+    tags: list[str] = [""]
     """
     Tags for dataset.
     """

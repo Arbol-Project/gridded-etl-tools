@@ -1,6 +1,6 @@
 import pytest
 
-from gridded_etl_tools.utils import attributes, store
+from gridded_etl_tools.utils import attributes
 
 
 class TestAttributes:
