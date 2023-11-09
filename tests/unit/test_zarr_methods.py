@@ -1,12 +1,16 @@
 import os
 import json
+import pytest
+import random
+import copy
 
 import pandas as pd
 import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_irregular_update_cadence
+from ..common import get_manager, patched_irregular_update_cadence, patched_extreme_values_by_unit
+from .conftest import fake_original_dataset, DummyManager
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
@@ -81,6 +85,73 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     assert modified_fill_value == -8888
 
 
+def test_calculate_update_time_ranges(
+    manager_class: DatasetManager,
+    fake_original_dataset: xr.Dataset,
+    fake_complex_update_dataset: xr.Dataset,
+):
+    """
+    Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated
+    """
+    # prepare a dataset manager
+    dm = get_manager(manager_class)
+    dm.set_key_dims()
+    datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
+        fake_original_dataset, fake_complex_update_dataset
+    )
+    # Test that 7 distinct updates -- 6 inserts and 1 append -- have been prepared
+    assert len(regions_indices) == 7
+    # Test that all of the updates are of the expected sizes
+    insert_range_sizes = []
+    for region in regions_indices:
+        index_range = region[1] - region[0]
+        insert_range_sizes.append(index_range)
+    assert insert_range_sizes == [1, 8, 1, 1, 12, 1, 1]
+    # Test that the append is of the expected size
+    append_update = datetime_ranges[-1]
+    append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
+    assert append_size == np.timedelta64(35, "D")
+
+def test_parse_quality_check(
+        mocker,
+        manager_class: DatasetManager,
+        fake_original_dataset: xr.Dataset
+):
+    """
+    Test that the pre-parse quality check method waves through good data
+    and fails as anticipated with bad data of specific types
+    """
+    # prepare a dataset manager
+    dm = DummyManager()
+    fake_original_dataset.data.attrs["units"] = 'cubits'
+    # Test that a dataset with out-of-order times fails
+    out_of_order_ds = fake_original_dataset.copy()
+    out_of_order_ds = out_of_order_ds.assign_coords({"time" : np.roll(out_of_order_ds.time.values, 1)})
+    with pytest.raises(IndexError):
+        dm.pre_parse_quality_check(out_of_order_ds)
+    # Test that a dataset with extreme values fails
+    mocker.patch(
+        "gridded_etl_tools.utils.convenience.Convenience.extreme_values_by_unit", return_value={"cubits" : (-500, 500)}, new_callable=mocker.PropertyMock
+    )
+    extreme_vals_ds = copy.deepcopy(fake_original_dataset)
+    extreme_vals_ds.data.values[:] = 1_000_000
+    with pytest.raises(ValueError):
+        dm.pre_parse_quality_check(extreme_vals_ds)
+    # Test that a dataset with NaN values fails
+    nan_vals_ds = copy.deepcopy(fake_original_dataset)
+    nan_vals_ds.data.values[:] = np.nan
+    with pytest.raises(ValueError):
+        dm.pre_parse_quality_check(nan_vals_ds)
+    # Test that a parse fails on mismatched data var encoding
+    mocker.patch(
+        "gridded_etl_tools.utils.attributes.Attributes.data_var_dtype", return_value='<f4'
+    )
+    fake_original_dataset["data"] = fake_original_dataset["data"].astype('<f8')
+    with pytest.raises(TypeError):
+        dm.pre_parse_quality_check(fake_original_dataset)
+
+
+
 def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     """
     Test that the check for non-contiguous times successfully catches bad times
@@ -118,30 +189,3 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
     assert not dm.are_times_in_expected_order(five_day_updates, expected_delta=expected_delta)
 
-
-def test_calculate_update_time_ranges(
-    manager_class: DatasetManager,
-    fake_original_dataset: xr.Dataset,
-    fake_complex_update_dataset: xr.Dataset,
-):
-    """
-    Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated
-    """
-    # prepare a dataset manager
-    dm = get_manager(manager_class)
-    dm.set_key_dims()
-    datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
-        fake_original_dataset, fake_complex_update_dataset
-    )
-    # Test that 7 distinct updates -- 6 inserts and 1 append -- have been prepared
-    assert len(regions_indices) == 7
-    # Test that all of the updates are of the expected sizes
-    insert_range_sizes = []
-    for region in regions_indices:
-        index_range = region[1] - region[0]
-        insert_range_sizes.append(index_range)
-    assert insert_range_sizes == [1, 8, 1, 1, 12, 1, 1]
-    # Test that the append is of the expected size
-    append_update = datetime_ranges[-1]
-    append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
-    assert append_size == np.timedelta64(35, "D")
