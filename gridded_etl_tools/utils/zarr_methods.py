@@ -1055,7 +1055,9 @@ class Publish(Transform, Metadata):
         original_dataset : xr.Dataset
             The final dataset to be parsed
         """
-        # Aggressively assert that the time dimension of the data is in the anticipated order. Only valid if the dataset's time dimension is longer than 1 element
+        # TIME CHECK
+        # Aggressively assert that the time dimension of the data is in the anticipated order. 
+        # Only valid if the dataset's time dimension is longer than 1 element
         # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
         # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
         times = dataset[self.time_dim].values
@@ -1063,8 +1065,9 @@ class Publish(Transform, Metadata):
             # Check is only valid if we have 2 or more values with which to calculate the delta
             expected_delta = times[1] - times[0]
             if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
-                raise ValueError("Dataset does not contain contiguous time data")
+                raise IndexError("Dataset does not contain contiguous time data")
 
+        # VALUES CHECK
         # Check 100 values for NAs and extreme values
         random_vals = {}
         for i in range(100):
@@ -1080,8 +1083,12 @@ class Publish(Transform, Metadata):
                 if not limit_vals[0] <= random_val <= limit_vals[1]:
                     raise ValueError(f"Value {random_val} falls outside acceptable range {limit_vals} for data in units {unit}. Found at {random_coords}")
             # Build a dictionary of checked values to compare against after parsing
-            random_vals.update({ i : {random_coords : random_val}})
+            random_vals.update({ i : {random_coords : random_val} })
 
+        # ENCODING CHECK
+        # Check that data is stored in a space efficient format
+        if not dataset[self.data_var()].dtype == self.data_var_dtype:
+            raise TypeError(f"Dtype for data variable {self.data_var()} is {dataset[self.data_var()].dtype} when it should be {dataset[self.data_var()].dtype}")
 
     def update_quality_check(self,
                              original_dataset: xr.Dataset,
@@ -1104,15 +1111,16 @@ class Publish(Transform, Metadata):
             Datetimes corresponding to all new records to append to the original dataset
         """
         # Check that the first value of the append times and the last value of the original dataset are contiguous
-        if append_times:
+        # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
+        if append_times and len(original_dataset[self.time_dim]) > 1:
             original_append_bridge_times = [original_dataset[self.time_dim].values[-1], append_times[0]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
             # Check these two values against the expected delta. All append times will be checked later in the stand
             if not self.are_times_in_expected_order(times=original_append_bridge_times, expected_delta=expected_delta):
-                raise ValueError("Append would create out of order or incomplete dataset, aborting")
-        # Raise an exception if there is no writable data
+                raise IndexError("Append would create out of order or incomplete dataset, aborting")
+        # Raise an exception if there is no data to write
         if not any(insert_times) and not any(append_times):
-            raise ValueError("Update started with no new records to insert or append to original zarr.")
+            raise IndexError("Update started with no new records to insert or append to original zarr.")
 
     def are_times_in_expected_order(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
