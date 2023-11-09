@@ -1083,12 +1083,12 @@ class Publish(Transform, Metadata):
                 if not limit_vals[0] <= random_val <= limit_vals[1]:
                     raise ValueError(f"Value {random_val} falls outside acceptable range {limit_vals} for data in units {unit}. Found at {random_coords}")
             # Build a dictionary of checked values to compare against after parsing
-            random_vals.update({ i : {random_coords : random_val} })
+            random_vals.update({ i : {"coords" : random_coords, "value" : random_val} })
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
         if not dataset[self.data_var()].dtype == self.data_var_dtype:
-            raise TypeError(f"Dtype for data variable {self.data_var()} is {dataset[self.data_var()].dtype} when it should be {dataset[self.data_var()].dtype}")
+            raise TypeError(f"Dtype for data variable {self.data_var()} is {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}")
 
     def update_quality_check(self,
                              original_dataset: xr.Dataset,

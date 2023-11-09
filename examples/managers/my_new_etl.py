@@ -330,6 +330,7 @@ class MyNewETLTempMin(MyNewETLTemp):
     def relative_path(self) -> pathlib.Path:
         return super().relative_path() / "min"
 
+    @classmethod
     def data_var(self) -> str:
         """
         Name of the column in the original data

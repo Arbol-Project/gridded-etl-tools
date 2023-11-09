@@ -69,6 +69,11 @@ class Attributes(ABC):
         other relevant dimension
         """
 
+    @classmethod
+    @abstractmethod
+    def data_var(self) -> str:
+        """Name of the relevant data variable in the original dataset"""
+
     @property
     def data_var_dtype(self) -> str:
         """
