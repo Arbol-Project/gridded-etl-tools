@@ -58,11 +58,6 @@ def noop(*args, **kwargs):
 
 
 class DummyManagerBase(dataset_manager.DatasetManager):
-    collection = unimplemented
-    concat_dims = unimplemented
-    identical_dims = unimplemented
-    remote_protocol = unimplemented
-
     prepare_input_files = noop
 
     unit_of_measurement = "parsecs"
@@ -84,11 +79,6 @@ class DummyManagerBase(dataset_manager.DatasetManager):
     def data_var(self):
         return "data"
 
-    @classmethod
-    def temporal_resolution(cls) -> str:
-        """Increment size along the "time" coordinate axis"""
-        return cls.SPAN_DAILY
-
     def extract(self, date_range=None):
         return super().extract(date_range=date_range)
 
@@ -102,7 +92,12 @@ class DummyManagerBase(dataset_manager.DatasetManager):
 
 
 class DummyManager(DummyManagerBase):
+    concat_dimensions = ["z", "zz"]
     dataset_name = "DummyManager"
+    collection_name = "Vintage Guitars"
+    identical_dimensions = ["x", "y"]
+    protocol = "handshake"
+    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
 
 
 # Set up overcomplicated mro for testing get_subclass(es)

@@ -1,6 +1,6 @@
 import pytest
 
-from gridded_etl_tools.utils import attributes
+from gridded_etl_tools.utils import attributes, store
 
 
 class TestAttributes:
@@ -87,3 +87,38 @@ class TestAttributes:
         with pytest.deprecated_call():
             with pytest.raises(TypeError):
                 base_class.name()
+
+    @staticmethod
+    def test_collection(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.collection() == "Vintage Guitars"
+
+    @staticmethod
+    def test_remote_protocol(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.remote_protocol() == "handshake"
+
+    @staticmethod
+    def test_identical_dims(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.identical_dims() == ["x", "y"]
+
+    @staticmethod
+    def test_concat_dims(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.concat_dims() == ["z", "zz"]
+
+    @staticmethod
+    def test_temporal_resolution(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.temporal_resolution() == "daily"
+
+    @staticmethod
+    def test_missing_value_indicator(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.missing_value_indicator() == ""
+
+    @staticmethod
+    def test_irregular_update_cadence(manager_class):
+        with pytest.deprecated_call():
+            assert manager_class.irregular_update_cadence() is None

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import typing
 import warnings
 
 import deprecation
@@ -83,217 +84,148 @@ class Attributes(ABC):
     def name(cls) -> str:
         return cls._find_fallback("dataset_name")
 
+    collection_name = abstract_class_property(fallback="collection")
+    """
+    Name of the collection
+    """
+
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the collection_name attribute")
     def collection(cls):
-        """'
-        Placeholder class for collection name
-        """
+        return cls._find_fallback("collection_name")
 
-    @property
-    def file_type(cls):
-        """
-        Class method to populate with a string representing the file type of each child class (and edition if
-        relevant), e.g. GRIB1 for ERA5 data, GRIB2 for RTMA, or NetCDF for Copernicus Marine Service
+    file_type = None
+    """
+    The file type of each child class (and edition if relevant), e.g. GRIB1 for ERA5 data, GRIB2 for RTMA, or NetCDF
+    for Copernicus Marine Service
 
-        Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
-        """
+    Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
+    """
+
+    protocol: str = abstract_class_property(fallback="remote_protocol")
+    """
+    Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+    for S3, etc. See fsspec docs for more details.
+    """
 
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the protocol attribute")
     def remote_protocol(cls):
-        """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
-        for S3, etc. See fsspec docs for more details.
-        """
+        return cls._find_fallback("protocol")
+
+    identical_dimensions = abstract_class_property(fallback="identical_dims")
+    """
+    List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
+    read these dimensions only one time, from the first input file
+    """
 
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the identical_dimensions attribute")
     def identical_dims(cls):
-        """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
-        read these dimensions only one time, from the first input file
-        """
+        return cls._find_fallback("identical_dimensions")
+
+    concat_dimensions = abstract_class_property(fallback="concat_dims")
+    """
+    List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
+    other relevant dimension
+    """
 
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the concat_dimensions attribute")
     def concat_dims(cls):
-        """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
-        other relevant dimension
-        """
+        return cls._find_fallback("concat_dimensions")
 
-    @property
-    def data_var_dtype(self) -> str:
-        """
-        Property specifying the data type of the data variable
+    data_var_dtype: float = "<f4"
+    """
+    The data type of the data variable
+    """
 
-        Returns
-        -------
-        str
-            The final data type of the dataset's data variable
-        """
-        return "<f4"
+    spatial_resolution: typing.Optional[float] = None
+    """
+    The spatial resolution of a dataset in decimal degrees
+    """
 
-    def spatial_resolution(self) -> float:
-        """
-        Property specifying the spatial resolution of a dataset in decimal degrees
+    spatial_precision: typing.Optional[float] = None
+    """
+    The spatial resolution of a dataset in decimal degrees
+    """
 
-        Returns
-        -------
-        float
-            The spatial resolution of a dataset
-        """
-
-    def spatial_precision(self) -> float:
-        """
-        Property specifying the spatial resolution of a dataset in decimal degrees
-
-        Returns
-        -------
-        float
-            The spatial resolution of a dataset
-        """
+    time_resolution: str = abstract_class_property(fallback="temporal_resolution")
+    """
+    The time resolution of the dataset as a string (e.g. "hourly", "daily", "monthly", etc.)
+    """
 
     @classmethod
-    @abstractmethod
+    @deprecation.deprecated("Use the time_resolution attribute")
     def temporal_resolution(cls) -> str:
-        """
-        Returns the time resolution of the dataset as a string (e.g. "hourly", "daily", "monthly", etc.)
+        return cls._find_fallback("time_resolution")
 
-        Returns
-        -------
-        str
-           Temporal resolution of the dataset
+    update_cadence: typing.Optional[str] = None
+    """
+    The frequency with which a dataset is updated.
+    """
 
-        """
-
-    @classmethod
-    def update_cadence(self) -> str:
-        """
-        Property specifying the frequency with which a dataset is updated
-        Optional class method, may just be specified directly in the static metadata
-
-        Returns
-        -------
-        str
-            The update frequency of a dataset
-        """
+    missing_value: str = ""
+    """
+    Indicator of a missing value in a dataset
+    """
 
     @classmethod
+    @deprecation.deprecated("Use the missing_value attribute")
     def missing_value_indicator(cls) -> str:
-        """
-        Default indicator of a missing value in a dataset
+        return cls.missing_value
 
-        Returns
-        -------
-        str
-           Stand-in for a missing value
+    tags: list[str] == [""]
+    """
+    Tags for dataset.
+    """
 
-        """
-        return ""
+    forecast: bool = False
+    """
+    ``True`` if the dataset provides forecast data.
+    """
 
-    @property
-    def tags(cls) -> list[str]:
-        """
-        Default tag for a dataset. Prevents crashes on parse if no tags assigned.
+    ensemble: bool = False
+    """
+    ``True`` if the dataset provides ensemble data.
+    """
 
-        Returns
-        -------
-        list[str]
-           Stand-in for a dataset's tags
+    hindcast: bool = False
+    """
+    ``True`` if the dataset privides hindcast data.
+    """
 
-        """
-        return [""]
+    forecast_hours: list[int] = []
+    """"
+    Hours provided by the forecast, if any.
+    """
 
-    @property
-    def forecast(self) -> bool:
-        """Forecast defaults to False, must override for actual forecast datasets"""
-        return False
+    ensemble_numbers: list[int] = []
+    """
+    Numbers uses for ensemble, if any.
+    """
 
-    @property
-    def ensemble(self) -> bool:
-        """Ensemble defaults to False, must override for actual ensemble datasets"""
-        return False
+    hindcast_steps: list[int] = []
+    """
+    Steps used for hindcast, if any.
+    """
 
-    @property
-    def hindcast(self) -> bool:
-        """Hindcast defaults to False, must override for actual hindcast datasets"""
-        return False
-
-    @property
-    def forecast_hours(self) -> list[int]:
-        """To be overwritten by actual forecast datasets"""
-        return list(None)
-
-    @property
-    def ensemble_numbers(self) -> list[int]:
-        """To be overwritten by actual ensemble datasets"""
-        return list(None)
-
-    @property
-    def hindcast_steps(self) -> list[int]:
-        """To be overwritten by actual hindcast datasets"""
-        return list(None)
+    update_cadence_bounds: typing.Optional[tuple[np.timedelta64, np.timedelta64]] = None
+    """G
+    If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable
+    updates. Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with
+    non-monotic update schedules.
+    """
 
     @classmethod
-    def irregular_update_cadence(self) -> None | tuple[np.timedelta64, np.timedelta64]:
-        """
-        If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of
-        acceptable updates Intended to prevent time contiguity checks from short-circuiting valid updates for datasets
-        with non-monotic update schedules
-        """
-        return None
+    @deprecation.deprecated("Use the update_cadence_bounds attribute")
+    def irregular_update_cadence(cls) -> None | tuple[np.timedelta64, np.timedelta64]:
+        return cls.update_cadence_bounds
 
-    @property
-    def bbox_rounding_value(self) -> int:
-        """
-        Value to round bbox values by. Specify within the dataset for very high resolution datasets
-        to prevent mismatches with rounding behavior of old Arbol API.
-
-        Returns
-        -------
-        int
-            The number of decimal places to round bounding box values to.
-        """
-        return 5
-
-    @property
-    def store(self) -> StoreInterface:
-        """
-        Get the store interface object for the store the output will be written to.
-
-        If it has not been previously set, a `etls.utils.store.Local` will be initialized and returned.
-
-        Returns
-        -------
-        StoreInterface
-            Object for interfacing with a Zarr's data store.
-        """
-        if not hasattr(self, "_store"):
-            self._store = Local(self)
-        return self._store
-
-    @store.setter
-    def store(self, value: StoreInterface):
-        """
-        Assign a `StoreInterface` to the store property. If the assigned value is not an instance of `StoreInterface`,
-        a `ValueError` will be raised.
-
-        Parameters
-        ----------
-        value
-            An instance of `StoreInterface`
-
-        Raises
-        ------
-        ValueError
-            Raised if anything other than a `StoreInterface` is passed.
-        """
-        if isinstance(value, StoreInterface):
-            self._store = value
-        else:
-            raise ValueError(f"Store must be an instance of {StoreInterface}")
+    bbox_rounding_value: int = 5
+    """
+    The number of decimal places to round bounding box values to.
+    """
 
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
