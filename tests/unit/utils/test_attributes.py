@@ -1,6 +1,6 @@
 import pytest
 
-from gridded_etl_tools.utils import attributes
+from gridded_etl_tools.utils import attributes, store
 
 
 class TestAttributes:
@@ -122,3 +122,17 @@ class TestAttributes:
     def test_irregular_update_cadence(manager_class):
         with pytest.deprecated_call():
             assert manager_class.irregular_update_cadence() is None
+
+    @staticmethod
+    def test_store_with_correct_type(manager_class):
+        dm = manager_class()
+        local_store = store.Local(dm)
+        dm.store = local_store
+        assert dm.store is local_store
+        assert dm.store.dm is dm
+
+    @staticmethod
+    def test_store_with_incorrect_type(manager_class):
+        dm = manager_class()
+        with pytest.raises(TypeError):
+            dm.store = "not a store"

@@ -5,6 +5,8 @@ import warnings
 import deprecation
 import numpy as np
 
+from gridded_etl_tools.utils.store import StoreInterface
+
 _NO_FALLBACK = object()
 
 
@@ -209,7 +211,7 @@ class Attributes(ABC):
     """
 
     update_cadence_bounds: typing.Optional[tuple[np.timedelta64, np.timedelta64]] = None
-    """G
+    """
     If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable
     updates. Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with
     non-monotic update schedules.
@@ -224,6 +226,21 @@ class Attributes(ABC):
     """
     The number of decimal places to round bounding box values to.
     """
+
+    @property
+    def store(self) -> StoreInterface:
+        """
+        The store where output is written to.
+        """
+        # The constructor has called the setter, so we don't need to check for the presence of the attribute.
+        return self._store
+
+    @store.setter
+    def store(self, new_store):
+        if not isinstance(new_store, StoreInterface):
+            raise TypeError("Expected instance of StoreInterface, got {type(new_store)}")
+
+        self._store = new_store
 
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
