@@ -28,6 +28,14 @@ class abstract_class_property(property):
         raise TypeError(f"No value in {cls.__name__} for abstract class attribute {self.name}")
 
 
+class readonly_property:
+    def __init__(self, value):
+        self.value = value
+
+    def __get__(self, obj, cls):
+        return self.value
+
+
 class Attributes(ABC):
     """
     Abstract base class containing default attributes of Zarr ETLs
@@ -67,12 +75,15 @@ class Attributes(ABC):
 
         raise TypeError(f"No value in {cls.__name__} for abstract class attribute {attr}")
 
+    organization: str = readonly_property("")  # e.g. "Arbol"
+    """
+    Name of the organization (your organization) hosting the data being published. Used in STAC metadata.
+    """
+
     @classmethod
+    @deprecation.deprecated("Use the organization attribute")
     def host_organization(self) -> str:
-        """
-        Name of the organization (your organization) hosting the data being published. Used in STAC metadata.
-        """
-        return ""  # e.g. "Arbol"
+        return self.organization
 
     dataset_name = abstract_class_property(fallback="name")
     """
