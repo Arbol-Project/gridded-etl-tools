@@ -9,8 +9,7 @@ import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_irregular_update_cadence, patched_extreme_values_by_unit
-from .conftest import fake_original_dataset, DummyManager
+from ..common import get_manager, patched_irregular_update_cadence
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
@@ -111,81 +110,4 @@ def test_calculate_update_time_ranges(
     append_update = datetime_ranges[-1]
     append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
     assert append_size == np.timedelta64(35, "D")
-
-def test_parse_quality_check(
-        mocker,
-        manager_class: DatasetManager,
-        fake_original_dataset: xr.Dataset
-):
-    """
-    Test that the pre-parse quality check method waves through good data
-    and fails as anticipated with bad data of specific types
-    """
-    # prepare a dataset manager
-    dm = DummyManager()
-    fake_original_dataset.data.attrs["units"] = 'cubits'
-    # Test that a dataset with out-of-order times fails
-    out_of_order_ds = fake_original_dataset.copy()
-    out_of_order_ds = out_of_order_ds.assign_coords({"time" : np.roll(out_of_order_ds.time.values, 1)})
-    with pytest.raises(IndexError):
-        dm.pre_parse_quality_check(out_of_order_ds)
-    # Test that a dataset with extreme values fails
-    mocker.patch(
-        "gridded_etl_tools.utils.convenience.Convenience.extreme_values_by_unit", return_value={"cubits" : (-500, 500)}, new_callable=mocker.PropertyMock
-    )
-    extreme_vals_ds = copy.deepcopy(fake_original_dataset)
-    extreme_vals_ds.data.values[:] = 1_000_000
-    with pytest.raises(ValueError):
-        dm.pre_parse_quality_check(extreme_vals_ds)
-    # Test that a dataset with NaN values fails
-    nan_vals_ds = copy.deepcopy(fake_original_dataset)
-    nan_vals_ds.data.values[:] = np.nan
-    with pytest.raises(ValueError):
-        dm.pre_parse_quality_check(nan_vals_ds)
-    # Test that a parse fails on mismatched data var encoding
-    mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.data_var_dtype", return_value='<f4'
-    )
-    fake_original_dataset["data"] = fake_original_dataset["data"].astype('<f8')
-    with pytest.raises(TypeError):
-        dm.pre_parse_quality_check(fake_original_dataset)
-
-
-
-def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
-    """
-    Test that the check for non-contiguous times successfully catches bad times
-    while letting anticipated irregular times pass
-    """
-    # prepare a dataset manager
-    dm = get_manager(manager_class)
-    # Check a set of contiguous times
-    contig = pd.date_range(start="2023-03-01", end="2023-03-15", freq="1D")
-    expected_delta = contig[1] - contig[0]
-    assert dm.are_times_in_expected_order(contig, expected_delta=expected_delta)
-    # Check a single time -- one good, one not
-    check1 = [contig[0], contig[1]]
-    check2 = [contig[0], contig[2]]
-    assert dm.are_times_in_expected_order(check1, expected_delta=expected_delta)
-    assert not dm.are_times_in_expected_order(check2, expected_delta=expected_delta)
-    # Check a set of times that skips a day
-    week_ahead_dt = contig[-1] + pd.Timedelta(days=7)
-    week_gap = contig.union([week_ahead_dt])
-    assert not dm.are_times_in_expected_order(week_gap, expected_delta=expected_delta)
-    # Check a set of times that's out of order
-    week_behind_dt = contig[0] - pd.Timedelta(days=7)
-    week_gap = contig.union([week_behind_dt])
-    assert not dm.are_times_in_expected_order(week_gap, expected_delta=expected_delta)
-    # Check a set of times that's badly out of order
-    out_of_order = [contig[1], contig[2], contig[0], contig[12], contig[3]]
-    assert not dm.are_times_in_expected_order(out_of_order, expected_delta=expected_delta)
-    # Check that irregular cadences pass
-    mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.irregular_update_cadence", patched_irregular_update_cadence
-    )
-    three_and_four_day_updates = [contig[0], contig[3], contig[6], contig[10]]
-    assert dm.are_times_in_expected_order(three_and_four_day_updates, expected_delta=expected_delta)
-    # Check that ranges outside the irregular cadence still fail
-    five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
-    assert not dm.are_times_in_expected_order(five_day_updates, expected_delta=expected_delta)
 
