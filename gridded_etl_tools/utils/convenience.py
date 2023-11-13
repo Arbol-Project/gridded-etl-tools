@@ -655,7 +655,7 @@ class Convenience(Attributes):
         for dim in dataset.dims:
             coords_dict.update({dim : random.choice(dataset[dim].values)})
         return coords_dict
-    
+
     @property
     def extreme_values_by_unit(self):
         """
