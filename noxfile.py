@@ -40,7 +40,7 @@ def cover(session):
 def lint(session):
     session.install("black", "flake8")
     run_black(session, check=True)
-    session.run("flake8", CODE, "tests")
+    session.run("flake8", CODE, "tests", "examples")
 
 
 @nox.session(py=DEFAULT_INTERPRETER)
@@ -70,7 +70,7 @@ def run_black(session, check=False):
     args = ["black"]
     if check:
         args.append("--check")
-    args.extend(["noxfile.py", CODE, "tests"])
+    args.extend(["noxfile.py", CODE, "tests", "examples"])
     session.run(*args)
 
 

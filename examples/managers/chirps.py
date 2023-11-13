@@ -1,6 +1,6 @@
-##### CHIRPS_Zarr.py
-#
-# Classes for managing CHIRPS global, gridded precipitation data
+"""
+Classes for managing CHIRPS global, gridded precipitation data
+"""
 
 import glob
 import datetime
@@ -13,17 +13,20 @@ from gridded_etl_tools.dataset_manager import DatasetManager
 
 class CHIRPS(DatasetManager):
     """
-    The base class for any CHIRPS set using Arbol's data architecture. It is a superclass of both CHIRPS Final
-    (monthly updates of .05 and .25 resolution from 1981) and CHIRPS Prelim (weekly updates of 0.05 resolution, from 2016 to present).
+    The base class for any CHIRPS set using Arbol's data architecture. It is a superclass of both CHIRPS Final (monthly
+    updates of .05 and .25 resolution from 1981) and CHIRPS Prelim (weekly updates of 0.05 resolution, from 2016 to
+    present).
     """
+
     def __init__(
-            self, *args,
-            # 0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
-            requested_dask_chunks = {"time": 200, "latitude": 25, "longitude": -1},  # 144 MB
-            requested_zarr_chunks = {"time": 200, "latitude": 25, "longitude": 50},  # 1 MB
-            requested_ipfs_chunker = "size-5000",
-            **kwargs
-            ):
+        self,
+        *args,
+        # 0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
+        requested_dask_chunks={"time": 200, "latitude": 25, "longitude": -1},  # 144 MB
+        requested_zarr_chunks={"time": 200, "latitude": 25, "longitude": 50},  # 1 MB
+        requested_ipfs_chunker="size-5000",
+        **kwargs,
+    ):
         """
         Initialize a new CHIRPS object with appropriate chunking parameters.
 
@@ -36,8 +39,8 @@ class CHIRPS(DatasetManager):
     def static_metadata(self):
         """
         Dict containing static fields in the metadata. These will be populated into STAC metadata and Zarr metadata.
-        Fields that are static should be manually specified here.
-        Fields that change per child class should be defined as properties or class methods under the relevant child class
+        Fields that are static should be manually specified here. Fields that change per child class should be defined
+        as properties or class methods under the relevant child class
         """
         static_metadata = {
             "coordinate reference system": "EPSG:4326",
@@ -49,31 +52,32 @@ class CHIRPS(DatasetManager):
             "data download url": self.dataset_download_url,
             "publisher": "Climate Hazards Group, University of California at Santa Barbara",
             "title": "CHIRPS Version 2.0",
-            "provider description": "The Climate Hazards Center is an alliance of multidisciplinary scientists and food security analysts"
-                                    " utilizing climate and crop models, satellite-based earth observations, and socioeconomic data sets to"
-                                    " predict and monitor droughts and food shortages among the world's most vulnerable populations. Through"
-                                    " partnerships with USAID, USGS, and FEWS NET, the CHC provides early warning to save lives and secure livelihoods.",
+            "provider description": "The Climate Hazards Center is an alliance of multidisciplinary scientists and "
+            "food security analysts utilizing climate and crop models, satellite-based earth observations, and "
+            "socioeconomic data sets to predict and monitor droughts and food shortages among the world's most "
+            "vulnerable populations. Through partnerships with USAID, USGS, and FEWS NET, the CHC provides early "
+            "warning to save lives and secure livelihoods.",
             "dataset description": (
-                "Climate Hazards center InfraRed Precipitation with Station data (CHIRPS) is a 30+ year quasi-global rainfall data set."
-                " Spanning 50°S-50°N (and all longitudes), starting in 1981 to near-present, CHIRPS incorporates 0.05° resolution satellite"
-                " imagery with in-situ station data to create gridded rainfall time series for trend analysis and seasonal drought monitoring. "
-
-                "For more information about CHIRPS data, visit http://chg.geog.ucsb.edu/data/chirps/index.html or"
-                " http://chg-wiki.geog.ucsb.edu/wiki/CHIRPS_FAQ. "
-
+                "Climate Hazards center InfraRed Precipitation with Station data (CHIRPS) is a 30+ year quasi-global "
+                "rainfall data set. Spanning 50°S-50°N (and all longitudes), starting in 1981 to near-present, CHIRPS "
+                "incorporates 0.05° resolution satellite imagery with in-situ station data to create gridded rainfall "
+                "time series for trend analysis and seasonal drought monitoring. For more information about CHIRPS "
+                "data, visit http://chg.geog.ucsb.edu/data/chirps/index.html or "
+                "http://chg-wiki.geog.ucsb.edu/wiki/CHIRPS_FAQ. "
                 "For full technical documentation visit http://pubs.usgs.gov/ds/832/"
             ),
             "license": "Creative Commons Attribution 3.0",
-            "terms of service": "To the extent possible under the law, Pete Peterson has waived all copyright and related or neighboring"
-                                " rights to CHIRPS. CHIRPS data is in the public domain as registered with Creative Commons.",
+            "terms of service": "To the extent possible under the law, Pete Peterson has waived all copyright and "
+            "related or neighboring rights to CHIRPS. CHIRPS data is in the public domain as registered with "
+            "Creative Commons.",
             "name": self.name(),
             "updated": str(datetime.datetime.now()),
             "missing value": self.missing_value_indicator(),
             "tags": self.tags,
             "standard name": self.standard_name,
             "long name": self.long_name,
-            "unit of measurement": self.unit_of_measurement
-            }
+            "unit of measurement": self.unit_of_measurement,
+        }
 
         return static_metadata
 
@@ -149,30 +153,32 @@ class CHIRPS(DatasetManager):
     @property
     def file_type(self) -> str:
         """
-        File type of raw data. Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
+        File type of raw data. Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray
+        operations.
         """
-        return 'NetCDF'
+        return "NetCDF"
 
     @classmethod
     def remote_protocol(cls) -> str:
         """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3' for S3, etc.
-        See fsspec docs for more details.
+        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+        for S3, etc. See fsspec docs for more details.
         """
-        return 'file'
+        return "file"
 
     @classmethod
     def identical_dims(cls) -> list[str]:
         """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it read these
-        dimensions only one time, from the first input file
+        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
+        read these dimensions only one time, from the first input file
         """
         return ["latitude", "longitude"]
 
     @classmethod
     def concat_dims(cls) -> list[str]:
         """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some other relevant dimension
+        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
+        other relevant dimension
         """
         return ["time"]
 
@@ -183,13 +189,14 @@ class CHIRPS(DatasetManager):
 
     def extract(self, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
         """
-        Check CHIRPS HTTP server for files from the end year of or after our data's end date. Download necessary files. Check
-        newest file and return `True` if it has newer data than us or `False` otherwise.
+        Check CHIRPS HTTP server for files from the end year of or after our data's end date. Download necessary files.
+        Check newest file and return `True` if it has newer data than us or `False` otherwise.
 
         Parameters
         ----------
         date_range: list, optional
-            A flag to specify a date range for download (and parsing). Assumes two isoformatted date strings. Defaults to None.
+            A flag to specify a date range for download (and parsing). Assumes two isoformatted date strings. Defaults
+            to None.
 
         Returns
         -------
@@ -202,7 +209,10 @@ class CHIRPS(DatasetManager):
                 self.info("Calculating new start date based on end date in STAC metadata")
                 end_date = self.get_metadata_date_range()["end"] + datetime.timedelta(days=1)
             except (KeyError, ValueError):
-                self.info(f"Because no metadata found, starting file search from the dataset beginning of {self.dataset_start_date}")
+                self.info(
+                    "Because no metadata found, starting file search from the dataset beginning of "
+                    f"{self.dataset_start_date}"
+                )
                 end_date = self.dataset_start_date
             download_year_range = range(end_date.year, datetime.datetime.now().year + 1)
         else:
@@ -213,22 +223,25 @@ class CHIRPS(DatasetManager):
         url = f"{self.dataset_download_url}/{self.remote_path}"
         self.info(f"connecting to {url}")
         index = requests.get(url).text
-        # loop through every year from end date until present year and download any files that are newer than ones we have on our server
+        # loop through every year from end date until present year and download any files that are newer than ones we
+        # have on our server
         for year in download_year_range:
-            pattern = fr"<a.+>(chirps-.+{year}.+\.nc)</a></td><td[^>]+>([^<]+[0-9])\s*</td>"
+            pattern = rf"<a.+>(chirps-.+{year}.+\.nc)</a></td><td[^>]+>([^<]+[0-9])\s*</td>"
             matches = re.findall(pattern, index, re.MULTILINE)
             if len(matches) > 0:
                 file_name, _ = matches[0]
                 local_path = self.local_input_path() / file_name
                 self.info(f"downloading remote file {file_name}")
                 remote_file = requests.get(f"{url}{file_name}").content
-                with open(local_path, 'wb') as local_file:
+                with open(local_path, "wb") as local_file:
                     local_file.write(remote_file)
         # check if newest file on our server has newer data
         try:
             newest_file_end_date = self.get_newest_file_date_range()[1]
         except IndexError as e:
-            self.info(f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}")
+            self.info(
+                f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}"
+            )
             return False
         self.info(f"newest file ends at {newest_file_end_date}")
         if newest_file_end_date >= end_date:
@@ -240,8 +253,9 @@ class CHIRPS(DatasetManager):
 
     def prepare_input_files(self, keep_originals: bool = False):
         """
-        Convert each of the input files (and associated metadata files) to a collection of daily netCDF4 classic files suitable for
-        reading by Kerchunk and intake into Xarray. This allows us to stack data into modern, performant N-Dimensional Zarr data.
+        Convert each of the input files (and associated metadata files) to a collection of daily netCDF4 classic files
+        suitable for reading by Kerchunk and intake into Xarray. This allows us to stack data into modern, performant
+        N-Dimensional Zarr data.
 
         Parameters
         ----------
@@ -254,7 +268,10 @@ class CHIRPS(DatasetManager):
             if glob.glob(str(input_dir / "*.nc4")):
                 self.info("Only converted NC4s found, skipping preparation step")
             if not glob.glob(str(input_dir / "*.nc4")):
-                raise FileNotFoundError("Neither yearly files nor converted NC4s found in input directory. Please provide data before processing")
+                raise FileNotFoundError(
+                    "Neither yearly files nor converted NC4s found in input directory. Please provide data before "
+                    "processing"
+                )
         else:
             # Convert input files to daily NetCDFs
             self.info(f"Converting {(len(list(yearlies)))} yearly NetCDF file(s) to daily NetCDFs")
@@ -284,11 +301,28 @@ class CHIRPS(DatasetManager):
             dataset[variable].encoding["_FillValue"] = self.missing_value_indicator()
         # Remove extraneous data from the data variable's attributes
         keys_to_remove = [
-            'Conventions', 'history', 'version', 'date_created',
-            'creator_name', 'creator_email', 'institution', 'documentation', 'reference',
-            'comments', 'acknowledgements', 'ftp_url', 'website', 'faq',
-            'zlib', 'shuffle', 'complevel', 'contiguous', 'source', 'original_shape', 'missing_value'
-            ]
+            "Conventions",
+            "history",
+            "version",
+            "date_created",
+            "creator_name",
+            "creator_email",
+            "institution",
+            "documentation",
+            "reference",
+            "comments",
+            "acknowledgements",
+            "ftp_url",
+            "website",
+            "faq",
+            "zlib",
+            "shuffle",
+            "complevel",
+            "contiguous",
+            "source",
+            "original_shape",
+            "missing_value",
+        ]
         for key in keys_to_remove:
             dataset.attrs.pop(key, None)
             dataset[self.data_var()].attrs.pop(key, None)
@@ -323,6 +357,7 @@ class CHIRPSFinal05(CHIRPSFinal):
     """
     Finalized CHIRPS data at 0.05 resolution
     """
+
     @classmethod
     def name(cls) -> str:
         """Name used to refer to the dataset where it's published"""
@@ -347,6 +382,7 @@ class CHIRPSFinal25(CHIRPSFinal):
     """
     Finalized CHIRPS data at 0.25 resolution
     """
+
     def __init__(self, *args, **kwargs):
         """
         Initialize a new CHIRPS object with appropriate chunking parameters.
@@ -355,8 +391,8 @@ class CHIRPSFinal25(CHIRPSFinal):
         chunks = dict(
             requested_dask_chunks={"time": 500, "latitude": 40, "longitude": -1},  # 115 MB
             requested_zarr_chunks={"time": 500, "latitude": 40, "longitude": 40},  # 3.2 MB
-            requested_ipfs_chunker="size-6400"
-            )
+            requested_ipfs_chunker="size-6400",
+        )
         kwargs.update(chunks)
         super().__init__(*args, **kwargs)
 
