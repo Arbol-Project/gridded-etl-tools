@@ -1,6 +1,5 @@
 import pathlib
 import shutil
-import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
