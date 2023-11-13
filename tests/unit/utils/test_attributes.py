@@ -64,6 +64,36 @@ class TestAttributes:
             Subclass.foo
 
     @staticmethod
+    def test_backwards_compatible_no_fallback_or_override(manager_class):
+        class MyClass(manager_class):
+            foo = attributes._backwards_compatible("bar", "get_foo")
+
+        assert MyClass.foo == "bar"
+
+    @staticmethod
+    def test_backwards_compatible_w_attribute_override(manager_class):
+        class Base(manager_class):
+            foo = attributes._backwards_compatible("bar", "get_foo")
+
+        class Subclass(Base):
+            foo = "baz"
+
+        assert Subclass.foo == "baz"
+
+    @staticmethod
+    def test_backwards_compatible_w_class_fallback_override(manager_class):
+        class Base(manager_class):
+            foo = attributes._backwards_compatible("bar", "get_foo")
+
+        class Subclass(Base):
+            @classmethod
+            def get_foo(self):
+                return "boo"
+
+        with pytest.deprecated_call():
+            assert Subclass.foo == "boo"
+
+    @staticmethod
     def test_host_organization(manager_class):
         with pytest.deprecated_call():
             assert manager_class.host_organization() == ""

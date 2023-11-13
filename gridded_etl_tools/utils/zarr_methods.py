@@ -320,7 +320,7 @@ class Transform(Convenience):
                 ref_names.add(re.match(file_match_pattern, ref).group(1))
         for ref in ref_names:
             fill_value_fix = json.loads(refs[f"{ref}/.zarray"])
-            fill_value_fix["fill_value"] = str(cls.missing_value_indicator())
+            fill_value_fix["fill_value"] = str(cls.missing_value)
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 

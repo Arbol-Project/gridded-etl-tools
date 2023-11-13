@@ -29,12 +29,34 @@ class abstract_class_property(property):
         raise TypeError(f"No value in {cls.__name__} for abstract class attribute {self.name}")
 
 
-class readonly_property(property):
-    def __init__(self, value):
+class _backwards_compatible(property):
+    """For backwards compatibility, until all deprecated fallbacks can be removed, we need to honor the deprecated
+    fallback if it is overridden in a subclass. So, to get a class property in a backwards compatible way we have to
+    traverse the mro of the class to see if we find the deprecated callback, and use that.
+
+    Note that if a class attribute has been overridden as a class attribute then this descriptor won't be reached, so
+    we don't check for the overridden class attribute here, just any possible class method fallbacks.
+    """
+
+    def __init__(self, value, fallback):
         self.value = value
+        self.fallback = fallback
 
     def __get__(self, obj, cls):
-        return self.value
+        # There would have to be a class with an empty mro for branch coverage to be happy
+        for superclass in cls.mro():  # pragma NO BRANCH
+            if superclass is Attributes:
+                return self.value
+
+            if self.fallback in superclass.__dict__:
+                fallback = getattr(superclass, self.fallback)
+                warnings.warn(
+                    f"{cls.__name__} is using deprecated fallback, {self.fallback}, for {self.name}. "
+                    f"{cls.__name__} should define {self.name}.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                return fallback()
 
 
 class Attributes(ABC):
@@ -47,7 +69,7 @@ class Attributes(ABC):
         """Setup for abstract class properties."""
         super().__init_subclass__(**kwargs)
         for name, obj in list(cls.__dict__.items()):
-            if isinstance(obj, abstract_class_property):
+            if isinstance(obj, (abstract_class_property, _backwards_compatible)):
                 # Tell property its own name
                 obj.name = name
 
@@ -76,7 +98,7 @@ class Attributes(ABC):
 
         raise TypeError(f"No value in {cls.__name__} for abstract class attribute {attr}")
 
-    organization: str = readonly_property("")  # e.g. "Arbol"
+    organization: str = _backwards_compatible("", "host_organization")  # e.g. "Arbol"
     """
     Name of the organization (your organization) hosting the data being published. Used in STAC metadata.
     """
@@ -177,7 +199,7 @@ class Attributes(ABC):
     The frequency with which a dataset is updated.
     """
 
-    missing_value: str = ""
+    missing_value: str = _backwards_compatible("", "missing_value_indicator")
     """
     Indicator of a missing value in a dataset
     """
@@ -222,7 +244,9 @@ class Attributes(ABC):
     Steps used for hindcast, if any.
     """
 
-    update_cadence_bounds: typing.Optional[tuple[np.timedelta64, np.timedelta64]] = None
+    update_cadence_bounds: typing.Optional[tuple[np.timedelta64, np.timedelta64]] = _backwards_compatible(
+        None, "irregular_update_cadence"
+    )
     """
     If a dataset doesn't update on a monotonic schedule return a tuple noting the lower and upper bounds of acceptable
     updates. Intended to prevent time contiguity checks from short-circuiting valid updates for datasets with
