@@ -19,7 +19,8 @@ class abstract_class_property(property):
             fallback = getattr(cls, self.fallback, None)
             if fallback is not None:
                 warnings.warn(
-                    f"{cls.__name__}.{self.fallback}() is deprecated. Use {cls.__name__}.{self.name}.",
+                    f"{cls.__name__} is using deprecated fallback, {self.fallback}, for {self.name}. "
+                    f"{cls.__name__} should define {self.name}.",
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -28,7 +29,7 @@ class abstract_class_property(property):
         raise TypeError(f"No value in {cls.__name__} for abstract class attribute {self.name}")
 
 
-class readonly_property:
+class readonly_property(property):
     def __init__(self, value):
         self.value = value
 
@@ -82,8 +83,8 @@ class Attributes(ABC):
 
     @classmethod
     @deprecation.deprecated("Use the organization attribute")
-    def host_organization(self) -> str:
-        return self.organization
+    def host_organization(cls) -> str:
+        return cls.organization
 
     dataset_name = abstract_class_property(fallback="name")
     """

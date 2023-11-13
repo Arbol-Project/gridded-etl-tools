@@ -600,17 +600,17 @@ class Metadata(Convenience, IPFS):
         dataset.encoding = {
             self.data_var(): {
                 "dtype": self.data_var_dtype,
-                "_FillValue": self.missing_value_indicator(),
+                "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value_indicator(),
+                "missing_value": self.missing_value,
             }
         }
         dataset[self.data_var()].encoding.update(
             {
                 "units": self.unit_of_measurement,
-                "_FillValue": self.missing_value_indicator(),
+                "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value_indicator(),
+                "missing_value": self.missing_value,
                 "chunks": tuple(val for val in self.requested_zarr_chunks.values()),
                 "preferred_chunks": self.requested_zarr_chunks,
             }

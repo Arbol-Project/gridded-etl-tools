@@ -65,7 +65,14 @@ class TestAttributes:
 
     @staticmethod
     def test_host_organization(manager_class):
-        assert manager_class.host_organization() == ""
+        with pytest.deprecated_call():
+            assert manager_class.host_organization() == ""
+
+    @staticmethod
+    def test_organization_read_only(manager_class):
+        dm = manager_class()
+        with pytest.raises(AttributeError):
+            dm.organization = "Hydra"
 
     @staticmethod
     def test_dataset_name_fallback_to_name(base_class):

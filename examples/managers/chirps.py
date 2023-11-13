@@ -85,22 +85,16 @@ class CHIRPS(DatasetManager):
     def host_organization(cls) -> str:
         return "My Organization"
 
-    @classmethod
-    def name(cls) -> str:
-        return "chirps"
+    dataset_name = "chirps"
 
     def relative_path(self) -> str:
         return super().relative_path() / "chirps"
 
-    @classmethod
-    def collection(cls) -> str:
-        """Overall collection of data. Used for filling and referencing STAC Catalog."""
-        return "CHIRPS"
+    collection_name = "CHIRPS"
+    """Overall collection of data. Used for filling and referencing STAC Catalog."""
 
-    @classmethod
-    def temporal_resolution(cls) -> str:
-        """Increment size along the "time" coordinate axis"""
-        return cls.SPAN_DAILY
+    time_resolution = DatasetManager.SPAN_DAILY
+    """Increment size along the "time" coordinate axis"""
 
     @classmethod
     def data_var(self) -> str:
@@ -153,29 +147,23 @@ class CHIRPS(DatasetManager):
         """
         return "NetCDF"
 
-    @classmethod
-    def remote_protocol(cls) -> str:
-        """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
-        for S3, etc. See fsspec docs for more details.
-        """
-        return "file"
+    protocol = "file"
+    """
+    Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+    for S3, etc. See fsspec docs for more details.
+    """
 
-    @classmethod
-    def identical_dims(cls) -> list[str]:
-        """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
-        read these dimensions only one time, from the first input file
-        """
-        return ["latitude", "longitude"]
+    identical_dimensions = ["latitude", "longitude"]
+    """
+    List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
+    read these dimensions only one time, from the first input file
+    """
 
-    @classmethod
-    def concat_dims(cls) -> list[str]:
-        """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
-        other relevant dimension
-        """
-        return ["time"]
+    concat_dimensions = ["time"]
+    """
+    List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
+    other relevant dimension
+    """
 
     @property
     def bbox_rounding_value(self) -> int:
@@ -331,10 +319,7 @@ class CHIRPSFinal(CHIRPS):
     A class for finalized CHIRPS data
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_final"
+    dataset_name = f"{CHIRPS.dataset_name}_final"
 
     def relative_path(self) -> pathlib.Path:
         return super().relative_path() / "final"
@@ -353,10 +338,7 @@ class CHIRPSFinal05(CHIRPSFinal):
     Finalized CHIRPS data at 0.05 resolution
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_05"
+    dataset_name = f"{CHIRPSFinal.dataset_name}_05"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""
@@ -391,10 +373,7 @@ class CHIRPSFinal25(CHIRPSFinal):
         kwargs.update(chunks)
         super().__init__(*args, **kwargs)
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_25"
+    dataset_name = f"{CHIRPSFinal.dataset_name}_25"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""
@@ -416,10 +395,7 @@ class CHIRPSPrelim05(CHIRPS):
     Preliminary CHIRPS data at 0.05 resolution
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_prelim_05"
+    dataset_name = f"{CHIRPS.dataset_name}_prelim_05"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""
