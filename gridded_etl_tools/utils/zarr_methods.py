@@ -1052,7 +1052,7 @@ class Publish(Transform, Metadata):
 
         Parameters
         ----------
-        original_dataset : xr.Dataset
+        dataset : xr.Dataset
             The final dataset to be parsed
         """
         # TIME CHECK

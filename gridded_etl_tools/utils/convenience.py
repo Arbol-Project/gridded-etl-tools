@@ -647,8 +647,9 @@ class Convenience(Attributes):
             An Xarray dataset
         """
         coords_dict = {}
-        for coord in dataset.coords:
-            coords_dict.update({coord : random.choice(dataset[coord].values)})
+        # We select from dims, not coords because inserts drop all non-time_dim coords
+        for dim in dataset.dims:
+            coords_dict.update({dim : random.choice(dataset[dim].values)})
         return coords_dict
     
     @property
