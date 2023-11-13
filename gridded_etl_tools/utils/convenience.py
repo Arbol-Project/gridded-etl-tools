@@ -648,10 +648,7 @@ class Convenience(Attributes):
         """
         coords_dict = {}
         for coord in dataset.coords:
-            try:
-                coords_dict.update({coord : random.choice(dataset[coord].values)})
-            except TypeError:
-                import ipdb; ipdb.set_trace(context=4)
+            coords_dict.update({coord : random.choice(dataset[coord].values)})
         return coords_dict
     
     @property

@@ -187,6 +187,13 @@ class Attributes(ABC):
         """To be overwritten by actual hindcast datasets"""
         return list(None)
 
+    @property
+    def has_nans(self) -> bool:
+        """
+        If True, disable quality checks for NaN values to prevent wrongful flags
+        Default value set as False"""
+        return False
+
     @classmethod
     def irregular_update_cadence(self) -> None | tuple[np.timedelta64, np.timedelta64]:
         """

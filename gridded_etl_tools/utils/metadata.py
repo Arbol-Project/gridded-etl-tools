@@ -581,7 +581,7 @@ class Metadata(Convenience, IPFS):
 
     def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """
-        Encode important data points related to the data variable.
+        Encode important data points related to the data and time variables.
         These are useful both for reference and to control Xarray's reading/writing behavior.
 
         Parameters
@@ -607,6 +607,7 @@ class Metadata(Convenience, IPFS):
         }
         dataset[self.data_var()].encoding.update(
             {
+                "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
                 "_FillValue": self.missing_value_indicator(),
                 # deprecated by NUG but maintained for backwards compatibility

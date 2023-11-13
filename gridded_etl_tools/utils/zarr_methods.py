@@ -1074,10 +1074,10 @@ class Publish(Transform, Metadata):
             random_coords = self.get_random_coords(dataset)
             random_val = dataset[self.data_var()].sel(**random_coords).values
             # Check NaNs
-            if np.isnan(random_val):
+            if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
             # Check extreme values if they are defined
-            unit = dataset[self.data_var()].units
+            unit = dataset[self.data_var()].encoding["units"]
             if unit in self.extreme_values_by_unit.keys():
                 limit_vals = self.extreme_values_by_unit[unit]
                 if not limit_vals[0] <= random_val <= limit_vals[1]:
@@ -1087,7 +1087,7 @@ class Publish(Transform, Metadata):
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
-        if not dataset[self.data_var()].dtype == self.data_var_dtype:
+        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(f"Dtype for data variable {self.data_var()} is {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}")
 
     def update_quality_check(self,
@@ -1112,7 +1112,7 @@ class Publish(Transform, Metadata):
         """
         # Check that the first value of the append times and the last value of the original dataset are contiguous
         # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
-        if append_times and len(original_dataset[self.time_dim]) > 1:
+        if any(append_times) and len(original_dataset[self.time_dim]) > 1:
             original_append_bridge_times = [original_dataset[self.time_dim].values[-1], append_times[0]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
             # Check these two values against the expected delta. All append times will be checked later in the stand

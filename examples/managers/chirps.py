@@ -128,6 +128,11 @@ class CHIRPS(DatasetManager):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
         return datetime.datetime(1981, 1, 1, 0)
 
+    @property
+    def has_nans(self) -> bool:
+        """If True, disable quality checks for NaN values to prevent wrongful flags"""
+        return True
+
     @classmethod
     def missing_value_indicator(cls) -> int:
         """
