@@ -126,7 +126,7 @@ original_json_key = DatasetManager.json_key
 
 
 def patched_json_key(self):
-    return f"{self.dataset_name}-{self.temporal_resolution()}_test_initial"
+    return f"{self.dataset_name}-{self.time_resolution}_test_initial"
 
 
 original_zarr_json_path = DatasetManager.zarr_json_path

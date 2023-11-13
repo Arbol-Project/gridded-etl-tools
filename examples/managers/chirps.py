@@ -45,7 +45,7 @@ class CHIRPS(DatasetManager):
         static_metadata = {
             "coordinate reference system": "EPSG:4326",
             "update cadence": self.update_cadence,
-            "temporal resolution": self.temporal_resolution(),
+            "temporal resolution": self.time_resolution,
             "spatial resolution": self.spatial_resolution,
             "spatial precision": 0.00001,
             "provider url": "http://chg.geog.ucsb.edu/",
@@ -70,9 +70,9 @@ class CHIRPS(DatasetManager):
             "terms of service": "To the extent possible under the law, Pete Peterson has waived all copyright and "
             "related or neighboring rights to CHIRPS. CHIRPS data is in the public domain as registered with "
             "Creative Commons.",
-            "name": self.name(),
+            "name": self.dataset_name,
             "updated": str(datetime.datetime.now()),
-            "missing value": self.missing_value_indicator(),
+            "missing value": self.missing_value,
             "tags": self.tags,
             "standard name": self.standard_name,
             "long name": self.long_name,
@@ -126,13 +126,11 @@ class CHIRPS(DatasetManager):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
         return datetime.datetime(1981, 1, 1, 0)
 
-    @classmethod
-    def missing_value_indicator(cls) -> int:
-        """
-        Value within the source data that should be automatically converted to 'nan' by Xarray.
-        Cannot be empty/None or Kerchunk will fail, so use -9999 if no NoData value actually exists in the dataset.
-        """
-        return -9999
+    missing_value = -9999
+    """
+    Value within the source data that should be automatically converted to 'nan' by Xarray.
+    Cannot be empty/None or Kerchunk will fail, so use -9999 if no NoData value actually exists in the dataset.
+    """
 
     @property
     def dataset_download_url(self) -> str:
@@ -281,7 +279,7 @@ class CHIRPS(DatasetManager):
         """
         dataset = super().remove_unwanted_fields(dataset)
         for variable in dataset.variables:
-            dataset[variable].encoding["_FillValue"] = self.missing_value_indicator()
+            dataset[variable].encoding["_FillValue"] = self.missing_value
         # Remove extraneous data from the data variable's attributes
         keys_to_remove = [
             "Conventions",

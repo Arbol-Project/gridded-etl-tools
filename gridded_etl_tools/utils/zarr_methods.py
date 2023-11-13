@@ -284,10 +284,10 @@ class Transform(Convenience):
             Kwargs for kerchunk's MultiZarrToZarr method
         """
         opts = dict(
-            remote_protocol=cls.remote_protocol(),
+            remote_protocol=cls.protocol,
             remote_options={"anon": True},
-            identical_dims=cls.identical_dims(),
-            concat_dims=cls.concat_dims(),
+            identical_dims=cls.identical_dimensions,
+            concat_dims=cls.concat_dimensions,
             preprocess=cls.preprocess_kerchunk,
         )
         return opts
@@ -724,7 +724,7 @@ class Publish(Transform, Metadata):
             backend_kwargs={
                 "storage_options": {
                     "fo": zarr_json_path,
-                    "remote_protocol": self.remote_protocol(),
+                    "remote_protocol": self.protocol,
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
