@@ -639,12 +639,16 @@ class Convenience(Attributes):
 
     def get_random_coords(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
-        Derive a dictionary of random coordinates, one for each coordinate in the input dataset
+        Derive a dictionary of random coordinates, one for each dimension in the input dataset
 
         Parameters
         ----------
         dataset
             An Xarray dataset
+
+        Returns
+        -------
+            A dict of {str: Any} pairing each dimension to a randomly selected coordinate value
         """
         coords_dict = {}
         # We select from dims, not coords because inserts drop all non-time_dim coords
@@ -656,6 +660,12 @@ class Convenience(Attributes):
     def extreme_values_by_unit(self):
         """
         Define minimum and maximum permissible values for common units
+
+        Returns
+        -------
+        dict
+            A dict of {str : (float, float)} representing the unit name
+            and corresponding lower/upper value limits
         """
         units_dict = {
             "C" : (-100, 60),

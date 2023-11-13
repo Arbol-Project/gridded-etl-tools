@@ -71,7 +71,7 @@ class Attributes(ABC):
 
     @classmethod
     @abstractmethod
-    def data_var(self) -> str:
+    def data_var(cls) -> str:
         """Name of the relevant data variable in the original dataset"""
 
     @property

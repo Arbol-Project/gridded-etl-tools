@@ -918,10 +918,11 @@ class Publish(Transform, Metadata):
                 region={self.time_dim: slice(region[0], region[1])},
             )
 
-        self.info(
-            f"Inserted records for {len(insert_dataset[self.time_dim].values)} times from {len(regions)} date "
-            "range(s) to original zarr"
-        )
+        if not self.dry_run:
+            self.info(
+                f"Inserted records for {len(insert_dataset[self.time_dim].values)} times from {len(regions)} date "
+                "range(s) to original zarr"
+            )
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
@@ -947,7 +948,8 @@ class Publish(Transform, Metadata):
         self.info("Indicating the dataset is appending data only.")
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
-        self.info(f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr")
+        if not self.dry_run:
+            self.info(f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr")
         # In the case of IPLD, store the hash for later use
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
@@ -1169,10 +1171,3 @@ class Publish(Transform, Metadata):
             previous_time = instant
         # Return True if no problems found
         return True
-
-    def post_parse_quality_check(self):
-        """
-        Run tests of dataset quality on the recently parsed dataset
-        """
-        ## Test 1 -- Values vs. raw data?
-        ## Test 2 -- API Retrieval Check
