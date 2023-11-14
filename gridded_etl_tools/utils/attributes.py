@@ -253,6 +253,12 @@ class Attributes(ABC):
     non-monotic update schedules.
     """
 
+    has_nans: bool = False
+    """
+    If True, disable quality checks for NaN values to prevent wrongful flags
+    Default value set as False
+    """
+
     @classmethod
     @deprecation.deprecated("Use the update_cadence_bounds attribute")
     def irregular_update_cadence(cls) -> None | tuple[np.timedelta64, np.timedelta64]:

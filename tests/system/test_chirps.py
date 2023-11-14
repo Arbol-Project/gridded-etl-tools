@@ -261,7 +261,7 @@ def test_bad_append(
     manager.requested_zarr_chunks = test_chunks
     # run ETL
     manager.transform()
-    with pytest.raises(ValueError):
+    with pytest.raises(IndexError):
         manager.parse()
 
 

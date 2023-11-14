@@ -7,10 +7,13 @@ import re
 import ftplib
 import io
 import json
+import random
 
 import pandas as pd
 import numpy as np
 import xarray as xr
+
+from typing import Any
 
 from .attributes import Attributes
 from .store import IPLD
@@ -615,11 +618,9 @@ class Convenience(Attributes):
         return dataset.sortby(["latitude", "longitude"])
 
     @classmethod
-    def span_to_timedelta(cls) -> np.timedelta64:
+    def span_to_timedelta(cls) -> dict[str, np.timedelta64]:
         """
-        Map a dataset's string time span to a corresponding numpy timedelta64 object
-        NOTE only valid for datasets with regular update cadences.
-        See `irregular_update_cadence` attribute for handling irregular cadence.
+        Provide a dictionary mapping common time spans to timedeltas
 
         Returns
         -------
@@ -632,4 +633,37 @@ class Convenience(Attributes):
             cls.SPAN_MONTHLY: np.timedelta64(1, "M"),
             cls.SPAN_YEARLY: np.timedelta64(1, "Y"),
         }
-        return span_to_td[cls.temporal_resolution()]
+        return span_to_td
+
+    def get_random_coords(self, dataset: xr.Dataset) -> dict[str, Any]:
+        """
+        Derive a dictionary of random coordinates, one for each dimension in the input dataset
+
+        Parameters
+        ----------
+        dataset
+            An Xarray dataset
+
+        Returns
+        -------
+            A dict of {str: Any} pairing each dimension to a randomly selected coordinate value
+        """
+        coords_dict = {}
+        # We select from dims, not coords because inserts drop all non-time_dim coords
+        for dim in dataset.dims:
+            coords_dict.update({dim: random.choice(dataset[dim].values)})
+        return coords_dict
+
+    @property
+    def extreme_values_by_unit(self):
+        """
+        Define minimum and maximum permissible values for common units
+
+        Returns
+        -------
+        dict
+            A dict of {str : (float, float)} representing the unit name
+            and corresponding lower/upper value limits
+        """
+        units_dict = {"C": (-90, 60), "K": (183.15, 333.15), "F": (-129, 140)}
+        return units_dict

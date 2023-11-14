@@ -126,6 +126,9 @@ class CHIRPS(DatasetManager):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
         return datetime.datetime(1981, 1, 1, 0)
 
+    has_nans: bool = True
+    """If True, disable quality checks for NaN values to prevent wrongful flags"""
+
     missing_value = -9999
     """
     Value within the source data that should be automatically converted to 'nan' by Xarray.

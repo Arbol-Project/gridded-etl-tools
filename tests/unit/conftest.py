@@ -26,7 +26,9 @@ def fake_original_dataset():
     lon = xr.DataArray(np.arange(100, 140, 10), dims="lon", coords={"lon": np.arange(100, 140, 10)})
     data = xr.DataArray(np.random.randn(138, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
 
-    return xr.Dataset({"data_var": data})
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
 
 
 @pytest.fixture()
@@ -36,7 +38,9 @@ def fake_complex_update_dataset():
     lon = xr.DataArray(np.arange(100, 140, 10), dims="lon", coords={"lon": np.arange(100, 140, 10)})
     data = xr.DataArray(np.random.randn(60, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
 
-    return xr.Dataset({"data_var": data})
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
 
 
 @pytest.fixture
@@ -76,8 +80,13 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         self._static_metadata = kwargs.pop("static_metadata", {})
         super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
 
+    @classmethod
     def data_var(self):
         return "data"
+
+    @property
+    def data_var_dtype(self):
+        return "<f4"
 
     def extract(self, date_range=None):
         return super().extract(date_range=date_range)
