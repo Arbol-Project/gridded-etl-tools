@@ -45,7 +45,7 @@ class CHIRPS(DatasetManager):
         static_metadata = {
             "coordinate reference system": "EPSG:4326",
             "update cadence": self.update_cadence,
-            "temporal resolution": self.temporal_resolution(),
+            "temporal resolution": self.time_resolution,
             "spatial resolution": self.spatial_resolution,
             "spatial precision": 0.00001,
             "provider url": "http://chg.geog.ucsb.edu/",
@@ -70,9 +70,9 @@ class CHIRPS(DatasetManager):
             "terms of service": "To the extent possible under the law, Pete Peterson has waived all copyright and "
             "related or neighboring rights to CHIRPS. CHIRPS data is in the public domain as registered with "
             "Creative Commons.",
-            "name": self.name(),
+            "name": self.dataset_name,
             "updated": str(datetime.datetime.now()),
-            "missing value": self.missing_value_indicator(),
+            "missing value": self.missing_value,
             "tags": self.tags,
             "standard name": self.standard_name,
             "long name": self.long_name,
@@ -85,22 +85,16 @@ class CHIRPS(DatasetManager):
     def host_organization(cls) -> str:
         return "My Organization"
 
-    @classmethod
-    def name(cls) -> str:
-        return "chirps"
+    dataset_name = "chirps"
 
     def relative_path(self) -> str:
         return super().relative_path() / "chirps"
 
-    @classmethod
-    def collection(cls) -> str:
-        """Overall collection of data. Used for filling and referencing STAC Catalog."""
-        return "CHIRPS"
+    collection_name = "CHIRPS"
+    """Overall collection of data. Used for filling and referencing STAC Catalog."""
 
-    @classmethod
-    def temporal_resolution(cls) -> str:
-        """Increment size along the "time" coordinate axis"""
-        return cls.SPAN_DAILY
+    time_resolution = DatasetManager.SPAN_DAILY
+    """Increment size along the "time" coordinate axis"""
 
     @classmethod
     def data_var(self) -> str:
@@ -132,13 +126,11 @@ class CHIRPS(DatasetManager):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
         return datetime.datetime(1981, 1, 1, 0)
 
-    @classmethod
-    def missing_value_indicator(cls) -> int:
-        """
-        Value within the source data that should be automatically converted to 'nan' by Xarray.
-        Cannot be empty/None or Kerchunk will fail, so use -9999 if no NoData value actually exists in the dataset.
-        """
-        return -9999
+    missing_value = -9999
+    """
+    Value within the source data that should be automatically converted to 'nan' by Xarray.
+    Cannot be empty/None or Kerchunk will fail, so use -9999 if no NoData value actually exists in the dataset.
+    """
 
     @property
     def dataset_download_url(self) -> str:
@@ -153,29 +145,23 @@ class CHIRPS(DatasetManager):
         """
         return "NetCDF"
 
-    @classmethod
-    def remote_protocol(cls) -> str:
-        """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
-        for S3, etc. See fsspec docs for more details.
-        """
-        return "file"
+    protocol = "file"
+    """
+    Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+    for S3, etc. See fsspec docs for more details.
+    """
 
-    @classmethod
-    def identical_dims(cls) -> list[str]:
-        """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
-        read these dimensions only one time, from the first input file
-        """
-        return ["latitude", "longitude"]
+    identical_dimensions = ["latitude", "longitude"]
+    """
+    List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
+    read these dimensions only one time, from the first input file
+    """
 
-    @classmethod
-    def concat_dims(cls) -> list[str]:
-        """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
-        other relevant dimension
-        """
-        return ["time"]
+    concat_dimensions = ["time"]
+    """
+    List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
+    other relevant dimension
+    """
 
     @property
     def bbox_rounding_value(self) -> int:
@@ -293,7 +279,7 @@ class CHIRPS(DatasetManager):
         """
         dataset = super().remove_unwanted_fields(dataset)
         for variable in dataset.variables:
-            dataset[variable].encoding["_FillValue"] = self.missing_value_indicator()
+            dataset[variable].encoding["_FillValue"] = self.missing_value
         # Remove extraneous data from the data variable's attributes
         keys_to_remove = [
             "Conventions",
@@ -331,10 +317,7 @@ class CHIRPSFinal(CHIRPS):
     A class for finalized CHIRPS data
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_final"
+    dataset_name = f"{CHIRPS.dataset_name}_final"
 
     def relative_path(self) -> pathlib.Path:
         return super().relative_path() / "final"
@@ -353,10 +336,7 @@ class CHIRPSFinal05(CHIRPSFinal):
     Finalized CHIRPS data at 0.05 resolution
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_05"
+    dataset_name = f"{CHIRPSFinal.dataset_name}_05"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""
@@ -391,10 +371,7 @@ class CHIRPSFinal25(CHIRPSFinal):
         kwargs.update(chunks)
         super().__init__(*args, **kwargs)
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_25"
+    dataset_name = f"{CHIRPSFinal.dataset_name}_25"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""
@@ -416,10 +393,7 @@ class CHIRPSPrelim05(CHIRPS):
     Preliminary CHIRPS data at 0.05 resolution
     """
 
-    @classmethod
-    def name(cls) -> str:
-        """Name used to refer to the dataset where it's published"""
-        return f"{super().name()}_prelim_05"
+    dataset_name = f"{CHIRPS.dataset_name}_prelim_05"
 
     def relative_path(self) -> pathlib.Path:
         """Relative path used to store data under 'datasets' and 'climate' folders"""

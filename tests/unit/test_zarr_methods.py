@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_irregular_update_cadence
+from ..common import get_manager
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
@@ -67,12 +67,13 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     Test that the preprocess_kerchunk method successfully changes the _FillValue attribute of all arrays
     """
     orig_fill_value = json.loads(example_zarr_json["refs"]["latitude/.zarray"])["fill_value"]
+
     # prepare a dataset manager and preprocess a Zarr JSON
-    dm = get_manager(manager_class)
-    mocker.patch(
-        "tests.unit.conftest.DummyManager.missing_value_indicator",
-        return_value=-8888,
-    )
+    class MyManagerClass(manager_class):
+        missing_value = -8888
+
+    dm = get_manager(MyManagerClass)
+
     pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])
     # populate before/after fill value variables
     modified_fill_value = int(json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"])
@@ -110,7 +111,8 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     assert not dm.are_times_in_expected_order(out_of_order, expected_delta=expected_delta)
     # Check that irregular cadences pass
     mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.irregular_update_cadence", patched_irregular_update_cadence
+        "gridded_etl_tools.utils.attributes.Attributes.update_cadence_bounds",
+        [np.timedelta64(3, "D"), np.timedelta64(4, "D")],
     )
     three_and_four_day_updates = [contig[0], contig[3], contig[6], contig[10]]
     assert dm.are_times_in_expected_order(three_and_four_day_updates, expected_delta=expected_delta)

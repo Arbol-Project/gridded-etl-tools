@@ -40,6 +40,11 @@ def fake_complex_update_dataset():
 
 
 @pytest.fixture
+def base_class():
+    return DummyManagerBase
+
+
+@pytest.fixture
 def manager_class():
     return DummyManager
 
@@ -52,12 +57,7 @@ def noop(*args, **kwargs):
     """Do nothing"""
 
 
-class DummyManager(dataset_manager.DatasetManager):
-    collection = unimplemented
-    concat_dims = unimplemented
-    identical_dims = unimplemented
-    remote_protocol = unimplemented
-
+class DummyManagerBase(dataset_manager.DatasetManager):
     prepare_input_files = noop
 
     unit_of_measurement = "parsecs"
@@ -65,10 +65,6 @@ class DummyManager(dataset_manager.DatasetManager):
     time_dim = "time"
     encryption_key = None
     fill_value = ""
-
-    @classmethod
-    def name(cls):
-        return cls.__name__
 
     def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, *args, **kwargs):
         if requested_dask_chunks is None:
@@ -83,11 +79,6 @@ class DummyManager(dataset_manager.DatasetManager):
     def data_var(self):
         return "data"
 
-    @classmethod
-    def temporal_resolution(cls) -> str:
-        """Increment size along the "time" coordinate axis"""
-        return cls.SPAN_DAILY
-
     def extract(self, date_range=None):
         return super().extract(date_range=date_range)
 
@@ -100,21 +91,30 @@ class DummyManager(dataset_manager.DatasetManager):
         return self._static_metadata
 
 
+class DummyManager(DummyManagerBase):
+    concat_dimensions = ["z", "zz"]
+    dataset_name = "DummyManager"
+    collection_name = "Vintage Guitars"
+    identical_dimensions = ["x", "y"]
+    protocol = "handshake"
+    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+
+
 # Set up overcomplicated mro for testing get_subclass(es)
 class John(DummyManager):
-    ...
+    dataset_name = "John"
 
 
 class Paul(DummyManager):
-    ...
+    dataset_name = "Paul"
 
 
 class George(John, Paul):
-    ...
+    dataset_name = "George"
 
 
 class Ringo(George):
-    ...
+    dataset_name = "Ringo"
 
 
 original_times = np.array(

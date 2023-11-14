@@ -1,6 +1,5 @@
 import pathlib
 import shutil
-import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
@@ -126,14 +125,14 @@ original_json_key = DatasetManager.json_key
 
 
 def patched_json_key(self):
-    return f"{self.name()}-{self.temporal_resolution()}_test_initial"
+    return f"{self.dataset_name}-{self.time_resolution}_test_initial"
 
 
 original_zarr_json_path = DatasetManager.zarr_json_path
 
 
 def patched_zarr_json_path(self):
-    return pathlib.Path(".") / f"{self.name()}_zarr.json"
+    return pathlib.Path(".") / f"{self.dataset_name}_zarr.json"
 
 
 original_root_stac_catalog = DatasetManager.default_root_stac_catalog
@@ -150,7 +149,3 @@ def patched_root_stac_catalog(self):
             The catalogs and collections describe single providers. Each may contain one or multiple datasets. \
             Each individual dataset has been documented as STAC Items.",
     }
-
-
-def patched_irregular_update_cadence(self):
-    return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]

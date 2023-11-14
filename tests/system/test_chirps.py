@@ -118,7 +118,6 @@ def teardown_module(request, heads_path):
     request.addfinalizer(test_clean)
 
 
-@pytest.mark.order(1)
 def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
     Test that a dry run parse of CHIRPS data does not, in fact, parse data.
@@ -142,7 +141,6 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
         manager.zarr_hash_to_dataset(manager.latest_hash())
 
 
-@pytest.mark.order(1)
 def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
     Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with

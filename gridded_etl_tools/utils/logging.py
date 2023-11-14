@@ -171,7 +171,7 @@ class Logging(Attributes):
 
         """
         pathlib.Path.mkdir(pathlib.Path("./logs"), mode=0o777, parents=False, exist_ok=True)
-        return pathlib.Path("logs") / f"{cls.name()}_{logging.getLevelName(level)}.log"
+        return pathlib.Path("logs") / f"{cls.dataset_name}_{logging.getLevelName(level)}.log"
 
     @classmethod
     def log(cls, message: str, level: str = logging.INFO, **kwargs):
@@ -194,7 +194,7 @@ class Logging(Attributes):
             exception information. See the logging module for all keyword arguments.
 
         """
-        logging.getLogger(cls.name()).log(level, message, **kwargs)
+        logging.getLogger(cls.dataset_name).log(level, message, **kwargs)
 
     @classmethod
     def info(cls, message: str, **kwargs):
