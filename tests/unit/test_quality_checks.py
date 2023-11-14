@@ -106,9 +106,7 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     out_of_order = [contig[1], contig[2], contig[0], contig[12], contig[3]]
     assert not dm.are_times_in_expected_order(out_of_order, expected_delta=expected_delta)
     # Check that irregular cadences pass
-    mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.update_cadence_bounds", patched_update_cadence_bounds
-    )
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.update_cadence_bounds", patched_update_cadence_bounds)
     three_and_four_day_updates = [contig[0], contig[3], contig[6], contig[10]]
     assert dm.are_times_in_expected_order(three_and_four_day_updates, expected_delta=expected_delta)
     # Check that ranges outside the irregular cadence still fail
