@@ -8,26 +8,25 @@ import xarray as xr
 from gridded_etl_tools.dataset_manager import DatasetManager
 from ..common import get_manager, patched_irregular_update_cadence
 
-def test_parse_quality_check(
-        mocker,
-        manager_class: DatasetManager,
-        fake_original_dataset: xr.Dataset
-):
+
+def test_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     """
     Test that the pre-parse quality check method waves through good data
     and fails as anticipated with bad data of specific types
     """
     # prepare a dataset manager
     dm = get_manager(manager_class)
-    fake_original_dataset.data.encoding["units"] = 'cubits'
+    fake_original_dataset.data.encoding["units"] = "cubits"
     # Test that a dataset with out-of-order times fails
     out_of_order_ds = fake_original_dataset.copy()
-    out_of_order_ds = out_of_order_ds.assign_coords({"time" : np.roll(out_of_order_ds.time.values, 1)})
+    out_of_order_ds = out_of_order_ds.assign_coords({"time": np.roll(out_of_order_ds.time.values, 1)})
     with pytest.raises(IndexError):
         dm.pre_parse_quality_check(out_of_order_ds)
     # Test that a dataset with extreme values fails
     mocker.patch(
-        "gridded_etl_tools.utils.convenience.Convenience.extreme_values_by_unit", return_value={"cubits" : (-500, 500)}, new_callable=mocker.PropertyMock
+        "gridded_etl_tools.utils.convenience.Convenience.extreme_values_by_unit",
+        return_value={"cubits": (-500, 500)},
+        new_callable=mocker.PropertyMock,
     )
     extreme_vals_ds = copy.deepcopy(fake_original_dataset)
     extreme_vals_ds.data.values[:] = 1_000_000
@@ -39,21 +38,15 @@ def test_parse_quality_check(
     with pytest.raises(ValueError):
         dm.pre_parse_quality_check(nan_vals_ds)
     # Test that a parse fails on mismatched data var encoding
-    mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.data_var_dtype", return_value='<f4'
-    )
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.data_var_dtype", return_value="<f4")
     # fake_original_dataset["data"] = fake_original_dataset["data"].astype('<f8')
-    fake_original_dataset.data.encoding["dtype"] = '<f8'
+    fake_original_dataset.data.encoding["dtype"] = "<f8"
     # fake_original_dataset.data.encoding["units"] = 'cubits'
     with pytest.raises(TypeError):
         dm.pre_parse_quality_check(fake_original_dataset)
 
 
-def test_update_quality_check(
-        mocker,
-        manager_class: DatasetManager,
-        fake_original_dataset: xr.Dataset
-):
+def test_update_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     """
     Test that the pre-parse quality check method waves through good data
     and fails as anticipated with bad data of specific types
@@ -63,11 +56,11 @@ def test_update_quality_check(
     # Test that a parse succeeds when append data is contiguous with existing data
     insert_times = []
     append_times = pd.date_range(start="2022-02-01", end="2023-02-15", freq="1D")
-    assert dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times) == None
+    assert not dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times)
     # Test that a parse succeeds when insert or append data exists
     insert_times = pd.date_range(start="2021-10-01", end="2021-10-15", freq="1D")
     append_times = []
-    assert dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times) == None
+    assert not dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times)
     # Test that a parse fails when append data is not contiguous with existing data
     insert_times = []
     append_times = pd.date_range(start="2022-02-02", end="2023-02-15", freq="1D")
@@ -116,4 +109,3 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     # Check that ranges outside the irregular cadence still fail
     five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
     assert not dm.are_times_in_expected_order(five_day_updates, expected_delta=expected_delta)
-

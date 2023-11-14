@@ -653,7 +653,7 @@ class Convenience(Attributes):
         coords_dict = {}
         # We select from dims, not coords because inserts drop all non-time_dim coords
         for dim in dataset.dims:
-            coords_dict.update({dim : random.choice(dataset[dim].values)})
+            coords_dict.update({dim: random.choice(dataset[dim].values)})
         return coords_dict
 
     @property
@@ -667,9 +667,5 @@ class Convenience(Attributes):
             A dict of {str : (float, float)} representing the unit name
             and corresponding lower/upper value limits
         """
-        units_dict = {
-            "C" : (-100, 60),
-            "K" : (263.15, 333.15),
-            "F" : (-148, 140)
-        }
+        units_dict = {"C": (-100, 60), "K": (263.15, 333.15), "F": (-148, 140)}
         return units_dict

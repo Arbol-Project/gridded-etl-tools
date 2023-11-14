@@ -1056,10 +1056,11 @@ class Publish(Transform, Metadata):
             The final dataset to be parsed
         """
         # TIME CHECK
-        # Aggressively assert that the time dimension of the data is in the anticipated order. 
+        # Aggressively assert that the time dimension of the data is in the anticipated order.
         # Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operations, but it should probably be replaced with 
-        # a more sophisticated set of flags that let the user decide how to handle time data at their own risk.
+        # This is to protect against data corruption, especially during insert and append operations,
+        # but it should probably be replaced with a more sophisticated set of flags
+        # that let the user decide how to handle time data at their own risk.
         times = dataset[self.time_dim].values
         if len(times) >= 2:
             # Check is only valid if we have 2 or more values with which to calculate the delta
@@ -1081,20 +1082,27 @@ class Publish(Transform, Metadata):
             if unit in self.extreme_values_by_unit.keys():
                 limit_vals = self.extreme_values_by_unit[unit]
                 if not limit_vals[0] <= random_val <= limit_vals[1]:
-                    raise ValueError(f"Value {random_val} falls outside acceptable range {limit_vals} for data in units {unit}. Found at {random_coords}")
+                    raise ValueError(
+                        f"Value {random_val} falls outside acceptable range\
+                         {limit_vals} for data in units {unit}. Found at {random_coords}"
+                    )
             # Build a dictionary of checked values to compare against after parsing
-            random_vals.update({ i : {"coords" : random_coords, "value" : random_val} })
+            random_vals.update({i: {"coords": random_coords, "value": random_val}})
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
         if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
-            raise TypeError(f"Dtype for data variable {self.data_var()} is {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}")
+            raise TypeError(
+                f"Dtype for data variable {self.data_var()} is\
+                  {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+            )
 
-    def update_quality_check(self,
-                             original_dataset: xr.Dataset,
-                             insert_times: tuple[datetime.datetime],
-                             append_times: tuple[datetime.datetime]
-                             ):
+    def update_quality_check(
+        self,
+        original_dataset: xr.Dataset,
+        insert_times: tuple[datetime.datetime],
+        append_times: tuple[datetime.datetime],
+    ):
         """
         Function containing quality checks specific to update parses, either insert or append.
         Intended to be run on an update dataset prior to parsing.

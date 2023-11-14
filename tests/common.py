@@ -155,9 +155,11 @@ def patched_root_stac_catalog(self):
 def patched_irregular_update_cadence(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
 
+
 original_extreme_values_by_unit = DatasetManager.extreme_values_by_unit
+
 
 def patched_extreme_values_by_unit(self):
     evbu = original_extreme_values_by_unit
-    evbu = evbu.update({"cubits" : (-500, 500)})
+    evbu = evbu.update({"cubits": (-500, 500)})
     return evbu

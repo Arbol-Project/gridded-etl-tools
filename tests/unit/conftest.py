@@ -27,7 +27,7 @@ def fake_original_dataset():
     data = xr.DataArray(np.random.randn(138, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
 
     ds = xr.Dataset({"data": data})
-    ds["data"] = ds["data"].astype('<f4')
+    ds["data"] = ds["data"].astype("<f4")
     return ds
 
 
@@ -39,7 +39,7 @@ def fake_complex_update_dataset():
     data = xr.DataArray(np.random.randn(60, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
 
     ds = xr.Dataset({"data": data})
-    ds["data"] = ds["data"].astype('<f4')
+    ds["data"] = ds["data"].astype("<f4")
     return ds
 
 

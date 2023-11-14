@@ -1,15 +1,11 @@
 import os
 import json
-import pytest
-import random
-import copy
 
-import pandas as pd
 import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_irregular_update_cadence
+from ..common import get_manager
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
@@ -110,4 +106,3 @@ def test_calculate_update_time_ranges(
     append_update = datetime_ranges[-1]
     append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
     assert append_size == np.timedelta64(35, "D")
-
