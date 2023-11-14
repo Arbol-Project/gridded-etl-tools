@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_irregular_update_cadence
+from ..common import get_manager, patched_update_cadence_bounds
 
 
 def test_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
@@ -107,7 +107,7 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     assert not dm.are_times_in_expected_order(out_of_order, expected_delta=expected_delta)
     # Check that irregular cadences pass
     mocker.patch(
-        "gridded_etl_tools.utils.attributes.Attributes.irregular_update_cadence", patched_irregular_update_cadence
+        "gridded_etl_tools.utils.attributes.Attributes.update_cadence_bounds", patched_update_cadence_bounds
     )
     three_and_four_day_updates = [contig[0], contig[3], contig[6], contig[10]]
     assert dm.are_times_in_expected_order(three_and_four_day_updates, expected_delta=expected_delta)

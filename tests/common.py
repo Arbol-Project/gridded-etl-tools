@@ -151,6 +151,6 @@ def patched_root_stac_catalog(self):
             Each individual dataset has been documented as STAC Items.",
     }
 
-
-def patched_irregular_update_cadence(self):
+@property
+def patched_update_cadence_bounds(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]

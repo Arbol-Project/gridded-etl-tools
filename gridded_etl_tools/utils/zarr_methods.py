@@ -1074,18 +1074,19 @@ class Publish(Transform, Metadata):
         for i in range(100):
             random_coords = self.get_random_coords(dataset)
             random_val = dataset[self.data_var()].sel(**random_coords).values
-            # Check NaNs
+            # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
             # Check extreme values if they are defined
-            unit = dataset[self.data_var()].encoding["units"]
-            if unit in self.extreme_values_by_unit.keys():
-                limit_vals = self.extreme_values_by_unit[unit]
-                if not limit_vals[0] <= random_val <= limit_vals[1]:
-                    raise ValueError(
-                        f"Value {random_val} falls outside acceptable range\
-                         {limit_vals} for data in units {unit}. Found at {random_coords}"
-                    )
+            if not np.isnan(random_val):
+                unit = dataset[self.data_var()].encoding["units"]
+                if unit in self.extreme_values_by_unit.keys():
+                    limit_vals = self.extreme_values_by_unit[unit]
+                    if not limit_vals[0] <= random_val <= limit_vals[1]:
+                        raise ValueError(
+                            f"Value {random_val} falls outside acceptable range\
+                            {limit_vals} for data in units {unit}. Found at {random_coords}"
+                        )
             # Build a dictionary of checked values to compare against after parsing
             random_vals.update({i: {"coords": random_coords, "value": random_val}})
 
