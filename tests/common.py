@@ -154,4 +154,3 @@ def patched_root_stac_catalog(self):
 
 def patched_irregular_update_cadence(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
-
