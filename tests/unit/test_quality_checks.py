@@ -71,6 +71,11 @@ def test_update_quality_check(mocker, manager_class: DatasetManager, fake_origin
     append_times = []
     with pytest.raises(IndexError):
         dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times)
+    # Test that a parse fails when the new data is before the existing data
+    insert_times = []
+    append_times = pd.date_range(start="2021-08-01", end="2021-08-15", freq="1D")
+    with pytest.raises(IndexError):
+        dm.update_quality_check(fake_original_dataset, insert_times=insert_times, append_times=append_times)
 
 
 def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):

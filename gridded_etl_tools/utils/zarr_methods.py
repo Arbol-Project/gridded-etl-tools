@@ -1118,6 +1118,23 @@ class Publish(Transform, Metadata):
         append_times : tuple
             Datetimes corresponding to all new records to append to the original dataset
         """
+        # Check that the update data isn't before the start of the existing dataset
+        if any(append_times):
+            if append_times[0] < original_dataset[self.time_dim][0]:
+                raise IndexError(
+                    f"Attempting to append data at {insert_times[0]}\
+                                before dataset start {original_dataset[self.time_dim][0]}.\
+                                This is not possible. If you need an earlier start date,\
+                                please reparse the dataset"
+                )
+        if any(insert_times):
+            if insert_times[0] < original_dataset[self.time_dim][0]:
+                raise IndexError(
+                    f"Attempting to insert data at {insert_times[0]}\
+                                before dataset start {original_dataset[self.time_dim][0]}.\
+                                This is not possible. If you need an earlier start date,\
+                                please reparse the dataset"
+                )
         # Check that the first value of the append times and the last value of the original dataset are contiguous
         # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
         if any(append_times) and len(original_dataset[self.time_dim]) > 1:
@@ -1128,7 +1145,7 @@ class Publish(Transform, Metadata):
                 raise IndexError("Append would create out of order or incomplete dataset, aborting")
         # Raise an exception if there is no data to write
         if not any(insert_times) and not any(append_times):
-            raise IndexError("Update started with no new records to insert or append to original zarr.")
+            raise IndexError("Update started with no new records to insert or append to original zarr")
 
     def are_times_in_expected_order(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
