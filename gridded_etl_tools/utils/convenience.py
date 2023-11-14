@@ -618,11 +618,9 @@ class Convenience(Attributes):
         return dataset.sortby(["latitude", "longitude"])
 
     @classmethod
-    def span_to_timedelta(cls) -> np.timedelta64:
+    def span_to_timedelta(cls) -> dict[str, np.timedelta64]:
         """
-        Map a dataset's string time span to a corresponding numpy timedelta64 object
-        NOTE only valid for datasets with regular update cadences.
-        See `irregular_update_cadence` attribute for handling irregular cadence.
+        Provide a dictionary mapping common time spans to timedeltas
 
         Returns
         -------
