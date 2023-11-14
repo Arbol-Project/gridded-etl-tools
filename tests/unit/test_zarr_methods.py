@@ -66,12 +66,13 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     Test that the preprocess_kerchunk method successfully changes the _FillValue attribute of all arrays
     """
     orig_fill_value = json.loads(example_zarr_json["refs"]["latitude/.zarray"])["fill_value"]
+
     # prepare a dataset manager and preprocess a Zarr JSON
-    dm = get_manager(manager_class)
-    mocker.patch(
-        "tests.unit.conftest.DummyManager.missing_value_indicator",
-        return_value=-8888,
-    )
+    class MyManagerClass(manager_class):
+        missing_value = -8888
+
+    dm = get_manager(MyManagerClass)
+
     pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])
     # populate before/after fill value variables
     modified_fill_value = int(json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"])

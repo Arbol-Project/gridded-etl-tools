@@ -284,10 +284,10 @@ class Transform(Convenience):
             Kwargs for kerchunk's MultiZarrToZarr method
         """
         opts = dict(
-            remote_protocol=cls.remote_protocol(),
+            remote_protocol=cls.protocol,
             remote_options={"anon": True},
-            identical_dims=cls.identical_dims(),
-            concat_dims=cls.concat_dims(),
+            identical_dims=cls.identical_dimensions,
+            concat_dims=cls.concat_dimensions,
             preprocess=cls.preprocess_kerchunk,
         )
         return opts
@@ -320,7 +320,7 @@ class Transform(Convenience):
                 ref_names.add(re.match(file_match_pattern, ref).group(1))
         for ref in ref_names:
             fill_value_fix = json.loads(refs[f"{ref}/.zarray"])
-            fill_value_fix["fill_value"] = str(cls.missing_value_indicator())
+            fill_value_fix["fill_value"] = str(cls.missing_value)
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 
@@ -716,7 +716,7 @@ class Publish(Transform, Metadata):
             backend_kwargs={
                 "storage_options": {
                     "fo": zarr_json_path,
-                    "remote_protocol": self.remote_protocol(),
+                    "remote_protocol": self.protocol,
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
@@ -1008,7 +1008,7 @@ class Publish(Transform, Metadata):
         """
         # NOTE this won't work for months (returns 1 minute), we could define a more precise method with if/else
         # statements if needed.
-        dataset_time_span = f"1{self.temporal_resolution()[0]}"
+        dataset_time_span = f"1{self.time_resolution[0]}"
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value,
         # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
@@ -1170,19 +1170,15 @@ class Publish(Transform, Metadata):
         previous_time = times[0]
         for instant in times[1:]:
             # Warn if not using expected delta
-            if self.irregular_update_cadence():
+            if self.update_cadence_bounds:
                 self.warn(
-                    f"Because dataset has irregular cadence {self.irregular_update_cadence()} expected delta "
+                    f"Because dataset has irregular cadence {self.update_cadence_bounds} expected delta "
                     f"{expected_delta} is not being used for checking time contiguity"
                 )
-                if (
-                    not self.irregular_update_cadence()[0]
-                    <= (instant - previous_time)
-                    <= self.irregular_update_cadence()[1]
-                ):
+                if not self.update_cadence_bounds[0] <= (instant - previous_time) <= self.update_cadence_bounds[1]:
                     self.warn(
                         f"Time value {instant} and previous time {previous_time} do not fit within anticipated update "
-                        f"cadence {self.irregular_update_cadence()}"
+                        f"cadence {self.update_cadence_bounds}"
                     )
                     return False
             elif instant - previous_time != expected_delta:

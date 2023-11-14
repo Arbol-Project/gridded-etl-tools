@@ -35,14 +35,14 @@ class Metadata(Convenience, IPFS):
         return {
             "stac_version": "1.0.0",
             "type": "Feature",
-            "id": cls.name(),
+            "id": cls.dataset_name,
             "collection": cls.collection(),
             "links": [],
             "assets": {
                 "zmetadata": {
-                    "title": cls.name(),
+                    "title": cls.dataset_name,
                     "type": "application/json",
-                    "description": f"Consolidated metadata file for {cls.name()} Zarr store, readable as a Zarr "
+                    "description": f"Consolidated metadata file for {cls.dataset_name} Zarr store, readable as a Zarr "
                     "dataset by Xarray",
                     "roles": ["metadata", "zarr-consolidated-metadata"],
                 }
@@ -453,7 +453,7 @@ class Metadata(Convenience, IPFS):
                 "rel": "self",
                 "href": str(href),
                 "type": "application/geo+json",
-                "title": f"{self.name()} metadata",
+                "title": f"{self.dataset_name} metadata",
             }
         )
         # push final STAC Item to backing store
@@ -600,18 +600,18 @@ class Metadata(Convenience, IPFS):
         dataset.encoding = {
             self.data_var(): {
                 "dtype": self.data_var_dtype,
-                "_FillValue": self.missing_value_indicator(),
+                "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value_indicator(),
+                "missing_value": self.missing_value,
             }
         }
         dataset[self.data_var()].encoding.update(
             {
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
-                "_FillValue": self.missing_value_indicator(),
+                "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value_indicator(),
+                "missing_value": self.missing_value,
                 "chunks": tuple(val for val in self.requested_zarr_chunks.values()),
                 "preferred_chunks": self.requested_zarr_chunks,
             }
