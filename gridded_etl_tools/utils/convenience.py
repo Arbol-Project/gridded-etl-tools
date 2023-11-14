@@ -1,19 +1,20 @@
 import os
 import gc
 import pathlib
-import natsort
 import datetime
 import re
 import ftplib
 import io
 import json
 import random
-
-import pandas as pd
-import numpy as np
-import xarray as xr
-
 from typing import Any
+
+from dateutil.parser import parse as parse_date
+import deprecation
+import natsort
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 from .attributes import Attributes
 from .store import IPLD
@@ -54,7 +55,7 @@ class Convenience(Attributes):
         pathlib.Path
             The path to the local final Zarr JSON file
         """
-        return self.local_input_root / "merged_zarr_jsons" / f"{self.name()}_zarr.json"
+        return self.local_input_root / "merged_zarr_jsons" / f"{self.dataset_name}_zarr.json"
 
     @classmethod
     def json_key(cls, append_date: bool = False) -> str:
@@ -73,14 +74,14 @@ class Convenience(Attributes):
             The formatted JSON key
 
         """
-        key = f"{cls.name()}-{cls.temporal_resolution()}"
+        key = f"{cls.dataset_name}-{cls.time_resolution}"
         if append_date:
             key = f"{key}-{datetime.datetime.now().strftime(cls.DATE_FORMAT_FOLDER)}"
         return key
 
     # PATHS
 
-    def local_input_path(self) -> str:
+    def local_input_path(self) -> pathlib.Path:
         """
         The path to local data is built recursively by appending each derivative's relative path to the previous
         derivative's path. If a custom input path is set, force return the custom path.
@@ -105,7 +106,7 @@ class Convenience(Attributes):
         """
         return pathlib.Path(".")
 
-    def input_files(self) -> list:
+    def input_files(self) -> list[pathlib.Path]:
         """
         Iterator for iterating through the list of local input files
 
@@ -139,7 +140,7 @@ class Convenience(Attributes):
             Directory path derived from the date provided
 
         """
-        if self.temporal_resolution() == self.SPAN_HOURLY:
+        if self.time_resolution == self.SPAN_HOURLY:
             date_format = self.DATE_HOURLY_FORMAT_FOLDER
         else:
             date_format = self.DATE_FORMAT_FOLDER
@@ -148,7 +149,7 @@ class Convenience(Attributes):
             path = pathlib.Path(self.output_root) / path
         return path
 
-    def output_path(self, omit_root: bool = False) -> str:
+    def output_path(self, omit_root: bool = False) -> pathlib.Path:
         """
         Return the path to a directory where parsed climate data will be written, automatically determining the end
         date and base on that. If `omit_root` is set, remove `self.output_root` from the path. Override with
@@ -171,7 +172,7 @@ class Convenience(Attributes):
 
     # DATES
 
-    def get_metadata_date_range(self) -> dict:
+    def get_metadata_date_range(self) -> dict[str, datetime.datetime]:
         """
         Returns the date range in the metadata as datetime objects in a dict with `start` and `end` keys.
 
@@ -199,7 +200,7 @@ class Convenience(Attributes):
                 if "date range" in dataset.attrs:
                     # Assume attr format is ['%Y%m%d%H', '%Y%m%d%H'], translate to datetime objects, then transform
                     # into a dict with "start" and "end" keys
-                    return dict(
+                    return dict(  # pragma NO BRANCH, coverage is confused here for some reason
                         zip(
                             ("start", "end"),
                             (datetime.datetime.strptime(d, date_format) for d in dataset.attrs["date range"]),
@@ -210,6 +211,7 @@ class Convenience(Attributes):
             else:
                 raise ValueError(f"No existing dataset found to get date range from at {self.store}")
 
+    @deprecation.deprecated("use dateutil.parser.parse")
     def convert_date_range(self, date_range: list) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Convert a JSON text/isoformat date range into a python datetime object range
@@ -225,12 +227,10 @@ class Convenience(Attributes):
             A tuple of (datetime.datetime, datetime.datetime) representing a date range's start and end
 
         """
-        if re.match(".+/.+/.+", date_range[0]):
-            start, end = [datetime.datetime.strptime(d, self.DATE_FORMAT_METADATA) for d in date_range]
-        else:
-            start, end = [datetime.datetime.fromisoformat(d) for d in date_range]
+        start, end = [parse_date(date) for date in date_range]
         return start, end
 
+    @deprecation.deprecated("use dateutil.parser.parse")
     def iso_to_datetime(self, isodate: str) -> datetime.datetime:
         """
         Get a datetime object from an ISO formatted date string
@@ -246,7 +246,7 @@ class Convenience(Attributes):
             The converted date
 
         """
-        return datetime.datetime.fromisoformat(isodate)
+        return parse_date(isodate)
 
     def numpydate_to_py(self, numpy_date: np.datetime64) -> datetime.datetime:
         """
@@ -298,11 +298,9 @@ class Convenience(Attributes):
             self.set_key_dims()
         # if there is only one date, set start and end to the same value
         if dataset[self.time_dim].size == 1:
-            value = dataset[self.time_dim].values
-            if isinstance(value, np.ndarray):
-                value = value[0]
-            start = self.numpydate_to_py(value)
-            end = start
+            values = dataset[self.time_dim].values
+            assert len(values) == 1
+            start = end = self.numpydate_to_py(values[0])
         else:
             start = self.numpydate_to_py(dataset[self.time_dim][0].values)
             end = self.numpydate_to_py(dataset[self.time_dim][-1].values)
@@ -328,12 +326,19 @@ class Convenience(Attributes):
             A tuple of datetime.datetime objects defining the start and end date of a file's time dimension
 
         """
-        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
-        date_range = self.get_date_range_from_dataset(dataset)
-        dataset.close()
-        del dataset
-        gc.collect()
-        return date_range
+        try:
+            dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
+            return self.get_date_range_from_dataset(dataset)
+
+        finally:
+            # Is there reason to think this is necessary? If Dataset is a normal Python object with normal behavior,
+            # when it will fall out of scope at the end of this function, causing its refcount to fall to zero, at
+            # which time the interpreter will evict it from memory, no garbage collecting necessary. Any needed cleanup
+            # (ie, the 'close' call) generally happens at that time as well. Does XArray do something weird that forces
+            # us to do this?
+            dataset.close()
+            del dataset
+            gc.collect()
 
     def date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
         """
@@ -366,73 +371,6 @@ class Convenience(Attributes):
 
         """
         return self.get_date_range_from_file(list(self.input_files())[-1])
-
-    # STRING TRANSFORMATIONS
-
-    def _coord_reformat(self, *args, pretty: bool = False, padding: int = 0) -> str:
-        """
-        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With
-        `pretty` set to False, return a string that can be used for a file name. With `pretty` set to True, return
-        formatted coordinate string
-
-        Parameters
-        ----------
-        args : list
-            A list of (index, coordinate) tuples
-        pretty : bool, optional
-            A switch indicating whether to add a separator to the returned coordinates
-        padding : int
-            The number of zero padding spaces, in integer form, to add to returned coordinates
-
-        Returns
-        -------
-        str
-            Coordinates reformatted as specified
-
-        """
-        if not pretty:
-            separator = "_"
-            coords = ""
-        else:
-            separator = ", "
-            coords = "("
-        for ii, coord in enumerate(args):
-            if ii > 0:
-                coords += separator
-            coords += f"{float(coord):0{padding}.3f}"
-        if pretty:
-            coords += ")"
-        return coords
-
-    def coord_str(self, *args, pretty: bool = False, padding=0) -> str:
-        """
-        Return coordinates (individually or pair) as a single string value with 3 decimal places of precision. With
-        `pretty` set to False, return a string that can be used for a file name. With `pretty` set to True, return
-        formatted coordinate string
-
-
-        Parameters
-        ----------
-        args : list
-            A list of (index, coordinate) tuples
-        pretty : bool, optional
-            A switch indicating whether to add a separator to the returned coordinates
-        padding : int
-            The number of zero padding spaces, in integer form, to add to returned coordinates
-
-        Returns
-        -------
-        str
-            Coordinates reformatted as specified
-
-        """
-        translated_args = []
-        for coord in args:
-            if isinstance(coord, xr.DataArray):
-                translated_args.append(coord.values)
-            else:
-                translated_args.append(coord)
-        return self._coord_reformat(*translated_args, pretty=pretty, padding=padding)
 
     # FTP
 
@@ -508,24 +446,6 @@ class Convenience(Attributes):
 
     # ETC
 
-    def array_has_data(self, array: np.ndarray) -> bool | np.ndarray:
-        """
-        Convenience method to determine if an array has any data
-
-        Parameters
-        ----------
-        array : np.array
-            A numpy array to assess
-
-        Returns
-        -------
-        bool | np.array
-            Either a boolean indicating whether an array has data,
-            or an array containing multiple booleans indicating which arrays have data
-
-        """
-        return not np.all(np.isnan(array))
-
     def bbox_coords(self, dataset: xr.Dataset) -> tuple[float, float, float, float]:
         """
         Calculate bounding box coordinates from an Xarray dataset
@@ -540,6 +460,7 @@ class Convenience(Attributes):
         tuple[float, float, float, float]
             The minimum X, minimum Y, maximum X, and maximum Y values of the dataset's bounding box extent
         """
+        # Shoulc longitude/latitude be hardcoded names?
         return (
             round(float(dataset.longitude.values.min()), self.bbox_rounding_value),
             round(float(dataset.latitude.values.min()), self.bbox_rounding_value),
@@ -617,24 +538,6 @@ class Convenience(Attributes):
         # to 180 if necessary.
         return dataset.sortby(["latitude", "longitude"])
 
-    @classmethod
-    def span_to_timedelta(cls) -> dict[str, np.timedelta64]:
-        """
-        Provide a dictionary mapping common time spans to timedeltas
-
-        Returns
-        -------
-        A numpy timedelta corresponding to a dataset's update cadence
-        """
-        span_to_td = {
-            cls.SPAN_HOURLY: np.timedelta64(1, "h"),
-            cls.SPAN_DAILY: np.timedelta64(1, "D"),
-            cls.SPAN_WEEKLY: np.timedelta64(1, "W"),
-            cls.SPAN_MONTHLY: np.timedelta64(1, "M"),
-            cls.SPAN_YEARLY: np.timedelta64(1, "Y"),
-        }
-        return span_to_td
-
     def get_random_coords(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
         Derive a dictionary of random coordinates, one for each dimension in the input dataset
@@ -655,6 +558,7 @@ class Convenience(Attributes):
         return coords_dict
 
     @property
+    @deprecation.deprecated("Use the constant DatasetManager.EXTREME_VALUES_BY_UNIT")
     def extreme_values_by_unit(self):
         """
         Define minimum and maximum permissible values for common units
@@ -665,5 +569,4 @@ class Convenience(Attributes):
             A dict of {str : (float, float)} representing the unit name
             and corresponding lower/upper value limits
         """
-        units_dict = {"deg_C": (-90, 60), "K": (183.15, 333.15), "deg_F": (-129, 140)}
-        return units_dict
+        return self.EXTREME_VALUES_BY_UNIT

@@ -45,6 +45,7 @@ dependencies = [
     "pandas",
     "psutil",
     "pycryptodome",
+    "python-dateutil",
     "requests",
     "s3fs",
     "shapely",

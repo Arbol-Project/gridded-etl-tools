@@ -22,9 +22,11 @@ def example_zarr_json():
 @pytest.fixture()
 def fake_original_dataset():
     time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
-    lat = xr.DataArray(np.arange(10, 50, 10), dims="lat", coords={"lat": np.arange(10, 50, 10)})
-    lon = xr.DataArray(np.arange(100, 140, 10), dims="lon", coords={"lon": np.arange(100, 140, 10)})
-    data = xr.DataArray(np.random.randn(138, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(138, 4, 4), dims=("time", "latitude", "longitude"), coords=(time, latitude, longitude)
+    )
 
     ds = xr.Dataset({"data": data})
     ds["data"] = ds["data"].astype("<f4")
@@ -34,9 +36,25 @@ def fake_original_dataset():
 @pytest.fixture()
 def fake_complex_update_dataset():
     time = xr.DataArray(np.array(complex_update_times), dims="time", coords={"time": np.arange(60)})
-    lat = xr.DataArray(np.arange(10, 50, 10), dims="lat", coords={"lat": np.arange(10, 50, 10)})
-    lon = xr.DataArray(np.arange(100, 140, 10), dims="lon", coords={"lon": np.arange(100, 140, 10)})
-    data = xr.DataArray(np.random.randn(60, 4, 4), dims=("time", "lat", "lon"), coords=(time, lat, lon))
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(60, 4, 4), dims=("time", "latitude", "longitude"), coords=(time, latitude, longitude)
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture()
+def single_time_instant_dataset():
+    time = xr.DataArray(np.array(original_times[:1]), dims="time", coords={"time": np.arange(1)})
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(1, 4, 4), dims=("time", "latitude", "longitude"), coords=(time, latitude, longitude)
+    )
 
     ds = xr.Dataset({"data": data})
     ds["data"] = ds["data"].astype("<f4")
@@ -66,11 +84,10 @@ class DummyManagerBase(dataset_manager.DatasetManager):
 
     unit_of_measurement = "parsecs"
     requested_zarr_chunks = {}
-    time_dim = "time"
     encryption_key = None
     fill_value = ""
 
-    def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, *args, **kwargs):
+    def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, set_key_dims=True, *args, **kwargs):
         if requested_dask_chunks is None:
             requested_dask_chunks = {}
 
@@ -79,6 +96,8 @@ class DummyManagerBase(dataset_manager.DatasetManager):
 
         self._static_metadata = kwargs.pop("static_metadata", {})
         super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
+        if set_key_dims:
+            self.set_key_dims()
 
     @classmethod
     def data_var(self):
