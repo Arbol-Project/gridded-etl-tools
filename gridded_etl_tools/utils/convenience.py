@@ -667,5 +667,5 @@ class Convenience(Attributes):
             A dict of {str : (float, float)} representing the unit name
             and corresponding lower/upper value limits
         """
-        units_dict = {"C": (-100, 60), "K": (263.15, 333.15), "F": (-148, 140)}
+        units_dict = {"C": (-90, 60), "K": (183.15, 333.15), "F": (-129, 140)}
         return units_dict
