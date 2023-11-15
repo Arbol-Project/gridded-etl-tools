@@ -1222,19 +1222,22 @@ class Publish(Transform, Metadata):
             The tolerance for diversions between original and parsed values. 
             Absolute differences between them beyond this limit will raise a ValueError
         """
-        self.info("Beginning post-parse quality check of prepared dataset")
-        start_checking = time.perf_counter()
-        # Instantiate needed objects
-        self.set_key_dims()  # in case running w/out Transform/Parse
-        prod_ds = self.get_prod_update_ds()
-        # Run the data check N times, incrementing after every successfuly check
-        i = 0
-        while i <= checks:
-            random_coords = self.get_random_coords(prod_ds)
-            orig_ds = self.get_original_ds()
-            i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
-        
-        self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
+        if self.skip_post_parse_qc:
+            self.info("Skipping post-parse quality check since the source data is different from the parsed data")
+        else:
+            self.info("Beginning post-parse quality check of the parsed dataset")
+            start_checking = time.perf_counter()
+            # Instantiate needed objects
+            self.set_key_dims()  # in case running w/out Transform/Parse
+            prod_ds = self.get_prod_update_ds()
+            # Run the data check N times, incrementing after every successfuly check
+            i = 0
+            while i <= checks:
+                random_coords = self.get_random_coords(prod_ds)
+                orig_ds = self.get_original_ds()
+                i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
+            
+            self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
     def get_prod_update_ds(self) -> xr.Dataset:
         """

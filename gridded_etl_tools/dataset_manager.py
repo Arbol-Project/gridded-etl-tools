@@ -66,6 +66,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dask_cpu_mem_target_ratio: float = 4 / 32,
         use_local_zarr_jsons: bool = True,
         skip_prepare_input_files: bool = False,
+        skip_post_parse_qc: bool = False,
         encryption_key: str = None,
         use_compression: bool = True,
         dry_run: bool = False,
@@ -123,6 +124,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             datasets. Defaults to True to speed up post-parse quality checks.
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
+        skip_post_parse_qc: bool, optional
+            Skip the `post_parse_quality_check` method. Applicable to datasets that transform source data before parsing,
+            making source data checks irrelevant.
         encryption_key : str, optional
             If provided, data will be encrypted using `encryption_key` with XChaCha20Poly1305. Use
             :func:`.encryption.generate_encryption_key` to generate a random encryption key to be passed in here.
@@ -143,6 +147,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Create certain paramters for development and debugging of certain dataset. All default to False.
         self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
+        self.skip_post_parse_qc = skip_post_parse_qc
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than
         # "local", "ipld", or "s3" is passed, raise a `ValueError`.
         if store is None or store == "local":
