@@ -9,6 +9,7 @@ import dask
 import pathlib
 import glob
 import os
+import random
 
 import pandas as pd
 import numpy as np
@@ -1184,8 +1185,7 @@ class Publish(Transform, Metadata):
             Returns False for any unacceptable timestamp order, otherwise True
         """
         # Check if times meet expected_delta or fall within the anticipated range. Raise a warning and return false if
-        # so. Raise a descriptive error message in the enclosing function describing the specific operation this failed
-        # on.
+        # so. Raise a descriptive error message in the enclosing function describing the specific operation that failed.
         previous_time = times[0]
         for instant in times[1:]:
             # Warn if not using expected delta
@@ -1209,3 +1209,132 @@ class Publish(Transform, Metadata):
             previous_time = instant
         # Return True if no problems found
         return True
+
+    def post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
+        """
+        Master function to check values written after a parse for discrepancies with the source data
+
+        Parameters
+        ----------
+        checks
+            The number of values to check. Defaults to 100.
+        threshold
+            The tolerance for diversions between original and parsed values. 
+            Absolute differences between them beyond this limit will raise a ValueError
+        """
+        self.info("Beginning post-parse quality check of prepared dataset")
+        start_checking = time.perf_counter()
+        # Instantiate needed objects
+        self.set_key_dims()  # in case running w/out Transform/Parse
+        prod_ds = self.get_prod_update_ds(self)
+        # Run the data check N times, incrementing after every successfuly check
+        i = 0
+        while i <= checks:
+            random_coords = self.get_random_coords(prod_ds)
+            orig_file_path = random.choice(list(self.input_files()))
+            i += self.check_value(random_coords, orig_file_path, prod_ds, threshold)
+        
+        self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
+
+    def get_prod_update_ds(self) -> xr.Dataset:
+        """
+        Get the prod dataset and filter it to the temporal extent of the latest update
+
+        Returns
+        -------
+        prod_ds
+            The production dataset filtered to only the temporal extent of the latest update
+        """
+        prod_ds = self.store.dataset
+        update_date_range = slice(
+                    datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
+                    datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
+                )
+        time_select = {self.time_dim : update_date_range}
+        return prod_ds.sel(**time_select)
+
+    def check_value(
+            self,
+            random_coords: dict[Any],
+            orig_file_path: pathlib.Path,
+            prod_ds: xr.Dataset,
+            threshold: float = 10e-5
+        ):
+        """
+        Check random values in the original files against the written values 
+        in the updated dataset at the same location
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        orig_file_path
+            The file path of the randomly selected original file
+        prod_ds
+            The filtered production dataset
+        threshold
+            The tolerance for diversions between original and parsed values. 
+            Absolute differences between them beyond this limit will raise a ValueError
+
+        Returns
+        -------
+        bool
+            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
+            to the update time range (False). Failed checks will raise a ValueError instead.
+        """
+        # Prepare the original dataset for selection and confirm it has a timestamp w/in the update range
+        # Some datasets download all values for the latest year, meaning lots of files won't match the update range
+        # We return False to skip those
+        orig_ds = self.reformat_orig_ds(orig_file_path)
+        if not random_coords["time"] == orig_ds["time"].values:
+            return False
+        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
+        # Open desired data values
+        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        # Compare values from the original dataset to the prod dataset.
+        # Raise an error if the values differ more than the permitted threshold
+        self.info(f"{orig_val}, {prod_val}")
+        if abs(orig_val - prod_val) > threshold:
+            raise ValueError(
+                f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
+            )
+        return True
+
+    def reformat_orig_ds(self, orig_file_path: pathlib.Path) -> xr.Dataset:
+        """
+        Open and reformat the original dataset so it can be selected from identically to the production dataset
+        Basically re-run key elements of the transform step
+
+        Parameters
+        ----------
+        orig_file_path
+            A pathlib path to one of the transformed original files on the local disk
+        """
+        # Open local file
+        orig_ds = xr.open_dataset(orig_file_path)
+        # Drop unused coords and dims
+        for coord in ["crs"]:
+            if coord in orig_ds:
+                orig_ds = orig_ds.drop(coord)
+        # Rename coordinates
+        orig_data_var = [var for var in orig_ds.data_vars][0]
+        rename_coords = {orig_data_var : self.data_var()}
+        for coord in ["lat","lon"]:
+            if coord in orig_ds.coords:
+                str_add = "itude"
+                if coord == "lon":
+                    str_add = "gitude"
+                rename_coords.update({coord : coord + str_add})
+        orig_ds = orig_ds.rename(**rename_coords)
+        # Rework longitudes to -180 to 180 style
+        orig_ds = orig_ds.assign_coords(
+                longitude=(((orig_ds.longitude + 180) % 360) - 180)
+            )
+        # Create a time dimension if missing
+        if not "time" in orig_ds:
+            orig_ds = orig_ds.assign_coords({"time" : datetime.datetime.strptime(re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")})
+        if "time" in orig_ds and not "time" in orig_ds.dims:
+            orig_ds = orig_ds.expand_dims("time")
+        return orig_ds
