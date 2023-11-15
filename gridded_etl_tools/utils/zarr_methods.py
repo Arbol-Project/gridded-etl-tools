@@ -1055,6 +1055,8 @@ class Publish(Transform, Metadata):
         dataset : xr.Dataset
             The final dataset to be parsed
         """
+        self.info(f"Beginning pre-parse quality check of prepared dataset")
+        start_checking = time.perf_counter()
         # TIME CHECK
         # Aggressively assert that the time dimension of the data is in the anticipated order.
         # Only valid if the dataset's time dimension is longer than 1 element
@@ -1079,6 +1081,7 @@ class Publish(Transform, Metadata):
                 f"Dtype for data variable {self.data_var()} is\
                   {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
             )
+        self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
     def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> dict[str, dict[str: Any]]:
         """
