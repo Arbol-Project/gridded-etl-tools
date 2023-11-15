@@ -1226,13 +1226,13 @@ class Publish(Transform, Metadata):
         start_checking = time.perf_counter()
         # Instantiate needed objects
         self.set_key_dims()  # in case running w/out Transform/Parse
-        prod_ds = self.get_prod_update_ds(self)
+        prod_ds = self.get_prod_update_ds()
         # Run the data check N times, incrementing after every successfuly check
         i = 0
         while i <= checks:
             random_coords = self.get_random_coords(prod_ds)
-            orig_file_path = random.choice(list(self.input_files()))
-            i += self.check_value(random_coords, orig_file_path, prod_ds, threshold)
+            orig_ds = self.get_original_ds()
+            i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
         
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
@@ -1245,13 +1245,63 @@ class Publish(Transform, Metadata):
         prod_ds
             The production dataset filtered to only the temporal extent of the latest update
         """
-        prod_ds = self.store.dataset
+        prod_ds = self.store.dataset()
         update_date_range = slice(
                     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
                     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
                 )
         time_select = {self.time_dim : update_date_range}
         return prod_ds.sel(**time_select)
+
+    def get_original_ds(self) -> xr.Dataset:
+        """
+        Get the original dataset and format it equivalently to the production dataset
+        """
+        orig_file_path = random.choice(list(self.input_files()))
+        if self.protocol == "file":
+            raw_ds = xr.open_dataset(orig_file_path)
+        # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
+        elif self.protocol == "remote":
+            raw_ds = self.zarr_json_to_dataset(zarr_json_path=orig_file_path)
+        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
+        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
+        return orig_ds
+
+    def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
+        """
+        Open and reformat the original dataset so it can be selected from identically to the production dataset
+        Basically re-run key elements of the transform step
+
+        Parameters
+        ----------
+        orig_ds
+            The original dataset, unformatted
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
+        """
+        # Drop unused coords and dims
+        for coord in ["crs"]:
+            if coord in orig_ds:
+                orig_ds = orig_ds.drop(coord)
+        # Rename coordinates
+        orig_data_var = [var for var in orig_ds.data_vars][0]
+        rename_coords = {orig_data_var : self.data_var()}
+        for coord in ["lat","lon"]:
+            if coord in orig_ds.coords:
+                str_add = "itude"
+                if coord == "lon":
+                    str_add = "gitude"
+                rename_coords.update({coord : coord + str_add})
+        orig_ds = orig_ds.rename(**rename_coords)
+        # Rework longitudes to -180 to 180 style
+        orig_ds = self.standardize_longitudes(orig_ds)
+        # Create a time dimension from the file name if missing in the raw file...
+        if not self.time_dim in orig_ds:
+            orig_ds = orig_ds.assign_coords({self.time_dim : datetime.datetime.strptime(re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")})
+        # ...or expand it if it's of length 1 and Xarray therefore doesn't recognize it as a dimension
+        if self.time_dim in orig_ds and not self.time_dim in orig_ds.dims:
+            orig_ds = orig_ds.expand_dims(self.time_dim)
+        return orig_ds
 
     def check_value(
             self,
@@ -1301,40 +1351,3 @@ class Publish(Transform, Metadata):
                 f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
             )
         return True
-
-    def reformat_orig_ds(self, orig_file_path: pathlib.Path) -> xr.Dataset:
-        """
-        Open and reformat the original dataset so it can be selected from identically to the production dataset
-        Basically re-run key elements of the transform step
-
-        Parameters
-        ----------
-        orig_file_path
-            A pathlib path to one of the transformed original files on the local disk
-        """
-        # Open local file
-        orig_ds = xr.open_dataset(orig_file_path)
-        # Drop unused coords and dims
-        for coord in ["crs"]:
-            if coord in orig_ds:
-                orig_ds = orig_ds.drop(coord)
-        # Rename coordinates
-        orig_data_var = [var for var in orig_ds.data_vars][0]
-        rename_coords = {orig_data_var : self.data_var()}
-        for coord in ["lat","lon"]:
-            if coord in orig_ds.coords:
-                str_add = "itude"
-                if coord == "lon":
-                    str_add = "gitude"
-                rename_coords.update({coord : coord + str_add})
-        orig_ds = orig_ds.rename(**rename_coords)
-        # Rework longitudes to -180 to 180 style
-        orig_ds = orig_ds.assign_coords(
-                longitude=(((orig_ds.longitude + 180) % 360) - 180)
-            )
-        # Create a time dimension if missing
-        if not "time" in orig_ds:
-            orig_ds = orig_ds.assign_coords({"time" : datetime.datetime.strptime(re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")})
-        if "time" in orig_ds and not "time" in orig_ds.dims:
-            orig_ds = orig_ds.expand_dims("time")
-        return orig_ds

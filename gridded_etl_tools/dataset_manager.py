@@ -64,7 +64,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
         dask_cpu_mem_target_ratio: float = 4 / 32,
-        use_local_zarr_jsons: bool = False,
+        use_local_zarr_jsons: bool = True,
         skip_prepare_input_files: bool = False,
         encryption_key: str = None,
         use_compression: bool = True,
@@ -120,7 +120,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             will fail with a warning message.
         use_local_zarr_jsons: bool, optional
             Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked
-            datasets.
+            datasets. Defaults to True to speed up post-parse quality checks.
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
         encryption_key : str, optional
