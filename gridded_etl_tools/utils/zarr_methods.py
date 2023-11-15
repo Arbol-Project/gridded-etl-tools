@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from typing import Optional
+from typing import Optional, Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
@@ -1070,8 +1070,29 @@ class Publish(Transform, Metadata):
 
         # VALUES CHECK
         # Check 100 values for NAs and extreme values
+        random_values = self.check_random_values(dataset, checks=100)
+
+        # ENCODING CHECK
+        # Check that data is stored in a space efficient format
+        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
+            raise TypeError(
+                f"Dtype for data variable {self.data_var()} is\
+                  {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+            )
+
+    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> dict[str, dict[str: Any]]:
+        """
+        Check N random values from the finalized dataset for any obviously wrong data points,
+        either unanticipated NaNs or extreme values
+
+        Returns
+        -------
+        random_values
+            A dictionary of randomly selected values with their corresponding coordinates.
+            Intended for later reuse checking the same coordinates after a dataset is parsed.
+        """
         random_vals = {}
-        for i in range(100):
+        for i in range(checks):
             random_coords = self.get_random_coords(dataset)
             random_val = dataset[self.data_var()].sel(**random_coords).values
             # Check for unanticipated NaNs
@@ -1089,14 +1110,9 @@ class Publish(Transform, Metadata):
                         )
             # Build a dictionary of checked values to compare against after parsing
             random_vals.update({i: {"coords": random_coords, "value": random_val}})
+        
+        return random_vals
 
-        # ENCODING CHECK
-        # Check that data is stored in a space efficient format
-        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
-            raise TypeError(
-                f"Dtype for data variable {self.data_var()} is\
-                  {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
-            )
 
     def update_quality_check(
         self,
