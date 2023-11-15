@@ -1055,7 +1055,7 @@ class Publish(Transform, Metadata):
         dataset : xr.Dataset
             The final dataset to be parsed
         """
-        self.info(f"Beginning pre-parse quality check of prepared dataset")
+        self.info("Beginning pre-parse quality check of prepared dataset")
         start_checking = time.perf_counter()
         # TIME CHECK
         # Aggressively assert that the time dimension of the data is in the anticipated order.
@@ -1072,7 +1072,7 @@ class Publish(Transform, Metadata):
 
         # VALUES CHECK
         # Check 100 values for NAs and extreme values
-        random_values = self.check_random_values(dataset, checks=100)
+        self.check_random_values(dataset, checks=100)
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
@@ -1083,7 +1083,7 @@ class Publish(Transform, Metadata):
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
-    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> dict[str, dict[str: Any]]:
+    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> dict[str, dict[str:Any]]:
         """
         Check N random values from the finalized dataset for any obviously wrong data points,
         either unanticipated NaNs or extreme values
@@ -1113,9 +1113,8 @@ class Publish(Transform, Metadata):
                         )
             # Build a dictionary of checked values to compare against after parsing
             random_vals.update({i: {"coords": random_coords, "value": random_val}})
-        
-        return random_vals
 
+        return random_vals
 
     def update_quality_check(
         self,
