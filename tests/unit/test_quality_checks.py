@@ -6,10 +6,10 @@ import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, patched_update_cadence_bounds
+from ..common import get_manager, patched_update_cadence_bounds, initial
 
 
-def test_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
+def test_pre_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     """
     Test that the pre-parse quality check method waves through good data
     and fails as anticipated with bad data of specific types
@@ -112,3 +112,28 @@ def test_are_times_in_expected_order(mocker, manager_class: DatasetManager):
     # Check that ranges outside the irregular cadence still fail
     five_day_updates = [contig[0], contig[3], contig[6], contig[11], contig[14]]
     assert not dm.are_times_in_expected_order(five_day_updates, expected_delta=expected_delta)
+
+# def test_post_parse_quality_check(mocker, capfd, initial_input_path, manager_class: DatasetManager):
+#     """
+#     Test that the post-parse quality check method waves through good data
+#     and fails as anticipated with bad data
+#     """
+#     # Prepare a dataset manager
+#     dm = initial(manager_class, initial_input_path)
+#     # Local data
+#     ### Approves aligned values
+#     ### Rejects misaligned values
+#     ### Skips dataset without time
+#     dm.protocol = 'file'
+#     dm.post_parse_quality_check(checks=5)
+#     # Remote data
+#     ### Approves aligned values
+#     ### Rejects misaligned values
+#     ### Skips dataset without time
+#     dm.protocol = 'remote'
+#     dm.post_parse_quality_check(checks=5)
+#     # Skipping the QC
+#     dm.skip_post_parse_qc = True
+#     dm.post_parse_quality_check(checks=5)
+#     out, _ = capfd.readouterr()
+#     assert "Skipping post-parse quality check" in out

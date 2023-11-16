@@ -1,6 +1,7 @@
 import pathlib
 import shutil
 import numpy as np
+import typing
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
@@ -15,11 +16,48 @@ from gridded_etl_tools.dataset_manager import DatasetManager
 #
 
 
+def initial(
+    manager_class: DatasetManager,
+    input_path: pathlib.Path,
+    store: str = "local",
+    allow_overwrite: typing.Optional[bool] = None,
+    **kwargs
+):
+    """
+    Construct a DatasetManager, forwarding the input path, store, and optionally the overwrite flag, run a transform and parse, and return
+    the constructed DatasetManager. Useful for running a standard transform and parse on a dataset and checking its values afterward.
+
+    Parameters
+    ----------
+    manager_class
+        A DatasetManager implementation for your chosen dataset
+    input_path
+        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append data.
+    store
+        The manager store to use. 'Local' in most implementations
+    allow_overwrite
+        Optionally assign the allow_overwrite flag of the dataset manager. If this is left as None, the dataset manager's default value will be used.
+    
+    Returns
+    -------
+    manager
+        Instance of the given manager class after running transform and parse
+    """
+    # Get the manager being requested by class_name
+    manager = get_manager(manager_class, input_path=input_path, store=store, allow_overwrite=allow_overwrite, **kwargs)
+    # Parse
+    manager.transform()
+    manager.parse()
+    manager.publish_metadata()
+    return manager
+
+
 def get_manager(
     manager_class: DatasetManager,
-    input_path: str = "",
+    input_path: str,
     store: str = "local",
     time_chunk: int = 50,
+    allow_overwrite: typing.Optional[bool] = None,
     **kwargs,
 ):
     """
@@ -30,26 +68,39 @@ def get_manager(
     manager_class
         A DatasetManager implementation for your chosen dataset
     input_path
-        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append
-        data.
+        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append data.
     store
         The manager store to use. 'Local' in most implementations
     time_chunk
-        Optional paramter to modify the size of time_chunks. Necessary for some ETLs. Defaults to 50.
+        Size of the Zarr and Dask time chunks to use instead of the dataset manager's default values. Defaults to a low value for the small files
+        used in testing. Note that to use the dataset manager's default time chunk values, it will need to be constructed outside of this function.
+    allow_overwrite
+        Optionally assign the allow_overwrite flag of the dataset manager. If this is left as None, the dataset manager's default value will be used.
 
     Returns
     -------
     manager
         A DatasetManager corresponding to your chosen manager_class
     """
-    # Get the manager being requested by class_name
-    manager = manager_class(
-        custom_input_path=input_path,
-        s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
-        store=store,
-        **kwargs,
-    )
-    # Overriding the default (usually very large) time chunk to enable testing chunking with a smaller set of times
+    # Get the manager being requested by class_name. Only pass allow_overwrite if it is set to something other than None so that the DM's default
+    # value can be used otherwise.
+    if allow_overwrite is not None:
+        manager = manager_class(
+            custom_input_path=input_path,
+            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            store=store,
+            allow_overwrite=allow_overwrite,
+            **kwargs
+        )
+    else:
+        manager = manager_class(
+            custom_input_path=input_path,
+            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            store=store,
+            **kwargs
+        )
+
+    # Override the default (usually very large) time chunk with the given value. Intended to enable testing chunking with a smaller set of times.
     manager.requested_dask_chunks["time"] = time_chunk
     manager.requested_zarr_chunks["time"] = time_chunk
     return manager
@@ -155,3 +206,28 @@ def patched_root_stac_catalog(self):
 @property
 def patched_update_cadence_bounds(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
+
+original_get_original_ds = DatasetManager.get_original_ds
+
+def original_ds_normal(self):
+    return self.get_original_ds()
+
+def original_ds_bad_data(self):
+    orig_ds = self.get_original_ds()    
+    orig_ds[self.data_var()][:] = 1234567
+    return orig_ds
+
+def original_ds_no_time(self):
+    orig_ds = self.get_original_ds()
+    return orig_ds.drop("time")
+
+def original_ds_bad_time(self):
+    orig_ds = self.get_original_ds()
+    orig_ds = orig_ds.assign_coords({"time" : np.datetime64("1850-1-1")})
+    return orig_ds
+
+def nc4_input_files(self):
+    return [fil for fil in self.input_files() if fil.endswith() == '.nc4']
+
+def json_input_files(self):
+    return [fil for fil in self.input_files() if fil.endswith() == '.json']
