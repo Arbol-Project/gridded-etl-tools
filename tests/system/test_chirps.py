@@ -16,14 +16,7 @@ from ..common import (
     patched_zarr_json_path,
     remove_dask_worker_dir,
     remove_performance_report,
-    remove_zarr_json,
-    initial,
-    original_ds_normal,
-    original_ds_bad_data,
-    original_ds_no_time,
-    original_ds_bad_time,
-    nc4_input_files,
-    json_input_files
+    remove_zarr_json
 )
 
 
@@ -284,69 +277,3 @@ def test_metadata(manager_class, heads_path):
     manager.HASH_HEADS_PATH = heads_path
     manager.publish_metadata()
     assert manager.load_stac_metadata() != {}
-
-
-def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_path):
-    """
-    Test that the post-parse quality check method waves through good data
-    and fails as anticipated with bad data
-    """
-    # Prepare a dataset manager
-    dm = initial(manager_class, input_path=initial_input_path)
-    # Approves aligned values
-    dm.post_parse_quality_check(checks=5)
-    assert dm.post_parse_quality_check(checks=5)
-    # Rejects misaligned values
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_data)
-    with pytest.raises(ValueError):
-        dm.post_parse_quality_check(checks=5)
-    # Skipping the QC
-    dm.skip_post_parse_qc = True
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
-    dm.post_parse_quality_check(checks=5)
-    assert "Skipping post-parse quality check" in caplog.text
-
-
-def test_get_original_ds(mocker, manager_class, initial_input_path):
-    """
-    Test that the get_original_ds function correctly loads in datasets as anticipated for
-    local and remote files alike
-    """
-    # Prepare a dataset manager
-    dm = initial(manager_class, input_path=initial_input_path, use_local_zarr_jsons=True)
-    # Local data
-    dm.protocol = 'file'
-    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", nc4_input_files)
-    assert dm.get_original_ds()
-    # Remote data
-    dm.protocol = 's3'
-    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", json_input_files)
-    assert dm.get_original_ds()
-
-
-def test_reformat_orig_ds(mocker, manager_class, qc_input_path):
-    """
-    Test that the original dataset is correctly reformatted when fed incorect data
-    """
-    # Prepare a dataset manager
-    dm = initial(manager_class, qc_input_path, use_local_zarr_jsons=False)
-    # Populates time dimension from filename if missing dataset
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
-    orig_ds, orig_file_path = dm.get_original_ds()
-    orig_ds = dm.reformat_orig_ds(orig_ds, orig_file_path)
-    assert "time" in orig_ds.dims
-
-
-def test_check_values(mocker, manager_class, initial_input_path):
-    """
-    Test that the values check exits as anticipated when given an original dataset whose
-    time dimension doesn't correspond to the production dataset
-    """
-    # Prepare a dataset manager
-    dm = initial(manager_class, initial_input_path)
-    ### Exits if time in original file doesn't match time in prod dataset
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
-    prod_ds = dm.store.dataset()
-    orig_ds = dm.get_original_ds()
-    random_coords = dm.get_random_coords(prod_ds)
-    assert not dm.check_value(random_coords, orig_ds, prod_ds)

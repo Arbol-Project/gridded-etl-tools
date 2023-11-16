@@ -1,0 +1,172 @@
+import os
+import datetime
+import pathlib
+import pytest
+import xarray
+import shutil
+import glob
+
+from ..common import (
+    clean_up_input_paths,
+    empty_ipns_publish,
+    patched_json_key,
+    patched_root_stac_catalog,
+    patched_zarr_json_path,
+    remove_dask_worker_dir,
+    remove_performance_report,
+    remove_zarr_json,
+    initial,
+    original_ds_normal,
+    original_ds_bad_data,
+    original_ds_no_time,
+    original_ds_bad_time,
+    nc4_input_files,
+    json_input_files
+)
+
+
+@pytest.fixture
+def create_input_directories(initial_input_path, qc_input_path):
+    """
+    The testing directories for initial, append and insert will get created before each run
+    """
+    for path in (
+        initial_input_path,
+        qc_input_path
+    ):
+        if not path.exists():
+            os.makedirs(path, 0o755, True)
+            print(f"Created {path} for testing")
+        else:
+            print(f"Found existing {path}")
+
+
+@pytest.fixture
+def simulate_file_download(root, initial_input_path, qc_input_path):
+    """
+    Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
+    directories will be deleted during clean up.
+    """
+    # for chirps_init_fil in root.glob("*initial*"):
+    #     shutil.copy(chirps_init_fil, initial_input_path)
+    shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
+    shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
+    print("Simulated downloading input files")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def setup_and_teardown_per_test(
+    mocker,
+    request,
+    initial_input_path,
+    qc_input_path,
+    create_heads_file_for_testing,
+    create_input_directories,
+    simulate_file_download,
+):
+    """
+    Call the setup functions first, in a chain ending with `simulate_file_download`.
+    Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
+    """
+    # Force ipns_publish to use offline mode to make tests run faster
+    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.json_key", patched_json_key)
+    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
+        patched_zarr_json_path,
+    )
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
+        patched_root_stac_catalog,
+    )
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
+        empty_ipns_publish,
+    )
+    yield  # run the tests first
+    # delete temp files
+    remove_zarr_json()
+    remove_dask_worker_dir()
+    remove_performance_report()
+    # now clean up the various files created for each test
+    clean_up_input_paths(initial_input_path, qc_input_path)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def teardown_module(request, heads_path):
+    """
+    Remove the heads file at the end of all tests
+    """
+
+    def test_clean():
+        if heads_path.exists():
+            os.remove(heads_path)
+            print(f"Cleaned up {heads_path}")
+
+    request.addfinalizer(test_clean)
+
+
+def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_path):
+    """
+    Test that the post-parse quality check method waves through good data
+    and fails as anticipated with bad data
+    """
+    # Prepare a dataset manager
+    dm = initial(manager_class, input_path=initial_input_path)
+    # Approves aligned values
+    dm.post_parse_quality_check(checks=5)
+    assert dm.post_parse_quality_check(checks=5)
+    # Rejects misaligned values
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_data)
+    with pytest.raises(ValueError):
+        dm.post_parse_quality_check(checks=5)
+    # Skipping the QC
+    dm.skip_post_parse_qc = True
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
+    dm.post_parse_quality_check(checks=5)
+    assert "Skipping post-parse quality check" in caplog.text
+
+
+def test_get_original_ds(mocker, manager_class, initial_input_path):
+    """
+    Test that the get_original_ds function correctly loads in datasets as anticipated for
+    local and remote files alike
+    """
+    # Prepare a dataset manager
+    dm = initial(manager_class, input_path=initial_input_path, use_local_zarr_jsons=True)
+    # Local data
+    dm.protocol = 'file'
+    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", nc4_input_files)
+    assert dm.get_original_ds()
+    # Remote data
+    dm.protocol = 's3'
+    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", json_input_files)
+    assert dm.get_original_ds()
+
+
+def test_reformat_orig_ds(mocker, manager_class, qc_input_path):
+    """
+    Test that the original dataset is correctly reformatted when fed incorect data
+    """
+    # Prepare a dataset manager
+    dm = initial(manager_class, qc_input_path, use_local_zarr_jsons=False)
+    # Populates time dimension from filename if missing dataset
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
+    orig_ds, orig_file_path = dm.get_original_ds()
+    orig_ds = dm.reformat_orig_ds(orig_ds, orig_file_path)
+    assert "time" in orig_ds.dims
+
+
+def test_check_values(mocker, manager_class, initial_input_path):
+    """
+    Test that the values check exits as anticipated when given an original dataset whose
+    time dimension doesn't correspond to the production dataset
+    """
+    # Prepare a dataset manager
+    dm = initial(manager_class, initial_input_path)
+    ### Exits if time in original file doesn't match time in prod dataset
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
+    prod_ds = dm.store.dataset()
+    orig_ds = dm.get_original_ds()
+    random_coords = dm.get_random_coords(prod_ds)
+    assert not dm.check_value(random_coords, orig_ds, prod_ds)
