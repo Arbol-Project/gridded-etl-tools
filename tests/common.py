@@ -210,24 +210,28 @@ def patched_update_cadence_bounds(self):
 original_get_original_ds = DatasetManager.get_original_ds
 
 def original_ds_normal(self):
-    return self.get_original_ds()
+    return original_get_original_ds(self)
 
 def original_ds_bad_data(self):
-    orig_ds = self.get_original_ds()    
+    orig_ds, _ = original_get_original_ds(self)
     orig_ds[self.data_var()][:] = 1234567
     return orig_ds
 
 def original_ds_no_time(self):
-    orig_ds = self.get_original_ds()
-    return orig_ds.drop("time")
+    orig_ds, orig_file_path = original_get_original_ds(self)
+    return orig_ds.squeeze().drop("time"), orig_file_path
 
 def original_ds_bad_time(self):
-    orig_ds = self.get_original_ds()
-    orig_ds = orig_ds.assign_coords({"time" : np.datetime64("1850-1-1")})
+    orig_ds, _ = original_get_original_ds(self)
+    orig_ds = orig_ds.assign_coords({"time" : np.atleast_1d(np.datetime64("1850-01-01"))})
     return orig_ds
 
+original_input_files = DatasetManager.input_files
+
 def nc4_input_files(self):
-    return [fil for fil in self.input_files() if fil.endswith() == '.nc4']
+    nc4s = [str(fil) for fil in list(original_input_files(self)) if fil.suffix == '.nc4']
+    return nc4s
 
 def json_input_files(self):
-    return [fil for fil in self.input_files() if fil.endswith() == '.json']
+    jsons = [str(fil) for fil in list(original_input_files(self)) if fil.suffix == '.json']
+    return jsons
