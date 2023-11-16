@@ -1236,8 +1236,15 @@ class Publish(Transform, Metadata):
                 random_coords = self.get_random_coords(prod_ds)
                 orig_ds = self.get_original_ds()
                 i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
-            
+                # Theoretically this could loop endlessly if all input files don't match the prod dataset
+                # in the time dimension. While improbable, let's build an automated exit just in case
+                if time.perf_counter() - start_checking > 1200:
+                    self.info("Breaking from checking loop after 20 minutes to prevent infinite checks")
+                    break
+
             self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
+
+        return True
 
     def get_prod_update_ds(self) -> xr.Dataset:
         """
@@ -1259,12 +1266,17 @@ class Publish(Transform, Metadata):
     def get_original_ds(self) -> xr.Dataset:
         """
         Get the original dataset and format it equivalently to the production dataset
+
+        Returns
+        ----------
+        orig_ds
+            The original dataset, unformatted
         """
         orig_file_path = random.choice(list(self.input_files()))
         if self.protocol == "file":
             raw_ds = xr.open_dataset(orig_file_path)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
-        elif self.protocol == "remote":
+        elif self.protocol == "S3":
             raw_ds = self.zarr_json_to_dataset(zarr_json_path=orig_file_path)
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
@@ -1281,6 +1293,11 @@ class Publish(Transform, Metadata):
             The original dataset, unformatted
         orig_file_path
             A pathlib.Path to the randomly selected original file
+
+        Returns
+        -------
+        orig_ds
+            The original dataset, reformatted similarly to the production dataset
         """
         # Drop unused coords and dims
         for coord in ["crs"]:
@@ -1300,7 +1317,10 @@ class Publish(Transform, Metadata):
         orig_ds = self.standardize_longitudes(orig_ds)
         # Create a time dimension from the file name if missing in the raw file...
         if not self.time_dim in orig_ds:
-            orig_ds = orig_ds.assign_coords({self.time_dim : datetime.datetime.strptime(re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")})
+            orig_ds = orig_ds.assign_coords({
+                self.time_dim : datetime.datetime.strptime(
+                    re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")
+                    })
         # ...or expand it if it's of length 1 and Xarray therefore doesn't recognize it as a dimension
         if self.time_dim in orig_ds and not self.time_dim in orig_ds.dims:
             orig_ds = orig_ds.expand_dims(self.time_dim)
@@ -1309,7 +1329,7 @@ class Publish(Transform, Metadata):
     def check_value(
             self,
             random_coords: dict[Any],
-            orig_file_path: pathlib.Path,
+            orig_ds: xr.Dataset,
             prod_ds: xr.Dataset,
             threshold: float = 10e-5
         ):
@@ -1321,8 +1341,8 @@ class Publish(Transform, Metadata):
         ----------
         random_coords
             A randomly selected set of individual coordinate values from the filtered production dataset
-        orig_file_path
-            The file path of the randomly selected original file
+        orig_ds
+            The original dataset, reformatted similarly to the production dataset
         prod_ds
             The filtered production dataset
         threshold
@@ -1335,10 +1355,9 @@ class Publish(Transform, Metadata):
             A boolean indicating that a check was successful (True) or the selected file doesn't correspond
             to the update time range (False). Failed checks will raise a ValueError instead.
         """
-        # Prepare the original dataset for selection and confirm it has a timestamp w/in the update range
+        # Confirm the original dataset has a timestamp w/in the update range
         # Some datasets download all values for the latest year, meaning lots of files won't match the update range
         # We return False to skip those
-        orig_ds = self.reformat_orig_ds(orig_file_path)
         if not random_coords["time"] == orig_ds["time"].values:
             return False
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
