@@ -1266,7 +1266,7 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim : update_date_range}
         return prod_ds.sel(**time_select)
 
-    def get_original_ds(self) -> xr.Dataset:
+    def get_original_ds(self) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
 
@@ -1274,6 +1274,8 @@ class Publish(Transform, Metadata):
         ----------
         orig_ds
             The original dataset, unformatted
+        orig_file_path
+            The pathlib.Path to the randomly selected original file
         """
         orig_file_path = random.choice(list(self.input_files()))
         if self.protocol == "file":
