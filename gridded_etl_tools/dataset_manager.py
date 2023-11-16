@@ -64,7 +64,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
         dask_cpu_mem_target_ratio: float = 4 / 32,
-        use_local_zarr_jsons: bool = True,
+        use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         skip_post_parse_qc: bool = False,
         encryption_key: str = None,

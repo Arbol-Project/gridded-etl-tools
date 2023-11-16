@@ -152,7 +152,9 @@ class Transform(Convenience):
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up
         # dev. work.
         if self.use_local_zarr_jsons:
-            if not local_file_path:
+            if not local_file_path and self.protocol == 'file':
+                local_file_path = os.path.splitext(file_path)[0] + '.json'
+            elif not local_file_path and self.protocol == 's3':
                 raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
                 memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
@@ -1234,12 +1236,13 @@ class Publish(Transform, Metadata):
             i = 0
             while i <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                orig_ds = self.get_original_ds()
+                orig_ds, _ = self.get_original_ds()
                 i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
-                    self.info("Breaking from checking loop after 20 minutes to prevent infinite checks")
+                    self.info(f"Breaking from checking loop after\
+                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} to prevent infinite checks")
                     break
 
             self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
@@ -1276,11 +1279,11 @@ class Publish(Transform, Metadata):
         if self.protocol == "file":
             raw_ds = xr.open_dataset(orig_file_path)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
-        elif self.protocol == "S3":
+        elif self.protocol == "s3":
             raw_ds = self.zarr_json_to_dataset(zarr_json_path=orig_file_path)
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
-        return orig_ds
+        return orig_ds, orig_file_path
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
@@ -1315,14 +1318,15 @@ class Publish(Transform, Metadata):
         orig_ds = orig_ds.rename(**rename_coords)
         # Rework longitudes to -180 to 180 style
         orig_ds = self.standardize_longitudes(orig_ds)
-        # Create a time dimension from the file name if missing in the raw file...
-        if not self.time_dim in orig_ds:
+        # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
+        if self.time_dim in orig_ds and not self.time_dim in orig_ds.dims:
+            orig_ds = orig_ds.expand_dims(self.time_dim)
+        # ... or create it from the file name if missing entirely in the raw file
+        elif not self.time_dim in orig_ds:
             orig_ds = orig_ds.assign_coords({
                 self.time_dim : datetime.datetime.strptime(
                     re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")
                     })
-        # ...or expand it if it's of length 1 and Xarray therefore doesn't recognize it as a dimension
-        if self.time_dim in orig_ds and not self.time_dim in orig_ds.dims:
             orig_ds = orig_ds.expand_dims(self.time_dim)
         return orig_ds
 
