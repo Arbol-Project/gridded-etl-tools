@@ -1323,7 +1323,6 @@ class Publish(Transform, Metadata):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        orig_ds = self.postprocess_zarr(orig_ds)
         # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
         if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
             orig_ds = orig_ds.expand_dims(self.time_dim)
@@ -1333,7 +1332,10 @@ class Publish(Transform, Metadata):
                 {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
             )
             orig_ds = orig_ds.expand_dims(self.time_dim)
-        return orig_ds
+        # Setting metadata will clean up data variables and a few other things
+        orig_ds = self.postprocess_zarr(orig_ds)
+        # Apply standard postprocessing to get other data variables in order
+        return self.rename_data_variable(orig_ds)
 
     def check_value(
         self,

@@ -61,7 +61,7 @@ def run_etl(
 
 def get_manager(
     manager_class: DatasetManager,
-    input_path: str,
+    input_path: str = None,
     store: str = "local",
     time_chunk: int = 50,
     allow_overwrite: typing.Optional[bool] = None,
@@ -77,6 +77,7 @@ def get_manager(
     input_path
         The path from which to source raw data to build your dataset.
         Should pertain to initial, insert, or append data.
+        Defaults to None, in case you just want a manager for unit testing.
     store
         The manager store to use. 'Local' in most implementations
     time_chunk
