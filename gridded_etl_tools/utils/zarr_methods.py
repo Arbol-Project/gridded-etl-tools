@@ -1226,24 +1226,25 @@ class Publish(Transform, Metadata):
             Absolute differences between them beyond this limit will raise a ValueError
         """
         if self.skip_post_parse_qc:
-            self.info("Skipping post-parse quality check since the source data is different from the parsed data")
+            self.info("Skipping post-parse quality check as directed")
         else:
             self.info("Beginning post-parse quality check of the parsed dataset")
             start_checking = time.perf_counter()
             # Instantiate needed objects
             self.set_key_dims()  # in case running w/out Transform/Parse
             prod_ds = self.get_prod_update_ds()
+            self.original_files = list(self.input_files())
             # Run the data check N times, incrementing after every successfuly check
             i = 0
             while i <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                orig_ds, _ = self.get_original_ds()
-                i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
+                orig_ds, orig_file_path = self.get_original_ds()
+                i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
                     self.info(
-                        f"Breaking from checking loop after \
+                        f"Breaking from checking loop after\
                               {datetime.timedelta(seconds=time.perf_counter() - start_checking)} \
                               to prevent infinite checks"
                     )
@@ -1284,12 +1285,19 @@ class Publish(Transform, Metadata):
         orig_file_path
             The pathlib.Path to the randomly selected original file
         """
-        orig_file_path = random.choice(list(self.input_files()))
+        orig_file_path = random.choice(self.original_files)
         if self.protocol == "file":
-            raw_ds = xr.open_dataset(orig_file_path)
+            try:
+                raw_ds = xr.open_dataset(orig_file_path)
+            except ValueError:
+                import ipdb; ipdb.set_trace(context=4)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
-            raw_ds = self.zarr_json_to_dataset(zarr_json_path=orig_file_path)
+            if not self.use_local_zarr_jsons:
+                raise ValueError(f"ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
+                                This prevents running needed checks for this dataset.\
+                                Please enable `use_local_zarr_jsons` to permit post-parse QC")
+            raw_ds = self.zarr_json_to_dataset(zarr_json_path=str(orig_file_path))
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds, orig_file_path
@@ -1339,7 +1347,12 @@ class Publish(Transform, Metadata):
         return orig_ds
 
     def check_value(
-        self, random_coords: dict[Any], orig_ds: xr.Dataset, prod_ds: xr.Dataset, threshold: float = 10e-5
+        self,
+        random_coords: dict[Any],
+        orig_ds: xr.Dataset,
+        prod_ds: xr.Dataset,
+        orig_file_path: pathlib.Path,
+        threshold: float = 10e-5
     ):
         """
         Check random values in the original files against the written values
@@ -1353,6 +1366,8 @@ class Publish(Transform, Metadata):
             The original dataset, reformatted similarly to the production dataset
         prod_ds
             The filtered production dataset
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
         threshold
             The tolerance for diversions between original and parsed values.
             Absolute differences between them beyond this limit will raise a ValueError
@@ -1365,8 +1380,10 @@ class Publish(Transform, Metadata):
         """
         # Confirm the original dataset has a timestamp w/in the update range
         # Some datasets download all values for the latest year, meaning lots of files won't match the update range
-        # We return False to skip those
+        # We return False to skip those and remove them from our list
         if not random_coords["time"] == orig_ds["time"].values:
+            if orig_ds["time"].values not in prod_ds["time"]:
+                self.original_files.remove(orig_file_path)
             return False
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}

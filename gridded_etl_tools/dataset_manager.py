@@ -121,7 +121,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             will fail with a warning message.
         use_local_zarr_jsons: bool, optional
             Write out Zarr JSONs created via Kerchunk to the local file system. For use with remotely kerchunked
-            datasets. Defaults to True to speed up post-parse quality checks.
+            datasets. Defaults to False.
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
         skip_post_parse_qc: bool, optional

@@ -140,14 +140,16 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     # Parse a dataset manager initially, and then for an update
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
+    dm.original_files = list(dm.input_files())
     # Local data
     dm.protocol = "file"
-    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", nc4_input_files)
+    dm.original_files = nc4_input_files(dm)
     assert dm.get_original_ds()
     # Remote data
     dm.protocol = "s3"
-    mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", json_input_files)
-    assert dm.get_original_ds()
+    dm.original_files = json_input_files(dm)
+    orig_ds, _ = dm.get_original_ds()
+    assert orig_ds
 
 
 def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_path):
@@ -157,6 +159,7 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     # Prepare a dataset manager
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
+    dm.original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
     orig_ds, orig_file_path = dm.get_original_ds()
@@ -172,9 +175,10 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     # Prepare a dataset manager
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
+    dm.original_files = list(dm.input_files())
     # Exits if time in original file doesn't match time in prod dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
     prod_ds = dm.store.dataset()
-    orig_ds = dm.get_original_ds()
+    orig_ds, orig_file_path = dm.get_original_ds()
     random_coords = dm.get_random_coords(prod_ds)
-    assert not dm.check_value(random_coords, orig_ds, prod_ds)
+    assert not dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)

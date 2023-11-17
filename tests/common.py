@@ -241,9 +241,9 @@ def original_ds_normal(self):
 
 
 def original_ds_bad_data(self):
-    orig_ds, _ = original_get_original_ds(self)
+    orig_ds, orig_file_path = original_get_original_ds(self)
     orig_ds[self.data_var()][:] = 1234567
-    return orig_ds
+    return orig_ds, orig_file_path
 
 
 def original_ds_no_time(self):
@@ -252,9 +252,9 @@ def original_ds_no_time(self):
 
 
 def original_ds_bad_time(self):
-    orig_ds, _ = original_get_original_ds(self)
+    orig_ds, orig_file_path = original_get_original_ds(self)
     orig_ds = orig_ds.assign_coords({"time": np.atleast_1d(np.datetime64("1850-01-01"))})
-    return orig_ds
+    return orig_ds, orig_file_path
 
 
 original_input_files = DatasetManager.input_files
