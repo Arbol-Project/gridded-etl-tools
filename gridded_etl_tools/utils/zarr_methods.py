@@ -1290,13 +1290,17 @@ class Publish(Transform, Metadata):
             try:
                 raw_ds = xr.open_dataset(orig_file_path)
             except ValueError:
-                import ipdb; ipdb.set_trace(context=4)
+                import ipdb
+
+                ipdb.set_trace(context=4)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
             if not self.use_local_zarr_jsons:
-                raise ValueError(f"ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
+                raise ValueError(
+                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
                                 This prevents running needed checks for this dataset.\
-                                Please enable `use_local_zarr_jsons` to permit post-parse QC")
+                                Please enable `use_local_zarr_jsons` to permit post-parse QC"
+                )
             raw_ds = self.zarr_json_to_dataset(zarr_json_path=str(orig_file_path))
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
@@ -1352,7 +1356,7 @@ class Publish(Transform, Metadata):
         orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
         orig_file_path: pathlib.Path,
-        threshold: float = 10e-5
+        threshold: float = 10e-5,
     ):
         """
         Check random values in the original files against the written values
