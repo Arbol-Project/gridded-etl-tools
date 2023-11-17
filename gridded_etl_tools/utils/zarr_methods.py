@@ -152,9 +152,9 @@ class Transform(Convenience):
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up
         # dev. work.
         if self.use_local_zarr_jsons:
-            if not local_file_path and self.protocol == 'file':
-                local_file_path = os.path.splitext(file_path)[0] + '.json'
-            elif not local_file_path and self.protocol == 's3':
+            if not local_file_path and self.protocol == "file":
+                local_file_path = os.path.splitext(file_path)[0] + ".json"
+            elif not local_file_path and self.protocol == "s3":
                 raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
                 memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
@@ -1186,15 +1186,16 @@ class Publish(Transform, Metadata):
         bool
             Returns False for any unacceptable timestamp order, otherwise True
         """
-        # Check if times meet expected_delta or fall within the anticipated range. Raise a warning and return false if
-        # so. Raise a descriptive error message in the enclosing function describing the specific operation that failed.
+        # Check if times meet expected_delta or fall within the anticipated range.
+        # Raise a warning and return false if so.
+        # Raise a descriptive error message in the enclosing function describing the specific operation that failed.
         previous_time = times[0]
         for instant in times[1:]:
             # Warn if not using expected delta
             if self.update_cadence_bounds:
                 self.warn(
-                    f"Because dataset has irregular cadence {self.update_cadence_bounds} expected delta "
-                    f"{expected_delta} is not being used for checking time contiguity"
+                    f"Because dataset has irregular cadence {self.update_cadence_bounds} expected delta"
+                    f" {expected_delta} is not being used for checking time contiguity"
                 )
                 if not self.update_cadence_bounds[0] <= (instant - previous_time) <= self.update_cadence_bounds[1]:
                     self.warn(
@@ -1221,7 +1222,7 @@ class Publish(Transform, Metadata):
         checks
             The number of values to check. Defaults to 100.
         threshold
-            The tolerance for diversions between original and parsed values. 
+            The tolerance for diversions between original and parsed values.
             Absolute differences between them beyond this limit will raise a ValueError
         """
         if self.skip_post_parse_qc:
@@ -1241,11 +1242,17 @@ class Publish(Transform, Metadata):
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
-                    self.info(f"Breaking from checking loop after\
-                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} to prevent infinite checks")
+                    self.info(
+                        f"Breaking from checking loop after \
+                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} \
+                              to prevent infinite checks"
+                    )
                     break
 
-            self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
+            self.info(
+                f"Values check successfully passed.\
+                      Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
+            )
 
         return True
 
@@ -1260,10 +1267,10 @@ class Publish(Transform, Metadata):
         """
         prod_ds = self.store.dataset()
         update_date_range = slice(
-                    datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
-                    datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
-                )
-        time_select = {self.time_dim : update_date_range}
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
+        )
+        time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
     def get_original_ds(self) -> tuple[xr.Dataset, pathlib.Path]:
@@ -1310,37 +1317,32 @@ class Publish(Transform, Metadata):
                 orig_ds = orig_ds.drop(coord)
         # Rename coordinates
         orig_data_var = [var for var in orig_ds.data_vars][0]
-        rename_coords = {orig_data_var : self.data_var()}
-        for coord in ["lat","lon"]:
+        rename_coords = {orig_data_var: self.data_var()}
+        for coord in ["lat", "lon"]:
             if coord in orig_ds.coords:
                 str_add = "itude"
                 if coord == "lon":
                     str_add = "gitude"
-                rename_coords.update({coord : coord + str_add})
+                rename_coords.update({coord: coord + str_add})
         orig_ds = orig_ds.rename(**rename_coords)
         # Rework longitudes to -180 to 180 style
         orig_ds = self.standardize_longitudes(orig_ds)
         # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-        if self.time_dim in orig_ds and not self.time_dim in orig_ds.dims:
+        if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
             orig_ds = orig_ds.expand_dims(self.time_dim)
         # ... or create it from the file name if missing entirely in the raw file
-        elif not self.time_dim in orig_ds:
-            orig_ds = orig_ds.assign_coords({
-                self.time_dim : datetime.datetime.strptime(
-                    re.search(r'([0-9]{8})', str(orig_file_path))[0], "%Y%m%d")
-                    })
+        elif self.time_dim not in orig_ds:
+            orig_ds = orig_ds.assign_coords(
+                {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
+            )
             orig_ds = orig_ds.expand_dims(self.time_dim)
         return orig_ds
 
     def check_value(
-            self,
-            random_coords: dict[Any],
-            orig_ds: xr.Dataset,
-            prod_ds: xr.Dataset,
-            threshold: float = 10e-5
-        ):
+        self, random_coords: dict[Any], orig_ds: xr.Dataset, prod_ds: xr.Dataset, threshold: float = 10e-5
+    ):
         """
-        Check random values in the original files against the written values 
+        Check random values in the original files against the written values
         in the updated dataset at the same location
 
         Parameters
@@ -1352,7 +1354,7 @@ class Publish(Transform, Metadata):
         prod_ds
             The filtered production dataset
         threshold
-            The tolerance for diversions between original and parsed values. 
+            The tolerance for diversions between original and parsed values.
             Absolute differences between them beyond this limit will raise a ValueError
 
         Returns

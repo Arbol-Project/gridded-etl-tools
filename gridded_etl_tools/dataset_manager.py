@@ -125,8 +125,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         skip_prepare_input_files: bool, optional
             Skip the `prepare_input_files` method. Useful when restarting a parse that previously prepared input files
         skip_post_parse_qc: bool, optional
-            Skip the `post_parse_quality_check` method. Applicable to datasets that transform source data before parsing,
-            making source data checks irrelevant.
+            Skip the `post_parse_quality_check` method. Applicable to datasets
+            that transform source data before parsing, making source data checks irrelevant.
         encryption_key : str, optional
             If provided, data will be encrypted using `encryption_key` with XChaCha20Poly1305. Use
             :func:`.encryption.generate_encryption_key` to generate a random encryption key to be passed in here.
