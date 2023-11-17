@@ -24,11 +24,11 @@ from ..common import (
 
 
 @pytest.fixture
-def create_input_directories(initial_input_path, qc_input_path):
+def create_input_directories(initial_input_path, qc_input_path, appended_input_path):
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (initial_input_path, qc_input_path):
+    for path in (initial_input_path, qc_input_path, appended_input_path):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
