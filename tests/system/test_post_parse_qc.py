@@ -1,27 +1,25 @@
 import os
-import datetime
-import pathlib
 import pytest
-import xarray
 import shutil
-import glob
 
 from ..common import (
+    run_etl,
     clean_up_input_paths,
     empty_ipns_publish,
+    patched_output_root,
     patched_json_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
+    remove_mock_output,
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
-    initial,
     original_ds_normal,
     original_ds_bad_data,
     original_ds_no_time,
     original_ds_bad_time,
     nc4_input_files,
-    json_input_files
+    json_input_files,
 )
 
 
@@ -30,10 +28,7 @@ def create_input_directories(initial_input_path, qc_input_path):
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (
-        initial_input_path,
-        qc_input_path
-    ):
+    for path in (initial_input_path, qc_input_path):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
@@ -42,7 +37,7 @@ def create_input_directories(initial_input_path, qc_input_path):
 
 
 @pytest.fixture
-def simulate_file_download(root, initial_input_path, qc_input_path):
+def simulate_file_download(root, initial_input_path, appended_input_path, qc_input_path):
     """
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
@@ -50,6 +45,8 @@ def simulate_file_download(root, initial_input_path, qc_input_path):
     # for chirps_init_fil in root.glob("*initial*"):
     #     shutil.copy(chirps_init_fil, initial_input_path)
     shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
+    shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
+    shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
     shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
     print("Simulated downloading input files")
 
@@ -59,6 +56,7 @@ def setup_and_teardown_per_test(
     mocker,
     request,
     initial_input_path,
+    appended_input_path,
     qc_input_path,
     create_heads_file_for_testing,
     create_input_directories,
@@ -83,13 +81,20 @@ def setup_and_teardown_per_test(
         "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
         empty_ipns_publish,
     )
+    # Mock the root output directory name, so no existing data will be overwritten and it can be easily cleaned up
+    mocker.patch(
+        "gridded_etl_tools.utils.convenience.Convenience.output_root",
+        patched_output_root,
+    )
+
     yield  # run the tests first
     # delete temp files
+    remove_mock_output()
     remove_zarr_json()
     remove_dask_worker_dir()
     remove_performance_report()
     # now clean up the various files created for each test
-    clean_up_input_paths(initial_input_path, qc_input_path)
+    clean_up_input_paths(initial_input_path, appended_input_path, qc_input_path)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -112,7 +117,7 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     and fails as anticipated with bad data
     """
     # Prepare a dataset manager
-    dm = initial(manager_class, input_path=initial_input_path)
+    dm = run_etl(manager_class, input_path=initial_input_path)
     # Approves aligned values
     dm.post_parse_quality_check(checks=5)
     assert dm.post_parse_quality_check(checks=5)
@@ -127,29 +132,31 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     assert "Skipping post-parse quality check" in caplog.text
 
 
-def test_get_original_ds(mocker, manager_class, initial_input_path):
+def test_get_original_ds(mocker, manager_class, initial_input_path, appended_input_path):
     """
     Test that the get_original_ds function correctly loads in datasets as anticipated for
     local and remote files alike
     """
-    # Prepare a dataset manager
-    dm = initial(manager_class, input_path=initial_input_path, use_local_zarr_jsons=True)
+    # Parse a dataset manager initially, and then for an update
+    dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
+    dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
     # Local data
-    dm.protocol = 'file'
+    dm.protocol = "file"
     mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", nc4_input_files)
     assert dm.get_original_ds()
     # Remote data
-    dm.protocol = 's3'
+    dm.protocol = "s3"
     mocker.patch("gridded_etl_tools.utils.convenience.Convenience.input_files", json_input_files)
     assert dm.get_original_ds()
 
 
-def test_reformat_orig_ds(mocker, manager_class, qc_input_path):
+def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_path):
     """
     Test that the original dataset is correctly reformatted when fed incorect data
     """
     # Prepare a dataset manager
-    dm = initial(manager_class, qc_input_path, use_local_zarr_jsons=False)
+    dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
+    dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
     orig_ds, orig_file_path = dm.get_original_ds()
@@ -157,14 +164,15 @@ def test_reformat_orig_ds(mocker, manager_class, qc_input_path):
     assert "time" in orig_ds.dims
 
 
-def test_check_values(mocker, manager_class, initial_input_path):
+def test_check_values(mocker, manager_class, initial_input_path, appended_input_path):
     """
     Test that the values check exits as anticipated when given an original dataset whose
     time dimension doesn't correspond to the production dataset
     """
     # Prepare a dataset manager
-    dm = initial(manager_class, initial_input_path)
-    ### Exits if time in original file doesn't match time in prod dataset
+    dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
+    dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
+    # Exits if time in original file doesn't match time in prod dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
     prod_ds = dm.store.dataset()
     orig_ds = dm.get_original_ds()

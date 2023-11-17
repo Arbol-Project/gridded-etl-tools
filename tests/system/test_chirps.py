@@ -16,7 +16,7 @@ from ..common import (
     patched_zarr_json_path,
     remove_dask_worker_dir,
     remove_performance_report,
-    remove_zarr_json
+    remove_zarr_json,
 )
 
 
@@ -25,12 +25,7 @@ def create_input_directories(initial_input_path, appended_input_path, appended_i
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (
-        initial_input_path,
-        appended_input_path,
-        appended_input_path_with_hole,
-        qc_input_path
-    ):
+    for path in (initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
