@@ -1323,22 +1323,7 @@ class Publish(Transform, Metadata):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        # Drop unused coords and dims
-        for coord in ["crs"]:
-            if coord in orig_ds:
-                orig_ds = orig_ds.drop(coord)
-        # Rename coordinates
-        orig_data_var = [var for var in orig_ds.data_vars][0]
-        rename_coords = {orig_data_var: self.data_var()}
-        for coord in ["lat", "lon"]:
-            if coord in orig_ds.coords:
-                str_add = "itude"
-                if coord == "lon":
-                    str_add = "gitude"
-                rename_coords.update({coord: coord + str_add})
-        orig_ds = orig_ds.rename(**rename_coords)
-        # Rework longitudes to -180 to 180 style
-        orig_ds = self.standardize_longitudes(orig_ds)
+        orig_ds = self.postprocess_zarr(orig_ds)
         # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
         if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
             orig_ds = orig_ds.expand_dims(self.time_dim)
