@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from typing import Optional, Any
+from typing import Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
@@ -111,7 +111,7 @@ class Transform(Convenience):
         self,
         file_path: str,
         scan_indices: int = 0,
-        local_file_path: Optional[pathlib.Path] = None,
+        local_file_path: pathlib.Path | None = None,
     ):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a
@@ -136,7 +136,7 @@ class Transform(Convenience):
             options are returned that usually means the provider prepares this data variable at multiple depth /
             surface layers. We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface
             layer in ETLs we've written.
-        local_file_path : Optional[str], optional
+        local_file_path : pathlib.Path  | None, optional
             An optional local file path to save the Kerchunked Zarr JSON to
 
         Returns

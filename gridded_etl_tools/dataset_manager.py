@@ -10,7 +10,6 @@ import logging
 import multiprocessing
 import multiprocessing.pool
 import sys
-from typing import Optional
 
 import psutil
 
@@ -265,7 +264,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
 
     @abstractmethod
-    def extract(self, date_range: Optional[tuple[datetime.datetime, datetime.datetime]] = None):
+    def extract(self, date_range: tuple[datetime.datetime, datetime.datetime] | None = None):
         """
         Check for updates to local input files (usually by checking a remote location where climate data publishers
         post updated data). Highly customized for every ETL.

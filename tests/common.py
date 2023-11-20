@@ -1,7 +1,6 @@
 import pathlib
 import shutil
 import numpy as np
-import typing
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
@@ -23,7 +22,7 @@ def run_etl(
     manager_class: DatasetManager,
     input_path: pathlib.Path,
     store: str = "local",
-    allow_overwrite: typing.Optional[bool] = None,
+    allow_overwrite: bool | None = None,
     **kwargs,
 ):
     """
@@ -64,7 +63,7 @@ def get_manager(
     input_path: str = None,
     store: str = "local",
     time_chunk: int = 50,
-    allow_overwrite: typing.Optional[bool] = None,
+    allow_overwrite: bool | None = None,
     **kwargs,
 ):
     """
