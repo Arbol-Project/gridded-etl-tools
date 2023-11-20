@@ -1367,7 +1367,6 @@ class Publish(Transform, Metadata):
         # Confirm the original dataset has a timestamp w/in the update range
         # Some datasets download all values for the latest year, meaning lots of files won't match the update range
         # We return False to skip those and remove them from our list
-        import ipdb; ipdb.set_trace(context=4)
         if not random_coords["time"] == orig_ds["time"].values:
             if orig_ds["time"].values not in prod_ds["time"]:
                 self.original_files.remove(orig_file_path)
