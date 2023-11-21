@@ -31,9 +31,9 @@ class IPFS:
         default_timeout: int = 600,
     ):
         self._host = host
+        self._default_hash = default_hash
         self._default_base = default_base
         self._default_timeout = default_timeout
-        self._default_hash = default_hash
 
         self.ipfs_session = get_retry_session()
 
@@ -162,13 +162,9 @@ class IPFS:
         ipns_key_hash_dict : dict
             All the IPNS name hashes and keys in the local IPFS repository
         """
-        ipns_key_hash_dict = {}
-        for name_hash_pair in self.ipfs_session.post(
-            self._host + "/api/v0/key/list", timeout=self._default_timeout
-        ).json()["Keys"]:
-            key, val = tuple(name_hash_pair.values())
-            ipns_key_hash_dict[key] = val
-        return ipns_key_hash_dict
+        res = self.ipfs_session.post(self._host + "/api/v0/key/list", timeout=self._default_timeout)
+        res.raise_for_status()
+        return {pair["Name"]: pair["Id"] for pair in res.json()["Keys"]}
 
     def ipns_generate_name(self, key: str = None) -> str:
         """
@@ -188,7 +184,8 @@ class IPFS:
         if key is None:
             key = self.json_key()
         # Only generate the key in IPFS's registry if it doesn't already exist
-        if key not in self.ipns_key_list():
+        keys = self.ipns_key_list()
+        if key not in keys:
             res = self.ipfs_session.post(
                 self._host + "/api/v0/key/gen",
                 timeout=self._default_timeout,
@@ -198,7 +195,7 @@ class IPFS:
             res.raise_for_status()
             return res.json()["Id"]
         else:
-            return self.ipns_key_list()[key]
+            return keys[key]
 
     def ipns_retrieve_object(self, ipns_name: str) -> tuple[dict, str]:
         """
@@ -244,17 +241,17 @@ class IPFS:
         """
         if self.custom_latest_hash is not None:
             return self.custom_latest_hash
-        else:
-            if key is None:
-                key = self.json_key()
-            if hasattr(self, "dataset_hash") and self.dataset_hash:
-                return self.dataset_hash
-            elif self.check_stac_on_ipns(key):
-                # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
-                # it finds to a CID object. Convert it back to a hash of type `str``
-                return str(self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(base=self._default_base))
-            else:
-                return None
+
+        if hasattr(self, "dataset_hash") and self.dataset_hash:
+            return self.dataset_hash
+
+        if key is None:
+            key = self.json_key()
+
+        if self.check_stac_on_ipns(key):
+            # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
+            # it finds to a CID object. Convert it back to a hash of type `str``
+            return str(self.load_stac_metadata(key)["assets"]["zmetadata"]["href"].set(base=self._default_base))
 
     def check_stac_on_ipns(self, key: str) -> bool:
         """
