@@ -13,7 +13,8 @@ dynamic = ["version"]
 authors = [
     { name = "Robert Banick", email = "robert.banick@arbol.io" },
     { name = "Evan Schechter", email = "evan@arbol.io" },
-    { name = "Frank DeMarco", email = "if.self.end@gmail.com" }
+    { name = "Frank DeMarco", email = "if.self.end@gmail.com" },
+    { name = "Chris Rossi", email = "chris@christophermrossi.com" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
