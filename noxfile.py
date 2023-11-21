@@ -38,7 +38,7 @@ def cover(session):
 
 @nox.session(py=DEFAULT_INTERPRETER)
 def lint(session):
-    session.install("black", "flake8")
+    session.install("black", "flake8", "flake8-pyproject")
     run_black(session, check=True)
     session.run("flake8", CODE, "tests", "examples")
 

@@ -1,7 +1,7 @@
 # pyproject.toml
 [build-system]
 requires = [
-    "setuptools>=45",
+    "setuptools>=61.2",
     "wheel",
     "setuptools_scm>=6.2"
 ]
@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gridded_etl_tools"
-version = "0.4.21"
+dynamic = ["version"]
 authors = [
     { name = "Robert Banick", email = "robert.banick@arbol.io" },
     { name = "Evan Schechter", email = "evan@arbol.io" },
@@ -26,7 +26,32 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Atmospheric Science"
 ]
-
+description = "Tools for transforming gridded climate data into Zarrs"
+readme = "README.md"
+keywords = ["Climate", "Zarr", "ETL", "IPFS"]
+requires-python = ">=3.10"
+dependencies = [
+    "cfgrib",
+    "dag-cbor==0.2.2",
+    "dask[array,diagnostics,distributed]==2023.3.2",
+    "deprecation",
+    "fsspec",
+    "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.1",
+    "kerchunk",
+    "multiformats",
+    "natsort",
+    "numpy",
+    "p_tqdm",
+    "pandas",
+    "psutil",
+    "pycryptodome",
+    "requests",
+    "s3fs",
+    "shapely",
+    "tqdm",
+    "xarray[complete]>=2023.9.0",
+    "zarr>=2.16.1",
+]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
@@ -39,3 +64,31 @@ Homepage = "https://arbol.io/"
 
 [tool.black]
 line-length = 119
+
+[project.optional-dependencies]
+testing = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+]
+dev = [
+    "black",
+    "flake8",
+    "flake8-pyproject",
+    "nox",
+]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.package-data]
+"*" = ["py.typed", "*.json"]
+
+[tool.setuptools.packages.find]
+exclude = ["tests"]
+namespaces = false
+
+[tool.flake8]
+# flake8 and black disagree on E203 and W503
+ignore = "E203 W503"
+max-line-length = "119"
