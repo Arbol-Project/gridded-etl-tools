@@ -1277,7 +1277,7 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def get_original_ds(self, random_coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
+    def get_original_ds(self, random_coords: dict[Any] | None = None) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
 
@@ -1294,9 +1294,9 @@ class Publish(Transform, Metadata):
             The pathlib.Path to the randomly selected original file
         """
         # Randomly select an original dataset
-        if "step" in random_coords:
+        if random_coords and "step" in random_coords:
             # Forecasts create loads of files so we pre-filter to speed things up
-            step_hours = random_coords["step"].astype('timedelta64[h]').astype(int)
+            step_hours = random_coords["step"].astype("timedelta64[h]").astype(int)
             step_filtered_original_files = [fil for fil in self.original_files if f"F{step_hours:03}." in str(fil)]
             try:
                 orig_file_path = random.choice(step_filtered_original_files)
@@ -1400,7 +1400,7 @@ class Publish(Transform, Metadata):
         if "step" in orig_ds.dims:
             # Forecast step timedeltas are hard to select from so we have to use the nearest method.
             # We don't implement this elsewhere to minimize scope for error
-            orig_val = orig_ds.sel(**selection_coords, method='nearest')[self.data_var()].values
+            orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
         else:
             orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values

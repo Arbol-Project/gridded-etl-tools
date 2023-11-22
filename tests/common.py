@@ -236,23 +236,23 @@ def patched_update_cadence_bounds(self):
 original_get_original_ds = DatasetManager.get_original_ds
 
 
-def original_ds_normal(self):
-    return original_get_original_ds(self)
+def original_ds_normal(self, *args, **kwargs):
+    return original_get_original_ds(self, *args, **kwargs)
 
 
-def original_ds_bad_data(self):
-    orig_ds, orig_file_path = original_get_original_ds(self)
+def original_ds_bad_data(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
     orig_ds[self.data_var()][:] = 1234567
     return orig_ds, orig_file_path
 
 
-def original_ds_no_time(self):
-    orig_ds, orig_file_path = original_get_original_ds(self)
+def original_ds_no_time(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
     return orig_ds.squeeze().drop("time"), orig_file_path
 
 
-def original_ds_bad_time(self):
-    orig_ds, orig_file_path = original_get_original_ds(self)
+def original_ds_bad_time(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
     orig_ds = orig_ds.assign_coords({"time": np.atleast_1d(np.datetime64("1850-01-01"))})
     return orig_ds, orig_file_path
 

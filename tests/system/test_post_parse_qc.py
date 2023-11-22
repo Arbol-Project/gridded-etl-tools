@@ -179,6 +179,6 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     # Exits if time in original file doesn't match time in prod dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
     prod_ds = dm.store.dataset()
-    orig_ds, orig_file_path = dm.get_original_ds()
     random_coords = dm.get_random_coords(prod_ds)
+    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
     assert not dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
