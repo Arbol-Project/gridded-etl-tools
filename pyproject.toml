@@ -53,17 +53,8 @@ dependencies = [
     "zarr>=2.16.1",
 ]
 
-[tool.setuptools_scm]
-version_scheme = "post-release"
-local_scheme = "no-local-version"
-write_to = "gridded_etl_tools/_version.py"
-
-
 [project.urls]
 Homepage = "https://arbol.io/"
-
-[tool.black]
-line-length = 119
 
 [project.optional-dependencies]
 testing = [
@@ -78,6 +69,14 @@ dev = [
     "nox",
 ]
 
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+write_to = "gridded_etl_tools/_version.py"
+
+[tool.black]
+line-length = 119
+
 [tool.setuptools]
 include-package-data = false
 
@@ -91,4 +90,4 @@ namespaces = false
 [tool.flake8]
 # flake8 and black disagree on E203 and W503
 ignore = "E203 W503"
-max-line-length = "119"
+max-line-length = 119
