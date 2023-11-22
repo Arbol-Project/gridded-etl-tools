@@ -1238,7 +1238,10 @@ class Publish(Transform, Metadata):
             i = 0
             while i <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                orig_ds, orig_file_path = self.get_original_ds()
+                try:
+                    orig_ds, orig_file_path = self.get_original_ds(random_coords)
+                except FileNotFoundError:
+                    break
                 i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
@@ -1274,9 +1277,14 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def get_original_ds(self) -> tuple[xr.Dataset, pathlib.Path]:
+    def get_original_ds(self, random_coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
 
         Returns
         ----------
@@ -1285,7 +1293,19 @@ class Publish(Transform, Metadata):
         orig_file_path
             The pathlib.Path to the randomly selected original file
         """
-        orig_file_path = random.choice(self.original_files)
+        # Randomly select an original dataset
+        if "step" in random_coords:
+            # Forecasts create loads of files so we pre-filter to speed things up
+            step_hours = random_coords["step"].astype('timedelta64[h]').astype(int)
+            step_filtered_original_files = [fil for fil in self.original_files if f"F{step_hours:03}." in str(fil)]
+            try:
+                orig_file_path = random.choice(step_filtered_original_files)
+            except IndexError:
+                # For some datasets a given day may not have all forecasts records available in prod,
+                # causing failures we need to escape
+                raise FileNotFoundError
+        else:
+            orig_file_path = random.choice(self.original_files)
         if self.protocol == "file":
             raw_ds = xr.open_dataset(orig_file_path)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
@@ -1296,6 +1316,7 @@ class Publish(Transform, Metadata):
                                 This prevents running needed checks for this dataset.\
                                 Please enable `use_local_zarr_jsons` to permit post-parse QC"
                 )
+            # Note this will apply postprocess_zarr automtically
             raw_ds = self.zarr_json_to_dataset(zarr_json_path=str(orig_file_path))
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
@@ -1327,8 +1348,10 @@ class Publish(Transform, Metadata):
                 {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
             )
             orig_ds = orig_ds.expand_dims(self.time_dim)
-        # Setting metadata will clean up data variables and a few other things
-        orig_ds = self.postprocess_zarr(orig_ds)
+        # Setting metadata will clean up data variables and a few other things.
+        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
+        if self.protocol == "file":
+            orig_ds = self.postprocess_zarr(orig_ds)
         # Apply standard postprocessing to get other data variables in order
         return self.rename_data_variable(orig_ds)
 
@@ -1367,14 +1390,19 @@ class Publish(Transform, Metadata):
         # Confirm the original dataset has a timestamp w/in the update range
         # Some datasets download all values for the latest year, meaning lots of files won't match the update range
         # We return False to skip those and remove them from our list
-        if not random_coords["time"] == orig_ds["time"].values:
-            if orig_ds["time"].values not in prod_ds["time"]:
+        if not random_coords[self.time_dim] == orig_ds[self.time_dim].values:
+            if orig_ds[self.time_dim].values not in prod_ds[self.time_dim]:
                 self.original_files.remove(orig_file_path)
             return False
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}
-        # Open desired data values
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        # Open desired data values.
+        if "step" in orig_ds.dims:
+            # Forecast step timedeltas are hard to select from so we have to use the nearest method.
+            # We don't implement this elsewhere to minimize scope for error
+            orig_val = orig_ds.sel(**selection_coords, method='nearest')[self.data_var()].values
+        else:
+            orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold
