@@ -9,12 +9,13 @@ import dask
 import pathlib
 import glob
 import os
+import random
 
 import pandas as pd
 import numpy as np
 import xarray as xr
 
-from typing import Optional, Any
+from typing import Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
@@ -110,7 +111,7 @@ class Transform(Convenience):
         self,
         file_path: str,
         scan_indices: int = 0,
-        local_file_path: Optional[pathlib.Path] = None,
+        local_file_path: pathlib.Path | None = None,
     ):
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a
@@ -135,7 +136,7 @@ class Transform(Convenience):
             options are returned that usually means the provider prepares this data variable at multiple depth /
             surface layers. We currently default to the 1st (index=0), as we tend to use the shallowest depth / surface
             layer in ETLs we've written.
-        local_file_path : Optional[str], optional
+        local_file_path : pathlib.Path  | None, optional
             An optional local file path to save the Kerchunked Zarr JSON to
 
         Returns
@@ -151,7 +152,9 @@ class Transform(Convenience):
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up
         # dev. work.
         if self.use_local_zarr_jsons:
-            if not local_file_path:
+            if not local_file_path and self.protocol == "file":
+                local_file_path = os.path.splitext(file_path)[0] + ".json"
+            elif not local_file_path and self.protocol == "s3":
                 raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
                 memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
@@ -1183,16 +1186,16 @@ class Publish(Transform, Metadata):
         bool
             Returns False for any unacceptable timestamp order, otherwise True
         """
-        # Check if times meet expected_delta or fall within the anticipated range. Raise a warning and return false if
-        # so. Raise a descriptive error message in the enclosing function describing the specific operation this failed
-        # on.
+        # Check if times meet expected_delta or fall within the anticipated range.
+        # Raise a warning and return false if so.
+        # Raise a descriptive error message in the enclosing function describing the specific operation that failed.
         previous_time = times[0]
         for instant in times[1:]:
             # Warn if not using expected delta
             if self.update_cadence_bounds:
                 self.warn(
-                    f"Because dataset has irregular cadence {self.update_cadence_bounds} expected delta "
-                    f"{expected_delta} is not being used for checking time contiguity"
+                    f"Because dataset has irregular cadence {self.update_cadence_bounds} expected delta"
+                    f" {expected_delta} is not being used for checking time contiguity"
                 )
                 if not self.update_cadence_bounds[0] <= (instant - previous_time) <= self.update_cadence_bounds[1]:
                     self.warn(
@@ -1208,4 +1211,204 @@ class Publish(Transform, Metadata):
                 return False
             previous_time = instant
         # Return True if no problems found
+        return True
+
+    def post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
+        """
+        Master function to check values written after a parse for discrepancies with the source data
+
+        Parameters
+        ----------
+        checks
+            The number of values to check. Defaults to 100.
+        threshold
+            The tolerance for diversions between original and parsed values.
+            Absolute differences between them beyond this limit will raise a ValueError
+        """
+        if self.skip_post_parse_qc:
+            self.info("Skipping post-parse quality check as directed")
+        else:
+            self.info("Beginning post-parse quality check of the parsed dataset")
+            start_checking = time.perf_counter()
+            # Instantiate needed objects
+            self.set_key_dims()  # in case running w/out Transform/Parse
+            prod_ds = self.get_prod_update_ds()
+            self.original_files = list(self.input_files())
+            # Run the data check N times, incrementing after every successfuly check
+            i = 0
+            while i <= checks:
+                random_coords = self.get_random_coords(prod_ds)
+                try:
+                    orig_ds, orig_file_path = self.get_original_ds(random_coords)
+                except FileNotFoundError:
+                    break
+                i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
+                # Theoretically this could loop endlessly if all input files don't match the prod dataset
+                # in the time dimension. While improbable, let's build an automated exit just in case
+                if time.perf_counter() - start_checking > 1200:
+                    self.info(
+                        f"Breaking from checking loop after\
+                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} \
+                              to prevent infinite checks"
+                    )
+                    break
+
+            self.info(
+                f"Values check successfully passed.\
+                      Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
+            )
+
+        return True
+
+    def get_prod_update_ds(self) -> xr.Dataset:
+        """
+        Get the prod dataset and filter it to the temporal extent of the latest update
+
+        Returns
+        -------
+        prod_ds
+            The production dataset filtered to only the temporal extent of the latest update
+        """
+        prod_ds = self.store.dataset()
+        update_date_range = slice(
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
+        )
+        time_select = {self.time_dim: update_date_range}
+        return prod_ds.sel(**time_select)
+
+    def get_original_ds(self, random_coords: dict[Any] | None = None) -> tuple[xr.Dataset, pathlib.Path]:
+        """
+        Get the original dataset and format it equivalently to the production dataset
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+
+        Returns
+        ----------
+        orig_ds
+            The original dataset, unformatted
+        orig_file_path
+            The pathlib.Path to the randomly selected original file
+        """
+        # Randomly select an original dataset
+        if random_coords and "step" in random_coords:
+            # Forecasts create loads of files so we pre-filter to speed things up
+            step_hours = random_coords["step"].astype("timedelta64[h]").astype(int)
+            step_filtered_original_files = [fil for fil in self.original_files if f"F{step_hours:03}." in str(fil)]
+            try:
+                orig_file_path = random.choice(step_filtered_original_files)
+            except IndexError:
+                # For some datasets a given day may not have all forecasts records available in prod,
+                # causing failures we need to escape
+                raise FileNotFoundError
+        else:
+            orig_file_path = random.choice(self.original_files)
+        if self.protocol == "file":
+            raw_ds = xr.open_dataset(orig_file_path)
+        # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
+        elif self.protocol == "s3":
+            if not self.use_local_zarr_jsons:
+                raise ValueError(
+                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
+                                This prevents running needed checks for this dataset.\
+                                Please enable `use_local_zarr_jsons` to permit post-parse QC"
+                )
+            # Note this will apply postprocess_zarr automtically
+            raw_ds = self.zarr_json_to_dataset(zarr_json_path=str(orig_file_path))
+        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
+        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
+        return orig_ds, orig_file_path
+
+    def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
+        """
+        Open and reformat the original dataset so it can be selected from identically to the production dataset
+        Basically re-run key elements of the transform step
+
+        Parameters
+        ----------
+        orig_ds
+            The original dataset, unformatted
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
+
+        Returns
+        -------
+        orig_ds
+            The original dataset, reformatted similarly to the production dataset
+        """
+        # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
+        if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
+            orig_ds = orig_ds.expand_dims(self.time_dim)
+        # ... or create it from the file name if missing entirely in the raw file
+        elif self.time_dim not in orig_ds:
+            orig_ds = orig_ds.assign_coords(
+                {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
+            )
+            orig_ds = orig_ds.expand_dims(self.time_dim)
+        # Setting metadata will clean up data variables and a few other things.
+        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
+        if self.protocol == "file":
+            orig_ds = self.postprocess_zarr(orig_ds)
+        # Apply standard postprocessing to get other data variables in order
+        return self.rename_data_variable(orig_ds)
+
+    def check_value(
+        self,
+        random_coords: dict[Any],
+        orig_ds: xr.Dataset,
+        prod_ds: xr.Dataset,
+        orig_file_path: pathlib.Path,
+        threshold: float = 10e-5,
+    ):
+        """
+        Check random values in the original files against the written values
+        in the updated dataset at the same location
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        orig_ds
+            The original dataset, reformatted similarly to the production dataset
+        prod_ds
+            The filtered production dataset
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
+        threshold
+            The tolerance for diversions between original and parsed values.
+            Absolute differences between them beyond this limit will raise a ValueError
+
+        Returns
+        -------
+        bool
+            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
+            to the update time range (False). Failed checks will raise a ValueError instead.
+        """
+        # Confirm the original dataset has a timestamp w/in the update range
+        # Some datasets download all values for the latest year, meaning lots of files won't match the update range
+        # We return False to skip those and remove them from our list
+        if not random_coords[self.time_dim] == orig_ds[self.time_dim].values:
+            if orig_ds[self.time_dim].values not in prod_ds[self.time_dim]:
+                self.original_files.remove(orig_file_path)
+            return False
+        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
+        # Open desired data values.
+        if "step" in orig_ds.dims:
+            # Forecast step timedeltas are hard to select from so we have to use the nearest method.
+            # We don't implement this elsewhere to minimize scope for error
+            orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
+        else:
+            orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        # Compare values from the original dataset to the prod dataset.
+        # Raise an error if the values differ more than the permitted threshold
+        self.info(f"{orig_val}, {prod_val}")
+        if abs(orig_val - prod_val) > threshold:
+            raise ValueError(
+                f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
+            )
         return True

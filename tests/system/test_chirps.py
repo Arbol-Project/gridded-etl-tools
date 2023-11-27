@@ -21,15 +21,11 @@ from ..common import (
 
 
 @pytest.fixture
-def create_input_directories(initial_input_path, appended_input_path, appended_input_path_with_hole):
+def create_input_directories(initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path):
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (
-        initial_input_path,
-        appended_input_path,
-        appended_input_path_with_hole,
-    ):
+    for path in (initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
@@ -38,7 +34,7 @@ def create_input_directories(initial_input_path, appended_input_path, appended_i
 
 
 @pytest.fixture
-def simulate_file_download(root, initial_input_path, appended_input_path):
+def simulate_file_download(root, initial_input_path, appended_input_path, qc_input_path):
     """
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
@@ -48,6 +44,7 @@ def simulate_file_download(root, initial_input_path, appended_input_path):
     shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
     shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
     shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
+    shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
     print("Simulated downloading input files")
 
 
@@ -135,8 +132,7 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     manager.transform()
     manager.parse()
     manager.zarr_json_path().unlink(missing_ok=True)
-    # Open the head with ipldstore + xarray.open_zarr and compare two data points
-    # with the same data points in a local GRIB file
+    # Check that a hash wasn't created because the dataset wasn't parsed
     with pytest.raises(FileNotFoundError):
         manager.zarr_hash_to_dataset(manager.latest_hash())
 
@@ -194,7 +190,7 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
         "examples.managers.chirps.CHIRPSFinal25.local_input_path",
         return_value=appended_input_path,
     )
-    dm = get_manager(manager_class)
+    dm = get_manager(manager_class, appended_input_path)
     # Test that prepare_input_files successfully expands 2 files to 32 files
     assert len(list(dm.input_files())) == 2
     dm.convert_to_lowest_common_time_denom(list(dm.input_files()), keep_originals=False)

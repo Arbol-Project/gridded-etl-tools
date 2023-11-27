@@ -14,12 +14,56 @@ from gridded_etl_tools.dataset_manager import DatasetManager
 #     from ..common import *
 #
 
+# This patch should be applied to gridded_etl_tools.convenience.Convenience.output_path
+mock_output_root = pathlib.Path("_climate_test")
+
+
+def run_etl(
+    manager_class: DatasetManager,
+    input_path: pathlib.Path,
+    store: str = "local",
+    allow_overwrite: bool | None = None,
+    **kwargs,
+):
+    """
+    Construct a DatasetManager, forwarding the input path, store,
+    and optionally the overwrite flag, run a transform and parse, and return
+    the constructed DatasetManager.
+    Useful for running a standard transform and parse on a dataset and checking its values afterward.
+
+    Parameters
+    ----------
+    manager_class
+        A DatasetManager implementation for your chosen dataset
+    input_path
+        The path from which to source raw data to build your dataset.
+        Should pertain to initial, insert, or append data.
+    store
+        The manager store to use. 'Local' in most implementations
+    allow_overwrite
+        Optionally assign the allow_overwrite flag of the dataset manager.
+        If this is left as None, the dataset manager's default value will be used.
+
+    Returns
+    -------
+    manager
+        Instance of the given manager class after running transform and parse
+    """
+    # Get the manager being requested by class_name
+    manager = get_manager(manager_class, input_path=input_path, store=store, allow_overwrite=allow_overwrite, **kwargs)
+    # Parse
+    manager.transform()
+    manager.parse()
+    manager.publish_metadata()
+    return manager
+
 
 def get_manager(
     manager_class: DatasetManager,
-    input_path: str = "",
+    input_path: str = None,
     store: str = "local",
     time_chunk: int = 50,
+    allow_overwrite: bool | None = None,
     **kwargs,
 ):
     """
@@ -30,29 +74,56 @@ def get_manager(
     manager_class
         A DatasetManager implementation for your chosen dataset
     input_path
-        The path from which to source raw data to build your dataset. Should pertain to initial, insert, or append
-        data.
+        The path from which to source raw data to build your dataset.
+        Should pertain to initial, insert, or append data.
+        Defaults to None, in case you just want a manager for unit testing.
     store
         The manager store to use. 'Local' in most implementations
     time_chunk
-        Optional paramter to modify the size of time_chunks. Necessary for some ETLs. Defaults to 50.
+        Size of the Zarr and Dask time chunks to use instead of the dataset manager's default values.
+        Defaults to a low value for the small files used in testing.
+        Note that to use the dataset manager's default time chunk values,
+        it will need to be constructed outside of this function.
+    allow_overwrite
+        Optionally assign the allow_overwrite flag of the dataset manager.
+        If this is left as None, the dataset manager's default value will be used.
 
     Returns
     -------
     manager
         A DatasetManager corresponding to your chosen manager_class
     """
-    # Get the manager being requested by class_name
-    manager = manager_class(
-        custom_input_path=input_path,
-        s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
-        store=store,
-        **kwargs,
-    )
-    # Overriding the default (usually very large) time chunk to enable testing chunking with a smaller set of times
+    # Get the manager being requested by class_name. Only pass allow_overwrite
+    # if it is set to something other than None so that the DM's default
+    # value can be used otherwise.
+    if allow_overwrite is not None:
+        manager = manager_class(
+            custom_input_path=input_path,
+            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            store=store,
+            allow_overwrite=allow_overwrite,
+            **kwargs,
+        )
+    else:
+        manager = manager_class(
+            custom_input_path=input_path,
+            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            store=store,
+            **kwargs,
+        )
+
+    # Override the default (usually very large) time chunk with the given value.
+    # Intended to enable testing chunking with a smaller set of times.
     manager.requested_dask_chunks["time"] = time_chunk
     manager.requested_zarr_chunks["time"] = time_chunk
     return manager
+
+
+# Delete mocked output folder (for local Zarrs)
+def remove_mock_output():
+    if mock_output_root.exists():
+        shutil.rmtree(mock_output_root)
+        print("Cleaned up mocked output root", mock_output_root)
 
 
 def remove_zarr_json():
@@ -125,6 +196,11 @@ def empty_ipns_publish(self, key, cid, offline=False):
 original_json_key = DatasetManager.json_key
 
 
+@property
+def patched_output_root(self):
+    return mock_output_root
+
+
 def patched_json_key(self):
     return f"{self.dataset_name}-{self.time_resolution}_test_initial"
 
@@ -155,3 +231,40 @@ def patched_root_stac_catalog(self):
 @property
 def patched_update_cadence_bounds(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
+
+
+original_get_original_ds = DatasetManager.get_original_ds
+
+
+def original_ds_normal(self, *args, **kwargs):
+    return original_get_original_ds(self, *args, **kwargs)
+
+
+def original_ds_bad_data(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds[self.data_var()][:] = 1234567
+    return orig_ds, orig_file_path
+
+
+def original_ds_no_time(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    return orig_ds.squeeze().drop("time"), orig_file_path
+
+
+def original_ds_bad_time(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = orig_ds.assign_coords({"time": np.atleast_1d(np.datetime64("1850-01-01"))})
+    return orig_ds, orig_file_path
+
+
+original_input_files = DatasetManager.input_files
+
+
+def nc4_input_files(self):
+    nc4s = [str(fil) for fil in list(original_input_files(self)) if fil.suffix == ".nc4"]
+    return nc4s
+
+
+def json_input_files(self):
+    jsons = [str(fil) for fil in list(original_input_files(self)) if fil.suffix == ".json"]
+    return jsons

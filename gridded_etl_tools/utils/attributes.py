@@ -1,5 +1,4 @@
 from abc import ABC
-import typing
 import warnings
 
 import deprecation
@@ -174,12 +173,12 @@ class Attributes(ABC):
     The data type of the data variable
     """
 
-    spatial_resolution: typing.Optional[float] = None
+    spatial_resolution: float | None = None
     """
     The spatial resolution of a dataset in decimal degrees
     """
 
-    spatial_precision: typing.Optional[float] = None
+    spatial_precision: float | None = None
     """
     The spatial resolution of a dataset in decimal degrees
     """
@@ -194,7 +193,7 @@ class Attributes(ABC):
     def temporal_resolution(cls) -> str:
         return cls._find_fallback("time_resolution")
 
-    update_cadence: typing.Optional[str] = None
+    update_cadence: str | None = None
     """
     The frequency with which a dataset is updated.
     """
@@ -244,7 +243,7 @@ class Attributes(ABC):
     Steps used for hindcast, if any.
     """
 
-    update_cadence_bounds: typing.Optional[tuple[np.timedelta64, np.timedelta64]] = _backwards_compatible(
+    update_cadence_bounds: tuple[np.timedelta64, np.timedelta64] | None = _backwards_compatible(
         None, "irregular_update_cadence"
     )
     """

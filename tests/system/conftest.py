@@ -41,6 +41,11 @@ def appended_input_path_with_hole(root):
 
 
 @pytest.fixture
+def qc_input_path(root):
+    return root / pathlib.Path("chirps_qc_input")
+
+
+@pytest.fixture
 def manager_class():
     """
     etls.managers.CHIRPSFinal25 child to run tests with

@@ -9,7 +9,7 @@ from gridded_etl_tools.dataset_manager import DatasetManager
 from ..common import get_manager, patched_update_cadence_bounds
 
 
-def test_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
+def test_pre_parse_quality_check(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     """
     Test that the pre-parse quality check method waves through good data
     and fails as anticipated with bad data of specific types

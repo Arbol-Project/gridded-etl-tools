@@ -556,12 +556,8 @@ class Metadata(Convenience, IPFS):
             The dataset being published, after metadata update
 
         """
-        # Rename data variable to desired name, if necessary. Will ValueError out if the name already exists
-        try:
-            dataset = dataset.rename_vars({[key for key in dataset.data_vars][0]: self.data_var()})
-        except ValueError:
-            self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
-            pass
+        # Rename data variable to desired name, if necessary.
+        dataset = self.rename_data_variable(dataset)
 
         # Set all fields to uncompressed and remove filters leftover from input files
         dataset = self.remove_unwanted_fields(dataset)
@@ -576,6 +572,32 @@ class Metadata(Convenience, IPFS):
         for attr in dataset.attrs.keys():
             if type(dataset.attrs[attr]) is dict or type(dataset.attrs[attr]) is None:
                 dataset.attrs[attr] = ""
+
+        return dataset
+
+    def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
+        """
+        Rename data variables to desired name if they are not already set
+        Normally this would take place w/in `postprocess_zarr` but as it's a classmethod it can't
+        call dataset specific methods and properties. Therefore we run it here.
+
+        Rename will return a ValueError if the name already exists, in which case we pass
+
+        Parameters
+        ----------
+        dataset : xarray.Dataset
+            The dataset being published, pre-rename
+
+        Returns
+        -------
+        dataset : xarray.Dataset
+            The dataset being published, post-rename
+        """
+        try:
+            dataset = dataset.rename_vars({[key for key in dataset.data_vars][0]: self.data_var()})
+        except ValueError:
+            self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
+            pass
 
         return dataset
 
