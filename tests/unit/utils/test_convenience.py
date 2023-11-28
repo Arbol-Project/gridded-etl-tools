@@ -98,17 +98,17 @@ class TestConvenience:
         assert dm.zarr_json_path() == pathlib.Path("/the/root/datasets/merged_zarr_jsons/DummyManager_zarr.json")
 
     @staticmethod
-    def test_json_key(manager_class):
+    def test_key(manager_class):
         dm = manager_class()
-        assert dm.json_key() == "DummyManager-daily"
+        assert dm.key() == "DummyManager-daily"
 
     @staticmethod
-    def test_json_key_append_date(mocker, manager_class):
+    def test_key_append_date(mocker, manager_class):
         patched_now = datetime.datetime(2010, 5, 12, 2, 42)
         patched_dt = mocker.patch("datetime.datetime")
         patched_dt.now.return_value = patched_now
         dm = manager_class()
-        assert dm.json_key(append_date=True) == "DummyManager-daily-20100512"
+        assert dm.key(append_date=True) == "DummyManager-daily-20100512"
 
     @staticmethod
     def test_relative_path(manager_class):

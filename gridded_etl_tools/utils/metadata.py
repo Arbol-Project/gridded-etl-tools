@@ -428,10 +428,10 @@ class Metadata(Convenience, IPFS):
         # Check if an older version of the STAC Item exists and if so create a "previous" link for them in the new STAC
         # Item
         try:
-            old_stac_item, href = self.retrieve_stac(self.json_key(), StacType.ITEM)
+            old_stac_item, href = self.retrieve_stac(self.key(), StacType.ITEM)
             if isinstance(self.store, IPLD):
                 # If IPLD, generate the previous hash link
-                old_item_ipfs_hash = self.ipns_resolve(self.json_key())
+                old_item_ipfs_hash = self.ipns_resolve(self.key())
                 self.info("Updating 'previous' link in dataset's STAC Item")
                 stac_item["links"].append(
                     {
@@ -447,7 +447,7 @@ class Metadata(Convenience, IPFS):
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
             self.info("No previous STAC Item found")
-            href = self.get_href(self.json_key(), StacType.ITEM)
+            href = self.get_href(self.key(), StacType.ITEM)
         stac_item["links"].append(
             {
                 "rel": "self",
@@ -458,7 +458,7 @@ class Metadata(Convenience, IPFS):
         )
         # push final STAC Item to backing store
         self.info("Pushing STAC Item to backing store")
-        self.publish_stac(self.json_key(), stac_item, StacType.ITEM)
+        self.publish_stac(self.key(), stac_item, StacType.ITEM)
         # register item as a link in the relevant collection, if not already there, and push updated collection to IPFS
         if any(
             stac_item["assets"]["zmetadata"]["title"] in link_dict["title"]
@@ -522,7 +522,7 @@ class Metadata(Convenience, IPFS):
         """
         if isinstance(self.store, IPLD):
             if not key:
-                key = self.json_key()
+                key = self.key()
             try:
                 return self.retrieve_stac(key, StacType.ITEM)[0]
             except (KeyError, TimeoutError):
