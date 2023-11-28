@@ -90,7 +90,7 @@ class S3(StoreInterface):
     """
     Provides an interface for reading and writing a dataset's Zarr on S3.
 
-    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_json_key].zarr"), create a new S3 object using a
+    To connect to a Zarr on S3 (i.e., at "s3://[bucket]/[dataset_key].zarr"), create a new S3 object using a
     `dataset_manager.DatasetManager` object and bucket name, and define both `AWS_ACCESS_KEY_ID` and
     `AWS_SECRET_ACCESS_KEY` in the ~/.aws/credentials file or shell environment.
 
@@ -153,7 +153,7 @@ class S3(StoreInterface):
         if self.dm.custom_output_path:
             return self.dm.custom_output_path
         else:
-            return f"s3://{self.bucket}/datasets/{self.dm.json_key()}.zarr"
+            return f"s3://{self.bucket}/datasets/{self.dm.key()}.zarr"
 
     def __str__(self) -> str:
         return self.path

@@ -186,7 +186,7 @@ class IPFS:
             The IPNS name hash (str) resulting from the publication of an empty dict
         """
         if key is None:
-            key = self.json_key()
+            key = self.key()
         # Only generate the key in IPFS's registry if it doesn't already exist
         if key not in self.ipns_key_list():
             res = self.ipfs_session.post(
@@ -235,7 +235,7 @@ class IPFS:
         ----------
         key : str, optional
             The name of the dataset in the format it is stored in the IPNS namespace. If `None`, the value of
-            `self.json_key()` will be used.
+            `self.key()` will be used.
 
         Returns
         -------
@@ -246,7 +246,7 @@ class IPFS:
             return self.custom_latest_hash
         else:
             if key is None:
-                key = self.json_key()
+                key = self.key()
             if hasattr(self, "dataset_hash") and self.dataset_hash:
                 return self.dataset_hash
             elif self.check_stac_on_ipns(key):

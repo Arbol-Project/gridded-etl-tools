@@ -118,14 +118,14 @@ def empty_ipns_publish(self, key, cid, offline=False):
     return self.info("Skipping IPNS publish to preserve initial test dataset")
 
 
-# Change the json_key used by IPNS publish to clearly mark the dataset as a test in your key list
+# Change the key used by IPNS publish to clearly mark the dataset as a test in your key list
 # This will allow other tests to reference the test dataset and prevent mixups with production data
 
 
-original_json_key = DatasetManager.json_key
+original_key = DatasetManager.key
 
 
-def patched_json_key(self):
+def patched_key(self):
     return f"{self.dataset_name}-{self.time_resolution}_test_initial"
 
 
