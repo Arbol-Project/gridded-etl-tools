@@ -173,6 +173,20 @@ class TestDatasetManager:
         dm.create_zarr_json.assert_called_once_with()
 
     @staticmethod
+    def test_transform_skip_post_parse_qc(manager_class):
+        dm = manager_class(skip_post_parse_qc=True)
+        dm.get_prod_update_ds = unittest.mock.Mock()
+        dm.get_original_ds = unittest.mock.Mock()
+        dm.input_files = unittest.mock.Mock()
+        dm.get_random_coords = unittest.mock.Mock()
+        dm.post_parse_quality_check()
+
+        dm.get_prod_update_ds.assert_not_called()
+        dm.input_files.assert_not_called()
+        dm.get_original_ds.assert_not_called()
+        dm.get_random_coords.assert_not_called()
+
+    @staticmethod
     def test_get_subclasses(manager_class):
         assert set(manager_class.get_subclasses()) == {John, Paul, George, Ringo}
         assert set(John.get_subclasses()) == {George, Ringo}
