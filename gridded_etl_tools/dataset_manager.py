@@ -66,6 +66,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         skip_post_parse_qc: bool = False,
+        skip_post_parse_api_check: bool = False,
         encryption_key: str = None,
         use_compression: bool = True,
         dry_run: bool = False,
@@ -126,6 +127,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         skip_post_parse_qc: bool, optional
             Skip the `post_parse_quality_check` method. Applicable to datasets
             that transform source data before parsing, making source data checks irrelevant.
+        skip_post_parse_api_check: bool, optional
+            Skip API checks run by the orchestration stack.
+            Applicable to datasets that are not set up for API access.
         encryption_key : str, optional
             If provided, data will be encrypted using `encryption_key` with XChaCha20Poly1305. Use
             :func:`.encryption.generate_encryption_key` to generate a random encryption key to be passed in here.
@@ -143,10 +147,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
+
         # Create certain paramters for development and debugging of certain dataset. All default to False.
+        self.dry_run = dry_run
         self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
         self.skip_post_parse_qc = skip_post_parse_qc
+        self.skip_post_parse_api_check = skip_post_parse_api_check
+
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than
         # "local", "ipld", or "s3" is passed, raise a `ValueError`.
         if store is None or store == "local":
@@ -215,9 +223,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
         self.use_compression = use_compression
-
-        # Instantiate a dry run parameter
-        self.dry_run = dry_run
 
     # SETUP
 
