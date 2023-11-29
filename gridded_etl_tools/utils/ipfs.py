@@ -182,7 +182,7 @@ class IPFS:
             The IPNS name hash (str) resulting from the publication of an empty dict
         """
         if key is None:
-            key = self.json_key()
+            key = self.key()
         # Only generate the key in IPFS's registry if it doesn't already exist
         keys = self.ipns_key_list()
         if key not in keys:
@@ -232,7 +232,7 @@ class IPFS:
         ----------
         key : str, optional
             The name of the dataset in the format it is stored in the IPNS namespace. If `None`, the value of
-            `self.json_key()` will be used.
+            `self.key()` will be used.
 
         Returns
         -------
@@ -246,7 +246,7 @@ class IPFS:
             return self.dataset_hash
 
         if key is None:
-            key = self.json_key()
+            key = self.key()
 
         if self.check_stac_on_ipns(key):
             # the dag_cbor.decode call in `self.ipfs_get` will auto-convert the `{'\' : <CID>}``
