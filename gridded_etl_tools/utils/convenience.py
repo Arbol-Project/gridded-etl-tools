@@ -1,5 +1,4 @@
 import os
-import gc
 import pathlib
 import datetime
 import re
@@ -326,19 +325,8 @@ class Convenience(Attributes):
             A tuple of datetime.datetime objects defining the start and end date of a file's time dimension
 
         """
-        try:
-            dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
-            return self.get_date_range_from_dataset(dataset)
-
-        finally:
-            # Is there reason to think this is necessary? If Dataset is a normal Python object with normal behavior,
-            # when it will fall out of scope at the end of this function, causing its refcount to fall to zero, at
-            # which time the interpreter will evict it from memory, no garbage collecting necessary. Any needed cleanup
-            # (ie, the 'close' call) generally happens at that time as well. Does XArray do something weird that forces
-            # us to do this?
-            dataset.close()
-            del dataset
-            gc.collect()
+        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
+        return self.get_date_range_from_dataset(dataset)
 
     def date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
         """
