@@ -283,7 +283,7 @@ class Attributes(ABC):
 
         self._store = new_store
 
-    EXTREME_VALUES_BY_UNIT = {"C": (-90, 60), "K": (183.15, 333.15), "F": (-129, 140)}
+    EXTREME_VALUES_BY_UNIT = {"deg_C": (-90, 60), "K": (183.15, 333.15), "deg_F": (-129, 140)}
     """
     minimum and maximum permissible values for common units
     """
