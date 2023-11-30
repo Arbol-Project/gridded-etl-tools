@@ -15,17 +15,17 @@ HERE = pathlib.Path(__file__).parent
 
 
 @nox.session(py=ALL_INTERPRETERS)
-def unit(session):
+def tests(session):
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
         f"--cov={CODE}",
-        "--cov=tests.unit",
+        "--cov=gridded_etl_tools",
         "--cov-append",
         "--cov-config",
         HERE / ".coveragerc",
         "--cov-report=term-missing",
-        "tests/unit",
+        "tests",
     )
 
 
@@ -48,22 +48,6 @@ def blacken(session):
     # Install all dependencies.
     session.install("black")
     run_black(session)
-
-
-@nox.session(py=DEFAULT_INTERPRETER)
-def system(session):
-    if not check_kubo():
-        session.skip("No IPFS server running")
-
-    session.install("-e", ".[testing]")
-    session.run(
-        "pytest",
-        "--cov=tests.system",
-        "--cov-config",
-        HERE / ".coveragerc",
-        "--cov-report=term-missing",
-        "tests/system",
-    )
 
 
 def run_black(session, check=False):
