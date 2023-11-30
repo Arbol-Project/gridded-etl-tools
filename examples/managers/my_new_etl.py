@@ -365,7 +365,3 @@ class MyNewETLTempMin(MyNewETLTemp):
     def long_name(self) -> str:
         """Long form name, as per the Climate and Forecasting Metadata Convention"""
         return "Daily Minimum Near-Surface Air Temperature"
-
-
-if __name__ == "__main__":
-    MyNewETL().run_etl_as_script()

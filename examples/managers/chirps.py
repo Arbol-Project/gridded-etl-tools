@@ -424,7 +424,3 @@ class CHIRPSPrelim05(CHIRPS):
     def populate_metadata(self):
         super().populate_metadata()
         self.metadata["revision"] = "preliminary"
-
-
-if __name__ == "__main__":
-    CHIRPS().run_etl_as_script()
