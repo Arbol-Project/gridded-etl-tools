@@ -332,13 +332,3 @@ Metadata creation and updates should adopt the following logic to avoid unantici
 * The `encoding` of a zarr dataset or one of its dimensions or data variables should be as empty as possible. Only chunk size information and fields required by the [Climate and Forecasting Metadata Conventions](https://cfconventions.org/) should be stored under the data variable's encoding.
 
 How the resulting metadata is managed and published is described in the [metadata readme](./metadata_standard.md).
-
-Enable managers as scripts
---------------------------
-
-To enable a manager to function as a standalone script we must leverage DatasetManager's `run_etl_as_script` function. This function invokes `run_etl` and parses command line inputs as kwargs to it. Insert the following code at the very end of your manager script to enable this functionality.
-
-    if __name__ == '__main__':
-        MyNewETL().run_etl_as_script()
-
-The process for invoking ETLs from the command line (or elsewhere) is described within the [the advanced section of the ETL invocation documentation](./running_an_etl.md#advanced-process).
