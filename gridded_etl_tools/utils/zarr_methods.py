@@ -1086,7 +1086,7 @@ class Publish(Transform, Metadata):
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
-    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> dict[str, dict[str:Any]]:
+    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> None:
         """
         Check N random values from the finalized dataset for any obviously wrong data points,
         either unanticipated NaNs or extreme values
@@ -1097,27 +1097,41 @@ class Publish(Transform, Metadata):
             A dictionary of randomly selected values with their corresponding coordinates.
             Intended for later reuse checking the same coordinates after a dataset is parsed.
         """
-        random_vals = {}
-        for i in range(checks):
+
+        # first, build a dictionary mapping dims to lists of random coords
+        random_coords_dict: dict[str, list[Any]] = {}
+        for _ in range(checks):
             random_coords = self.get_random_coords(dataset)
-            random_val = dataset[self.data_var()].sel(**random_coords).values
+            for dim, coord in random_coords.items():
+                if dim not in random_coords_dict:
+                    random_coords_dict[dim] = [coord]
+                else:
+                    random_coords_dict[dim].append(coord)
+        random_coords_dict_data_arrays = {
+            dim: xr.DataArray(coords, dims="z") for dim, coords in random_coords_dict.items()
+        }
+
+        # Then, subset the dataset to only those coords for performance reasons
+        points_dataset = dataset.sel(random_coords_dict_data_arrays).compute()
+        unit = dataset[self.data_var()].encoding["units"]
+        # Lastly, check that all those points have reasonable values
+        for i in range(checks):
+            current_coords = {dim: coords[i] for dim, coords in random_coords_dict.items()}
+            random_val = points_dataset[self.data_var()].sel(z=i).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
-                raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
+                
+                raise ValueError(f"NaN value found for random point at coordinates {current_coords}")
             # Check extreme values if they are defined
             if not np.isnan(random_val):
-                unit = dataset[self.data_var()].encoding["units"]
                 if unit in self.extreme_values_by_unit.keys():
                     limit_vals = self.extreme_values_by_unit[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
                         raise ValueError(
                             f"Value {random_val} falls outside acceptable range\
-                            {limit_vals} for data in units {unit}. Found at {random_coords}"
+                            {limit_vals} for data in units {unit}. Found at {current_coords}"
                         )
             # Build a dictionary of checked values to compare against after parsing
-            random_vals.update({i: {"coords": random_coords, "value": random_val}})
-
-        return random_vals
 
     def update_quality_check(
         self,
