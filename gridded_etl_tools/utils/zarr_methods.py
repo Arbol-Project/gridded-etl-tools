@@ -1086,19 +1086,13 @@ class Publish(Transform, Metadata):
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
-    def check_random_values(self, dataset: xr.Dataset, checks: int = 100) -> None:
+    def check_random_values(self, dataset: xr.Dataset, checks: int = 100):
         """
         Check N random values from the finalized dataset for any obviously wrong data points,
         either unanticipated NaNs or extreme values
-
-        Returns
-        -------
-        random_values
-            A dictionary of randomly selected values with their corresponding coordinates.
-            Intended for later reuse checking the same coordinates after a dataset is parsed.
         """
 
-        # first, build a dictionary mapping dims to lists of random coords
+        # First, build a dictionary mapping dims to lists of random coords
         random_coords_dict: dict[str, list[Any]] = {}
         for _ in range(checks):
             random_coords = self.get_random_coords(dataset)
@@ -1114,13 +1108,13 @@ class Publish(Transform, Metadata):
         # Then, subset the dataset to only those coords for performance reasons
         points_dataset = dataset.sel(random_coords_dict_data_arrays).compute()
         unit = dataset[self.data_var()].encoding["units"]
+
         # Lastly, check that all those points have reasonable values
         for i in range(checks):
             current_coords = {dim: coords[i] for dim, coords in random_coords_dict.items()}
             random_val = points_dataset[self.data_var()].sel(z=i).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
-                
                 raise ValueError(f"NaN value found for random point at coordinates {current_coords}")
             # Check extreme values if they are defined
             if not np.isnan(random_val):
