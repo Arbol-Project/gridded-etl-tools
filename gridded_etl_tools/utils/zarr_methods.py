@@ -10,6 +10,7 @@ import pathlib
 import glob
 import os
 import random
+import s3fs
 
 import pandas as pd
 import numpy as np
@@ -219,7 +220,7 @@ class Transform(Convenience):
         s3_so = {"anon": True, "default_cache_type": "readahead"}
         # Scan based on file type
         if self.file_type == "NetCDF":
-            with self.store.fs().open(file_path, **s3_so) as infile:
+            with s3fs.S3FileSystem().open(file_path, **s3_so) as infile:
                 scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
         elif "GRIB" in self.file_type:
             scanned_zarr_json = scan_grib(
