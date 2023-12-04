@@ -579,8 +579,8 @@ class Publish(Transform, Metadata):
                     empty_dataset = empty_dataset.drop(coord)
                 # Populating update fields before a parse is actually done creates problems if a parse crashes midway
                 # Remove update attributes for population after the parse is done
-                update_dict = {"update_in_progress" : True}
-                for attr in ["update_date_range", "finalization date"]:
+                update_dict = {"update_in_progress" : False}
+                for attr in self.update_attributes:
                     if attr in empty_dataset.attrs:
                         update_dict[attr] = empty_dataset.attrs.pop(attr, None)
                 # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the

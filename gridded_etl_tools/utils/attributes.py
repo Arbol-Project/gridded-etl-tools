@@ -243,6 +243,12 @@ class Attributes(ABC):
     Steps used for hindcast, if any.
     """
 
+    update_attributes: list[str] = ["date range"]
+    """
+    Certain fields of a dataset should not be overwritten until after a parse completes to avoid confusion
+     if a parse fails midway.
+    """
+
     update_cadence_bounds: tuple[np.timedelta64, np.timedelta64] | None = _backwards_compatible(
         None, "irregular_update_cadence"
     )
