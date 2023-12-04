@@ -1,0 +1,21 @@
+name: Trigger to build prefect-etl-orchestration workflow for gridded ETL containers
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    name: Dispatch workflow in prefect-etl-orchestration
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ['Arbol-Project/prefect-etl-orchestration']
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch to workflows
+        run: |
+            curl -X POST https://api.github.com/repos/${{ matrix.repo }}/dispatches \
+            -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
+            --data '{"event_type": "gridded-build", "client_payload": { "repository": "'"$GITHUB_REPOSITORY"'" }'
