@@ -1091,25 +1091,9 @@ class Publish(Transform, Metadata):
         Check N random values from the finalized dataset for any obviously wrong data points,
         either unanticipated NaNs or extreme values
         """
-
-        # First, build a dictionary mapping dims to lists of random coords
-        random_coords_dict: dict[str, list[Any]] = {}
-        for _ in range(checks):
-            random_coords = self.get_random_coords(dataset)
-            for dim, coord in random_coords.items():
-                if dim not in random_coords_dict:
-                    random_coords_dict[dim] = [coord]
-                else:
-                    random_coords_dict[dim].append(coord)
-        random_coords_dict_data_arrays = {
-            dim: xr.DataArray(coords, dims="z") for dim, coords in random_coords_dict.items()
-        }
-
-        # Then, subset the dataset to only those coords for performance reasons
-        points_dataset = dataset.sel(random_coords_dict_data_arrays).compute()
+        points_dataset, random_coords_dict = self.subset_dataset_to_points(dataset, num_points=checks)
         unit = dataset[self.data_var()].encoding["units"]
 
-        # Lastly, check that all those points have reasonable values
         for i in range(checks):
             current_coords = {dim: coords[i] for dim, coords in random_coords_dict.items()}
             random_val = points_dataset[self.data_var()].sel(z=i).values
@@ -1125,7 +1109,6 @@ class Publish(Transform, Metadata):
                             f"Value {random_val} falls outside acceptable range\
                             {limit_vals} for data in units {unit}. Found at {current_coords}"
                         )
-            # Build a dictionary of checked values to compare against after parsing
 
     def update_quality_check(
         self,
@@ -1236,21 +1219,26 @@ class Publish(Transform, Metadata):
         if self.skip_post_parse_qc:
             self.info("Skipping post-parse quality check as directed")
         else:
+            self.set_key_dims()  # in case running w/out Transform/Parse
+            prod_ds = self.get_prod_update_ds()
+
+            prod_ds_points, random_coords_dict = self.subset_dataset_to_points(prod_ds, num_points=checks)
+
             self.info("Beginning post-parse quality check of the parsed dataset")
             start_checking = time.perf_counter()
             # Instantiate needed objects
-            self.set_key_dims()  # in case running w/out Transform/Parse
-            prod_ds = self.get_prod_update_ds()
             self.original_files = list(self.input_files())
             # Run the data check N times, incrementing after every successfuly check
             i = 0
-            while i <= checks:
-                random_coords = self.get_random_coords(prod_ds)
+            while i < checks:
+                current_coords = {dim: coords[i] for dim, coords in random_coords_dict.items()}
                 try:
-                    orig_ds, orig_file_path = self.get_original_ds(random_coords)
+                    orig_ds, orig_file_path = self.get_original_ds(current_coords)
                 except FileNotFoundError:
                     break
-                i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
+                i += self.check_value(
+                    current_coords, orig_ds, prod_ds_points, orig_file_path, threshold, prod_ds_z_index=i
+                )
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
@@ -1363,6 +1351,46 @@ class Publish(Transform, Metadata):
         # Apply standard postprocessing to get other data variables in order
         return self.rename_data_variable(orig_ds)
 
+    def subset_dataset_to_points(
+        self,
+        dataset: xr.Dataset,
+        num_points: int,
+    ) -> tuple[xr.Dataset, dict[str, list[Any]]]:
+        """
+        Subset a dataset to num_points random points and store the result in memory.
+        Useful because selecting from the full dataset is much more memory intensive
+        than selecting from the subset.
+
+        Parameters
+        ----------
+        dataset
+            The dataset to filter down
+        num_points
+            The number of points to include in the output dataset
+
+        Returns
+        -------
+        xr.Dataset
+            An in-memory filtered dataset with only num_points points
+        dict[str, list[Any]]]
+            A mapping of dimension names to the list of random coordinates for each dim
+        """
+        # First, build a dictionary mapping dims to lists of random coords
+        random_coords_dict: dict[str, list[Any]] = {}
+        for _ in range(num_points):
+            random_coords = self.get_random_coords(dataset)
+            for dim, coord in random_coords.items():
+                if dim not in random_coords_dict:
+                    random_coords_dict[dim] = [coord]
+                else:
+                    random_coords_dict[dim].append(coord)
+        random_coords_dict_data_arrays = {
+            dim: xr.DataArray(coords, dims="z") for dim, coords in random_coords_dict.items()
+        }
+        subsetted_ds = dataset.sel(random_coords_dict_data_arrays).compute()
+        # Then, subset the dataset to only those coords and put in memory
+        return subsetted_ds, random_coords_dict
+
     def check_value(
         self,
         random_coords: dict[Any],
@@ -1370,6 +1398,7 @@ class Publish(Transform, Metadata):
         prod_ds: xr.Dataset,
         orig_file_path: pathlib.Path,
         threshold: float = 10e-5,
+        prod_ds_z_index: int | None = None,
     ):
         """
         Check random values in the original files against the written values
@@ -1411,7 +1440,8 @@ class Publish(Transform, Metadata):
             orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
         else:
             orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        prod_selection_coords = selection_coords if prod_ds_z_index is None else {"z": prod_ds_z_index}
+        prod_val = prod_ds[self.data_var()].sel(**prod_selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold
         self.info(f"{orig_val}, {prod_val}")
