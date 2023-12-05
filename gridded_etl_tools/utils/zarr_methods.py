@@ -1371,7 +1371,8 @@ class Publish(Transform, Metadata):
         Returns
         -------
         xr.Dataset
-            An in-memory filtered dataset with only num_points points
+            An in-memory filtered dataset indexed by the dimension z
+                with only num_points points
         dict[str, list[Any]]]
             A mapping of dimension names to the list of random coordinates for each dim
         """
