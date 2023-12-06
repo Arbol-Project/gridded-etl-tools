@@ -592,62 +592,62 @@ class Publish(Transform, Metadata):
                 xr.Dataset.to_zarr(empty_dataset, self.store.mapper(), append_dim=self.time_dim)
 
     def define_pre_update_ds(self, dataset: xr.Dataset) -> xr.Dataset:
-            """
-            Filter the specified datset to a dataset empty of actual data, containing only a few key
-             attributes we want to insert into the production Zarr ahead of an update to signal
-             it's being edited (and how).
-            
-            Parameters
-            ----------
-            dataset
-                The dataset that will be used to update the production dataset
-            
-            Returns
-            -------
-            empty_dataset
-                An empty xr.Dataset containing only attributes we want to pre-insert into the production dataset
-            update_dict
-                A dictionary of attributes we want to hold in reserve for insertion into the production dataset
-                  until after editing is done
-            """
+        """
+        Filter the specified datset to a dataset empty of actual data, containing only a few key
+         attributes we want to insert into the production Zarr ahead of an update to signal
+         it's being edited (and how).
 
-            # Create an empty dataset that will be used to just write the metadata
-            dataset.attrs["update_in_progress"] = True
-            empty_dataset = dataset
-            for coord in chain(dataset.coords, dataset.data_vars):
-                empty_dataset = empty_dataset.drop(coord)
-            # Populating update fields before a parse is actually done creates problems if a parse crashes midway
-            # Remove update attributes for population after the parse is done
-            update_dict = {"update_in_progress" : False}
-            for attr in self.update_attributes:
-                if attr in empty_dataset.attrs:
-                    update_dict[attr] = empty_dataset.attrs.pop(attr, None)
+        Parameters
+        ----------
+        dataset
+            The dataset that will be used to update the production dataset
 
-            return empty_dataset, update_dict
-    
+        Returns
+        -------
+        empty_dataset
+            An empty xr.Dataset containing only attributes we want to pre-insert into the production dataset
+        update_dict
+            A dictionary of attributes we want to hold in reserve for insertion into the production dataset
+              until after editing is done
+        """
+
+        # Create an empty dataset that will be used to just write the metadata
+        dataset.attrs["update_in_progress"] = True
+        empty_dataset = dataset
+        for coord in chain(dataset.coords, dataset.data_vars):
+            empty_dataset = empty_dataset.drop(coord)
+        # Populating update fields before a parse is actually done creates problems if a parse crashes midway
+        # Remove update attributes for population after the parse is done
+        update_dict = {"update_in_progress": False}
+        for attr in self.update_attributes:
+            if attr in empty_dataset.attrs:
+                update_dict[attr] = empty_dataset.attrs.pop(attr, None)
+
+        return empty_dataset, update_dict
+
     def define_post_update_ds(self, dataset: xr.Dataset, update_dict: dict[str, dict]) -> xr.Dataset:
-            """
-            Refresh and add to the attributes of the previously filtered empty dataset so that key attributes
-             can be added to the production dataset after a successful parse.
-            This prevents important attributes from appearing in the Zarr metadata before a parse is completely
-             finished, for instance if a parse crashes mid-way.
- 
-            Parameters
-            ----------
-            empty_dataset
-                An empty xr.Dataset containing only attributes we pre-inserted into the production dataset
-            update_dict
-                A dictionary of attributes we want to hold in reserve for insertion into the production dataset
-                  until after editing is done
-            
-            Returns
-            -------
-            empty_dataset
-                An empty xr.Dataset containing only attributes we want to insert into the production dataset
-            """
-            # Indicate in metadata that update is complete.
-            dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
-            return dataset
+        """
+        Refresh and add to the attributes of the previously filtered empty dataset so that key attributes
+         can be added to the production dataset after a successful parse.
+        This prevents important attributes from appearing in the Zarr metadata before a parse is completely
+         finished, for instance if a parse crashes mid-way.
+
+        Parameters
+        ----------
+        empty_dataset
+            An empty xr.Dataset containing only attributes we pre-inserted into the production dataset
+        update_dict
+            A dictionary of attributes we want to hold in reserve for insertion into the production dataset
+              until after editing is done
+
+        Returns
+        -------
+        empty_dataset
+            An empty xr.Dataset containing only attributes we want to insert into the production dataset
+        """
+        # Indicate in metadata that update is complete.
+        dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
+        return dataset
 
     # SETUP
 
