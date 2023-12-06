@@ -5,6 +5,7 @@ import numpy as np
 import xarray as xr
 
 from copy import deepcopy
+from itertools import chain
 from gridded_etl_tools.dataset_manager import DatasetManager
 from gridded_etl_tools.utils import store
 from ..common import get_manager
@@ -42,7 +43,7 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
         "longitude",
     ]
     assert dm.time_dim == "forecast_reference_time"
-    # Ensemble standard dims
+    # Hindcast standard dims
     mocker.patch("gridded_etl_tools.utils.attributes.Attributes.hindcast", return_value=True)
     dm.set_key_dims()
     assert dm.standard_dims == [
@@ -55,7 +56,6 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
     ]
     assert dm.time_dim == "hindcast_reference_time"
 
-
 def test_export_zarr_json_in_memory(manager_class: DatasetManager, example_zarr_json):
     dm = get_manager(manager_class)
     local_file_path = "output_zarr_json.json"
@@ -63,7 +63,6 @@ def test_export_zarr_json_in_memory(manager_class: DatasetManager, example_zarr_
     dm.zarr_json_in_memory_to_file(json_str, local_file_path=local_file_path)
     assert os.path.exists(local_file_path)
     os.remove(local_file_path)
-
 
 def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr_json: dict):
     """
@@ -83,7 +82,6 @@ def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr
     # test that None != -8888
     assert orig_fill_value != modified_fill_value
     assert modified_fill_value == -8888
-
 
 def test_calculate_update_time_ranges(
     manager_class: DatasetManager,
@@ -122,10 +120,10 @@ def test_to_zarr(
 
     Test that metadata fields for date ranges, etc. are only populated to a datset *after* a successful parse
     """
-    dm = get_manager(manager_class, store='local')
+    dm = manager_class()
     dm.set_key_dims()
     dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
-    # Mock update components
+    # Mock datasets
     dataset = deepcopy(fake_original_dataset)
     dataset.attrs.update(**{"date range": ("2000010100", "2020123123"),
                           "update_date_range" : ("202012293", "2020123123"),
@@ -138,26 +136,32 @@ def test_to_zarr(
                                  "update_date_range" : ("2021010123", "2021010523"),
                                  "update_previous_end_date" : "2020123123",
                                  "another attribute" : True})
-
+    empty_dataset = deepcopy(update_dataset)
+    empty_dataset.attrs = {"update_in_progress" : True,
+                           "update_date_range" : ("202012293", "2020123123")}
+    empty_dataset = empty_dataset.drop(["latitude","longitude","time", "data"])
+    # Mock functions
     mocker.patch("gridded_etl_tools.utils.zarr_methods.xr.core.dataset.Dataset.to_zarr", autospec=True, return_value=None)
     dm.pre_parse_quality_check = Mock()
-    dm.store = Mock(has_existing=True, mapper=Mock(refresh=True, return_value=1), dataset=Mock(return_value=dataset), spec=store.Local)
+    dm.store = Mock(has_existing=True, mapper=Mock(refresh=True, return_value=None), dataset=Mock(return_value=dataset), spec=store.Local)
     # Corresponding update dict
     update_dict = {"date range" : ("2000010100", "2021010523"),
                    "update_previous_end_date" : "2020123123",
                    "attribute relevant to updates" : 1,
                    "update_in_progress" : False}
     # Arguments to check
-    to_zarr_calls = [call("empty_dataset", dm.store.mapper(refresh=True), append_dim=dm.time_dim),
-                     call(dataset, dm.store.mapper, [], {}),
-                     call("empty_dataset", dm.store.mapper(), append_dim=dm.time_dim),]
+    to_zarr_calls = [call(empty_dataset, None, append_dim=dm.time_dim),
+                     call(update_dataset, dm.store.mapper, append_dim=dm.time_dim),
+                     call(empty_dataset, None, append_dim=dm.time_dim)]
+    # to_zarr_calls = [call(empty_dataset, dm.store.mapper, append_dim=dm.time_dim)]
     # Run to_zarr
     dm.to_zarr(update_dataset, dm.store.mapper, append_dim=dm.time_dim)
     # Assertions
-    # dm.pre_parse_quality_check.assert_called_once_with()
+    dm.pre_parse_quality_check.assert_called_once_with(dataset)
     assert xr.core.dataset.Dataset.to_zarr.call_count == 3
-    import ipdb; ipdb.set_trace(context=4)
     xr.core.dataset.Dataset.to_zarr.assert_has_calls(to_zarr_calls, any_order=True)  # TODO turn any order to True
+    # xr.core.dataset.Dataset.to_zarr.call_args_list[0]
     # dm.store.dataset.attrs.update.assert_called_once_with(**update_dict)
-    dm.to_zarr.empty_dataset.attrs.update.assert_called_once_with(**update_dict)
+    # xr.core.dataset.Dataset.attrs.update.assert_called_once_with(**update_dict)
+
     assert dm.to_zarr.update_dict == update_dict
