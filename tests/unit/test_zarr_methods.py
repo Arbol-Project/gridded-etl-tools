@@ -136,12 +136,17 @@ def test_to_zarr(
                                  "update_date_range" : ("2021010123", "2021010523"),
                                  "update_previous_end_date" : "2020123123",
                                  "another attribute" : True})
-    empty_dataset = deepcopy(update_dataset)
-    empty_dataset.attrs = {"update_in_progress" : True,
+    empty_dataset_pre_update = deepcopy(update_dataset)
+    empty_dataset_pre_update.attrs = {"update_in_progress" : True,
                            "update_date_range" : ("202012293", "2020123123")}
-    empty_dataset = empty_dataset.drop(["latitude","longitude","time", "data"])
+    empty_dataset_pre_update = empty_dataset_pre_update.drop(["latitude","longitude","time", "data"])
+    empty_dataset_post_update = deepcopy(empty_dataset_pre_update).attrs.update({"update_in_progress" : False})
     # Mock functions
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.xr.core.dataset.Dataset.to_zarr", autospec=True, return_value=None)
+    # mocker.patch("gridded_etl_tools.utils.zarr_methods.xr.core.dataset.Dataset.to_zarr", autospec=True, return_value=None)
+    # xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr", autospec=True)
+    # xr.backends.api.to_zarr = Mock(autospec=True, return_value=None)
+    # xr.backends.ZarrStore.open_group = Mock(return_value=dataset)
+    xr.core.dataset.Dataset.to_zarr = Mock(autospec=True, return_value=None)
     dm.pre_parse_quality_check = Mock()
     dm.store = Mock(has_existing=True, mapper=Mock(refresh=True, return_value=None), dataset=Mock(return_value=dataset), spec=store.Local)
     # Corresponding update dict
@@ -150,18 +155,15 @@ def test_to_zarr(
                    "attribute relevant to updates" : 1,
                    "update_in_progress" : False}
     # Arguments to check
-    to_zarr_calls = [call(empty_dataset, None, append_dim=dm.time_dim),
+    to_zarr_calls = [call(empty_dataset_pre_update, None, append_dim=dm.time_dim),
                      call(update_dataset, dm.store.mapper, append_dim=dm.time_dim),
-                     call(empty_dataset, None, append_dim=dm.time_dim)]
+                     call(empty_dataset_post_update, None, append_dim=dm.time_dim)]
     # to_zarr_calls = [call(empty_dataset, dm.store.mapper, append_dim=dm.time_dim)]
     # Run to_zarr
     dm.to_zarr(update_dataset, dm.store.mapper, append_dim=dm.time_dim)
     # Assertions
     dm.pre_parse_quality_check.assert_called_once_with(dataset)
     assert xr.core.dataset.Dataset.to_zarr.call_count == 3
+    import ipdb; ipdb.set_trace(context=4)
+    # xr.core.dataset.Dataset.to_zarr.call_args_list  # Shows empty_dataset w/ unchangd attributes, but correctly w/out dims and coords
     xr.core.dataset.Dataset.to_zarr.assert_has_calls(to_zarr_calls, any_order=True)  # TODO turn any order to True
-    # xr.core.dataset.Dataset.to_zarr.call_args_list[0]
-    # dm.store.dataset.attrs.update.assert_called_once_with(**update_dict)
-    # xr.core.dataset.Dataset.attrs.update.assert_called_once_with(**update_dict)
-
-    assert dm.to_zarr.update_dict == update_dict

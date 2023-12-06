@@ -588,11 +588,11 @@ class Publish(Transform, Metadata):
                 # Note that update_is_append_only is also written here because it was set outside of to_zarr.
                 if self.store.has_existing:
                     self.info("Pre-writing metadata to indicate an update is in progress")
-                    empty_dataset.to_zarr(self.store.mapper(refresh=True), append_dim=self.time_dim)
+                    xr.Dataset.to_zarr(empty_dataset, self.store.mapper(refresh=True), append_dim=self.time_dim)
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
-            dataset.to_zarr(*args, **kwargs)
+            xr.Dataset.to_zarr(dataset, *args, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
             # Don't use update-in-progress metadata flag on IPLD
@@ -600,7 +600,7 @@ class Publish(Transform, Metadata):
                 # Indicate in metadata that update is complete.
                 empty_dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
                 self.info("Re-writing Zarr to indicate in the metadata that update is no longer in process.")
-                empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
+                xr.Dataset.to_zarr(empty_dataset, self.store.mapper(), append_dim=self.time_dim)
 
     # SETUP
 
