@@ -140,7 +140,8 @@ def test_to_zarr(
     empty_dataset_pre_update.attrs = {"update_in_progress" : True,
                            "update_date_range" : ("202012293", "2020123123")}
     empty_dataset_pre_update = empty_dataset_pre_update.drop(["latitude","longitude","time", "data"])
-    empty_dataset_post_update = deepcopy(empty_dataset_pre_update).attrs.update({"update_in_progress" : False})
+    empty_dataset_post_update = deepcopy(empty_dataset_pre_update)
+    empty_dataset_post_update.attrs.update({"update_in_progress" : False})
     # Mock functions
     # mocker.patch("gridded_etl_tools.utils.zarr_methods.xr.core.dataset.Dataset.to_zarr", autospec=True, return_value=None)
     # xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr", autospec=True)
@@ -166,4 +167,4 @@ def test_to_zarr(
     assert xr.core.dataset.Dataset.to_zarr.call_count == 3
     import ipdb; ipdb.set_trace(context=4)
     # xr.core.dataset.Dataset.to_zarr.call_args_list  # Shows empty_dataset w/ unchangd attributes, but correctly w/out dims and coords
-    xr.core.dataset.Dataset.to_zarr.assert_has_calls(to_zarr_calls, any_order=True)  # TODO turn any order to True
+    xr.core.dataset.Dataset.to_zarr.assert_has_calls(to_zarr_calls, any_order=False)
