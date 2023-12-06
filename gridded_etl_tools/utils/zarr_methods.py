@@ -572,17 +572,18 @@ class Publish(Transform, Metadata):
         else:
             # Don't use update-in-progress metadata flag on IPLD
             if not isinstance(self.store, IPLD):
-                # Create an empty dataset that will be used to just write the metadata=
-                dataset.attrs["update_in_progress"] = True
-                empty_dataset = dataset
-                for coord in chain(dataset.coords, dataset.data_vars):
-                    empty_dataset = empty_dataset.drop(coord)
-                # Populating update fields before a parse is actually done creates problems if a parse crashes midway
-                # Remove update attributes for population after the parse is done
-                update_dict = {"update_in_progress" : False}
-                for attr in self.update_attributes:
-                    if attr in empty_dataset.attrs:
-                        update_dict[attr] = empty_dataset.attrs.pop(attr, None)
+                # # Create an empty dataset that will be used to just write the metadata
+                # dataset.attrs["update_in_progress"] = True
+                # empty_dataset = dataset
+                # for coord in chain(dataset.coords, dataset.data_vars):
+                #     empty_dataset = empty_dataset.drop(coord)
+                # # Populating update fields before a parse is actually done creates problems if a parse crashes midway
+                # # Remove update attributes for population after the parse is done
+                # update_dict = {"update_in_progress" : False}
+                # for attr in self.update_attributes:
+                #     if attr in empty_dataset.attrs:
+                #         update_dict[attr] = empty_dataset.attrs.pop(attr, None)
+                empty_dataset, update_dict = self.define_pre_update_ds(dataset)
                 # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the
                 # metadata before starting the real write.
                 # Note that update_is_append_only is also written here because it was set outside of to_zarr.
@@ -597,10 +598,33 @@ class Publish(Transform, Metadata):
 
             # Don't use update-in-progress metadata flag on IPLD
             if not isinstance(self.store, IPLD):
-                # Indicate in metadata that update is complete.
-                empty_dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
+                # # Indicate in metadata that update is complete.
+                # empty_dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
+                empty_dataset = self.define_post_update_ds(empty_dataset, update_dict)
                 self.info("Re-writing Zarr to indicate in the metadata that update is no longer in process.")
                 xr.Dataset.to_zarr(empty_dataset, self.store.mapper(), append_dim=self.time_dim)
+
+    def define_pre_update_ds(self, dataset: xr.Dataset) -> xr.Dataset:
+
+            # Create an empty dataset that will be used to just write the metadata
+            dataset.attrs["update_in_progress"] = True
+            empty_dataset = dataset
+            for coord in chain(dataset.coords, dataset.data_vars):
+                empty_dataset = empty_dataset.drop(coord)
+            # Populating update fields before a parse is actually done creates problems if a parse crashes midway
+            # Remove update attributes for population after the parse is done
+            update_dict = {"update_in_progress" : False}
+            for attr in self.update_attributes:
+                if attr in empty_dataset.attrs:
+                    update_dict[attr] = empty_dataset.attrs.pop(attr, None)
+
+            return empty_dataset, update_dict
+    
+    def define_post_update_ds(self, dataset: xr.Dataset, update_dict: dict[str, dict]) -> xr.Dataset:
+
+            # Indicate in metadata that update is complete.
+            dataset.attrs.update(**update_dict)  # Add update fields to the empty dataset
+            return dataset
 
     # SETUP
 
