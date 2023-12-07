@@ -306,7 +306,6 @@ class S3(StoreInterface):
             return f"s3://{self.bucket}/metadata/{title}.json"
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
-
         # Edit both .zmetadata and .zattrs
         for z_path in (".zmetadata", ".zattrs"):
             current_attributes = {}

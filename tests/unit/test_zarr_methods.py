@@ -113,9 +113,8 @@ def test_calculate_update_time_ranges(
     append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
     assert append_size == np.timedelta64(35, "D")
 
-def test_to_zarr(mocker,
-                 manager_class: DatasetManager,
-                 fake_original_dataset: xr.Dataset):
+
+def test_to_zarr(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     """
     Test that calls to `to_zarr` correctly run three times,
      updating relevant metadata fields to show a parse is underway.
