@@ -613,8 +613,7 @@ class Publish(Transform, Metadata):
         # Build a dictionary of attributes to update post-parse
         for attr in self.update_attributes:
             if attr in dataset.attrs:
-                # Remove update attribute fields from the dataset so they aren't written
-                # with the dataset. 
+                # Remove update attribute fields from the dataset so they aren't written with the dataset
                 # For example "date range" should only be updated after a successful parse
                 update_attrs[attr] = dataset.attrs.pop(attr, None)
 
