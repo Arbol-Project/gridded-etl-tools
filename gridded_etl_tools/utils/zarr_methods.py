@@ -576,9 +576,12 @@ class Publish(Transform, Metadata):
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
-                self.store.write_metadata_only(
-                    {"update_in_progress": True, "update_is_append_only": dataset.get("update_is_append_only")}
-                )
+                self.store.write_metadata_only(update_attrs={
+                    "update_in_progress": True,
+                    "update_is_append_only": dataset.get("update_is_append_only")
+                })
+                # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
+                post_parse_attrs = self.post_parse_attrs(dataset=dataset)
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
@@ -589,7 +592,33 @@ class Publish(Transform, Metadata):
             if not isinstance(self.store, IPLD):
                 # Indicate in metadata that update is complete.
                 self.info("Writing metadata after writing data to indicate write is finished.")
-                self.store.write_metadata_only({"update_in_progress": False})
+                self.store.write_metadata_only(update_attrs=post_parse_attrs)
+
+    def post_parse_attrs(self, dataset: xr.Dataset = None) -> dict[str, Any]:
+        """
+        Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes
+        While building this dict, remove these attributes from the dataset to be written.
+
+        Parameters
+        ----------
+        dataset
+            The xr.Dataset about to be written
+
+        Returns
+        -------
+        update_attrs
+            A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
+        """
+        update_attrs = {"update_in_progress" : False}
+        # Build a dictionary of attributes to update post-parse
+        for attr in self.update_attributes:
+            if attr in dataset.attrs:
+                # Remove update attribute fields from the dataset so they aren't written
+                # with the dataset. 
+                # For example "date range" should only be updated after a successful parse
+                update_attrs[attr] = dataset.attrs.pop(attr, None)
+
+        return update_attrs
 
     # SETUP
 
