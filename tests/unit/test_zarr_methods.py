@@ -1,16 +1,26 @@
 import os
 import json
+import pytest
 
 import numpy as np
 import xarray as xr
 
 from unittest.mock import Mock
 from copy import deepcopy
-from xarray.testing import assert_identical
 
 from gridded_etl_tools.dataset_manager import DatasetManager
-from gridded_etl_tools.utils import store
-from ..common import get_manager
+from ..common import get_manager, mock_output_root, remove_mock_output
+
+
+@pytest.fixture(scope="function")
+def setup_and_teardown():
+    """
+    Call the setup functions first, in a chain ending with `simulate_file_download`.
+    Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
+    """
+    yield  # run the tests first
+    # delete temp files
+    remove_mock_output()
 
 
 def test_standard_dims(mocker, manager_class: DatasetManager):
@@ -114,7 +124,7 @@ def test_calculate_update_time_ranges(
     assert append_size == np.timedelta64(35, "D")
 
 
-def test_to_zarr(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
+def test_to_zarr(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset, setup_and_teardown):
     """
     Test that calls to `to_zarr` correctly run three times,
      updating relevant metadata fields to show a parse is underway.
@@ -123,58 +133,51 @@ def test_to_zarr(mocker, manager_class: DatasetManager, fake_original_dataset: x
      *after* a successful parse
     """
     dm = manager_class()
-    dm.set_key_dims()
     dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
-    update_dict = {
-        "date range": ("2000010100", "2021010523"),
+    pre_update_dict = {
+        "date range": ["2000010100", "2020123123"],
+        "update_date_range": ["202012293", "2020123123"],
+        "update_previous_end_date": "2020123023",
+        "update_in_progress": False,
+        "attribute relevant to updates": 1,
+        "another attribute": True,
+    }
+    post_update_dict = {
+        "date range": ["2000010100", "2021010523"],
         "update_previous_end_date": "2020123123",
         "update_in_progress": False,
         "another attribute": True,
     }
     # Mock datasets
     dataset = deepcopy(fake_original_dataset)
-    dataset.attrs.update(
-        **{
-            "date range": ("2000010100", "2020123123"),
-            "update_date_range": ("202012293", "2020123123"),
-            "update_previous_end_date": "2020123023",
-            "update_in_progress": False,
-            "attribute relevant to updates": 1,
-            "another attribute": True,
-        }
-    )
-    update_dataset = deepcopy(fake_original_dataset)
-    update_dataset.attrs.update(
-        **{
-            "date range": ("2000010100", "2021010523"),
-            "update_date_range": ("2021010123", "2021010523"),
-            "update_previous_end_date": "2020123123",
-            "another attribute": True,
-        }
-    )
-    empty_dataset_pre_update = deepcopy(update_dataset)
-    empty_dataset_pre_update.attrs = {
-        "update_in_progress": True,
-        "update_date_range": ("202012293", "2020123123"),
-        "another_attribute": True,
-    }
-    empty_dataset_pre_update = empty_dataset_pre_update.drop(["latitude", "longitude", "time", "data"])
-    empty_dataset_post_update = deepcopy(empty_dataset_pre_update)
-    empty_dataset_post_update.attrs.update({"update_in_progress": False})
+    dataset.attrs.update(**pre_update_dict)
+    dm.custom_output_path = mock_output_root / "to_zarr_dataset.zarr/"
+    dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
     # Mock functions
-    xr.core.dataset.Dataset.to_zarr = Mock(autospec=True, return_value=None)
     dm.pre_parse_quality_check = Mock()
-    dm.store = Mock(
-        has_existing=True,
-        mapper=Mock(refresh=True, return_value=None),
-        dataset=Mock(return_value=dataset),
-        spec=store.Local,
-    )
-    # And finally, test the function works as it should
-    dm.to_zarr(update_dataset, dm.store.mapper, append_dim=dm.time_dim)
+    # Tests
+    for key in pre_update_dict.keys():
+        assert dm.store.dataset().attrs[key] == pre_update_dict[key]
+
+    dataset.attrs.update(**post_update_dict)
+    dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+
+    for key in post_update_dict.keys():
+        assert dm.store.dataset().attrs[key] == post_update_dict[key]
 
     dm.pre_parse_quality_check.assert_called_once_with(dataset)
-    assert xr.core.dataset.Dataset.to_zarr.call_count == 3
-    assert_identical(dm.define_pre_update_ds(dataset)[0], empty_dataset_pre_update)
-    assert_identical(xr.core.dataset.Dataset.to_zarr.call_args_list[1][0][0], update_dataset)
-    assert_identical(dm.define_post_update_ds(empty_dataset_pre_update, update_dict), empty_dataset_post_update)
+
+
+def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
+    dm = manager_class()
+    dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
+    post_update_dict = {
+        "date range": ["2000010100", "2021010523"],
+        "update_previous_end_date": "2020123123",
+        "another attribute": True,
+        "update_in_progress": False,
+    }
+    # Mock datasets
+    dataset = fake_original_dataset
+    dataset.attrs.update(**post_update_dict)
+    assert dm.post_parse_attrs(dataset) == post_update_dict
