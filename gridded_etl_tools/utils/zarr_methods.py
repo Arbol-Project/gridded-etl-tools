@@ -573,14 +573,12 @@ class Publish(Transform, Metadata):
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
             if not isinstance(self.store, IPLD) and self.store.has_existing:
-
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
-                self.store.write_metadata_only({
-                    "update_in_progress": True,
-                    "update_is_append_only": dataset.get("update_is_append_only")
-                })
+                self.store.write_metadata_only(
+                    {"update_in_progress": True, "update_is_append_only": dataset.get("update_is_append_only")}
+                )
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
@@ -589,12 +587,9 @@ class Publish(Transform, Metadata):
 
             # Don't use update-in-progress metadata flag on IPLD
             if not isinstance(self.store, IPLD):
-
                 # Indicate in metadata that update is complete.
                 self.info("Writing metadata after writing data to indicate write is finished.")
-                self.store.write_metadata_only({
-                    "update_in_progress": False
-                })
+                self.store.write_metadata_only({"update_in_progress": False})
 
     # SETUP
 
