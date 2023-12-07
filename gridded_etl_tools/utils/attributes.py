@@ -193,6 +193,12 @@ class Attributes(ABC):
     def temporal_resolution(cls) -> str:
         return cls._find_fallback("time_resolution")
 
+    update_attributes: list[str] = ["date range", "update_previous_end_date"]
+    """
+    Certain fields of a dataset should not be overwritten until after a parse completes to avoid confusion
+     if a parse fails midway.
+    """
+
     update_cadence: str | None = None
     """
     The frequency with which a dataset is updated.
