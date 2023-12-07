@@ -85,6 +85,30 @@ class StoreInterface(ABC):
         else:
             return None
 
+    @abstractmethod
+    def write_metadata_only(self, attributes: dict):
+        """
+        Writes the metadata to the stored Zarr. Not available to datasets on the IPLD store. Use DatasetManager.to_zarr
+        instead.
+
+        Open the Zarr's `.zmetadata` and `.zattr` files with the JSON library, update the values with the values in the
+        given dict, and write the files.
+
+        These changes will be reflected in the attributes dict of subsequent calls to `DatasetManager.store.dataset`
+        without needing to call `DatasetManager.to_zarr`.
+
+        Parameters
+        ----------
+        attributes
+            A dict of metadata attributes to add or update to the Zarr
+
+        Raises
+        ------
+        NotImplementedError
+            If the store is IPLD
+        """
+        pass
+
 
 class S3(StoreInterface):
     """
@@ -280,6 +304,25 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
 
+    def write_metadata_only(self, attributes: dict):
+        # Edit both .zmetadata and .zattrs
+        for z_path in (".zmetadata", ".zattrs"):
+            current_attributes = {}
+
+            # Read current metadata from Zarr
+            with self.fs().open(f"{self.path}/{z_path}") as z_contents:
+                current_attributes.update(json.load(z_contents))
+
+            # Update given attributes at the appropriate location depending on which z file
+            if z_path == ".zmetadata":
+                current_attributes["metadata"][".zattrs"].update(attributes)
+            else:
+                current_attributes.update(attributes)
+
+            # Write back to Zarr
+            with self.fs().open(f"{self.path}/{z_path}", "w") as z_contents:
+                json.dump(current_attributes, z_contents)
+
 
 class IPLD(StoreInterface):
     """
@@ -362,6 +405,9 @@ class IPLD(StoreInterface):
             Return `True` if the dataset has a latest hash, or `False` otherwise.
         """
         return bool(self.dm.latest_hash())
+
+    def write_metadata_only(self, attributes: dict):
+        raise NotImplementedError("Can't write metadata-only on the IPLD store. Use DatasetManager.to_zarr instead.")
 
 
 class Local(StoreInterface):
@@ -528,3 +574,22 @@ class Local(StoreInterface):
             The s3 path for this entity as a pathlib.Path
         """
         return (pathlib.Path() / "metadata" / stac_type / f"{title}.json").resolve()
+
+    def write_metadata_only(self, attributes: dict):
+        # Edit both .zmetadata and .zattrs
+        for z_path in (".zmetadata", ".zattrs"):
+            current_attributes = {}
+
+            # Read current metadata from Zarr
+            with open(self.path / z_path) as z_contents:
+                current_attributes.update(json.load(z_contents))
+
+            # Update given attributes at the appropriate location depending on which z file
+            if z_path == ".zmetadata":
+                current_attributes["metadata"][".zattrs"].update(attributes)
+            else:
+                current_attributes.update(attributes)
+
+            # Write back to Zarr
+            with open(self.path / z_path, "w") as z_contents:
+                json.dump(current_attributes, z_contents)
