@@ -995,6 +995,14 @@ class Publish(Transform, Metadata):
         Calculate the start/end dates and index values for contiguous time ranges of updates.
         Used by `update_zarr` to specify the location(s) of updates in a target Zarr dataset.
 
+        Algorithm given here due to complexity of function:
+        1. Find the time coordinates of the beginnings and ends of contiguous sections of the update dataset
+        2. Combine these coordinates into a single array such that
+            start and end points of ranges of length 1 are repeated
+        3. Create a list of tuples of length 2, where the entries represent the endpoints of these ranges
+        4. Find the indices within the orginal dataset of these coordinates
+        5. Return the results of 3 and 4
+
         Parameters
         ----------
         original_dataset : xr.Dataset
@@ -1016,12 +1024,12 @@ class Publish(Transform, Metadata):
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value,
         # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
-        starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(
-            pd.Timedelta(dataset_time_span * 100)
-        ) > pd.Timedelta(dataset_time_span)
-        ends = (complete_time_series - complete_time_series.shift(-1)).abs().fillna(
-            pd.Timedelta(dataset_time_span * 100)
-        ) > pd.Timedelta(dataset_time_span)
+        starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(pd.Timedelta.max) > pd.Timedelta(
+            dataset_time_span
+        )
+        ends = (complete_time_series - complete_time_series.shift(-1)).abs().fillna(pd.Timedelta.max) > pd.Timedelta(
+            dataset_time_span
+        )
         # Filter down the update time series to just the range starts/ends
         insert_datetimes = complete_time_series[starts + ends]
         single_datetime_inserts = complete_time_series[starts & ends]
