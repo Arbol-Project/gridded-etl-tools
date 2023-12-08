@@ -308,11 +308,10 @@ class S3(StoreInterface):
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         # Edit both .zmetadata and .zattrs
         for z_path in (".zmetadata", ".zattrs"):
-            current_attributes = {}
 
             # Read current metadata from Zarr
             with self.fs().open(f"{self.path}/{z_path}") as z_contents:
-                current_attributes.update(json.load(z_contents))
+                current_attributes = json.load(z_contents)
 
             # Update given attributes at the appropriate location depending on which z file
             if z_path == ".zmetadata":
@@ -579,11 +578,10 @@ class Local(StoreInterface):
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         # Edit both .zmetadata and .zattrs
         for z_path in (".zmetadata", ".zattrs"):
-            current_attributes = {}
 
             # Read current metadata from Zarr
             with open(self.path / z_path) as z_contents:
-                current_attributes.update(json.load(z_contents))
+                current_attributes = json.load(z_contents)
 
             # Update given attributes at the appropriate location depending on which z file
             if z_path == ".zmetadata":
