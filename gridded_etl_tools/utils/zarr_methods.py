@@ -597,7 +597,7 @@ class Publish(Transform, Metadata):
                 self.info("Writing metadata after writing data to indicate write is finished.")
                 self.store.write_metadata_only(update_attrs=post_parse_attrs)
 
-    def post_parse_attrs(self, dataset: xr.Dataset) -> dict[str, Any]:
+    def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
         Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes
         While building this dict, remove these attributes from the dataset to be written.
