@@ -612,6 +612,7 @@ class Publish(Transform, Metadata):
         update_attrs
             A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
         """
+        dataset = dataset.copy()
         update_attrs = {"update_in_progress": False}
         # Build a dictionary of attributes to update post-parse
         for attr in self.update_attributes:

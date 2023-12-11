@@ -180,4 +180,4 @@ def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: 
     # Mock datasets
     dataset = fake_original_dataset
     dataset.attrs.update(**post_update_dict)
-    assert dm.move_post_parse_attrs_to_dict(dataset) == post_update_dict
+    assert dm.move_post_parse_attrs_to_dict(dataset)[1] == post_update_dict
