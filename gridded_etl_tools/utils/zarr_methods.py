@@ -20,7 +20,7 @@ from typing import Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
-from itertools import starmap, repeat, chain
+from itertools import starmap, repeat
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -571,20 +571,20 @@ class Publish(Transform, Metadata):
             self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
-            # Don't use update-in-progress metadata flag on IPLD
-            if not isinstance(self.store, IPLD):
-                # Create an empty dataset that will be used to just write the metadata
-                # (there's probably a better way to dothis? compute=False or zarr.consolidate_metadata?).
-                dataset.attrs["update_in_progress"] = True
-                empty_dataset = dataset
-                for coord in chain(dataset.coords, dataset.data_vars):
-                    empty_dataset = empty_dataset.drop(coord)
-                # If there is an existing Zarr, indicate in the metadata that an update is in progress, and write the
-                # metadata before starting the real write.
-                # Note that update_is_append_only is also written here because it was set outside of to_zarr.
-                if self.store.has_existing:
-                    self.info("Pre-writing metadata to indicate an update is in progress")
-                    empty_dataset.to_zarr(self.store.mapper(refresh=True), append_dim=self.time_dim)
+            # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
+            exists_at_start = self.store.has_existing
+            if not isinstance(self.store, IPLD) and exists_at_start:
+                # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
+                # a Zarr is opened during writing, there will be indicators that show the data is being edited.
+                self.info("Writing metadata before writing data to indicate write is in progress.")
+                self.store.write_metadata_only(
+                    update_attrs={
+                        "update_in_progress": True,
+                        "update_is_append_only": dataset.get("update_is_append_only"),
+                    }
+                )
+                # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
+                dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
@@ -592,11 +592,38 @@ class Publish(Transform, Metadata):
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
             # Don't use update-in-progress metadata flag on IPLD
-            if not isinstance(self.store, IPLD):
+            if not isinstance(self.store, IPLD) and exists_at_start:
                 # Indicate in metadata that update is complete.
-                empty_dataset.attrs["update_in_progress"] = False
-                self.info("Re-writing Zarr to indicate in the metadata that update is no longer in process.")
-                empty_dataset.to_zarr(self.store.mapper(), append_dim=self.time_dim)
+                self.info("Writing metadata after writing data to indicate write is finished.")
+                self.store.write_metadata_only(update_attrs=post_parse_attrs)
+
+    def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> tuple[xr.Dataset, dict[str, Any]]:
+        """
+        Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes
+        While building this dict, remove these attributes from the dataset to be written.
+
+        Parameters
+        ----------
+        dataset
+            The xr.Dataset about to be written
+
+        Returns
+        -------
+        dataset
+            The xr.Dataset about to be written, with `self.update_attributes` keys removed from attributes
+        update_attrs
+            A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
+        """
+        dataset = dataset.copy()
+        update_attrs = {"update_in_progress": False}
+        # Build a dictionary of attributes to update post-parse
+        for attr in self.update_attributes:
+            if attr in dataset.attrs:
+                # Remove update attribute fields from the dataset so they aren't written with the dataset
+                # For example "date range" should only be updated after a successful parse
+                update_attrs[attr] = dataset.attrs.pop(attr, None)
+
+        return dataset, update_attrs
 
     # SETUP
 
