@@ -209,6 +209,10 @@ class TestMetadata:
     def test_create_root_stac_catalog(organized_manager_class):
         dm = organized_manager_class()
         dm.publish_stac = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.check_stac_exists = mock.Mock(return_value=False)
+        dm.get_href = mock.Mock(return_value="/it/is/here.json")
+
         dm.create_root_stac_catalog()
         dm.publish_stac.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog",
@@ -224,21 +228,25 @@ class TestMetadata:
                 "links": [
                     {
                         "rel": "root",
-                        "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                        "Monster Data Catalog.json",
+                        "href": "/it/is/here.json",
                         "type": "application/json",
                         "title": "Church of the Flying Spaghetti Monster root catalog",
                     },
                     {
                         "rel": "self",
-                        "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                        "Monster Data Catalog.json",
+                        "href": "/it/is/here.json",
                         "type": "application/json",
                         "title": "Church of the Flying Spaghetti Monster root catalog",
                     },
                 ],
             },
             metadata.StacType.CATALOG,
+        )
+        dm.check_stac_exists.assert_called_once_with(
+            "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
+        )
+        dm.get_href.assert_called_once_with(
+            "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
 
     @staticmethod
@@ -278,15 +286,13 @@ class TestMetadata:
                     "links": [
                         {
                             "rel": "root",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/it/is/here.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
                         {
                             "rel": "self",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/it/is/here.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
@@ -299,6 +305,8 @@ class TestMetadata:
         stac_collection = dm.default_stac_collection
         stac_collection["links"].append({"rel": "not myself today"})
         mocker.patch("gridded_etl_tools.utils.metadata.Metadata.default_stac_collection", stac_collection)
+        dm.get_href = mock.Mock(return_value="/here/is/the/collection.json")
+
         dm.create_stac_collection(fake_original_dataset)
 
         dm.publish_stac.assert_has_calls(
@@ -317,22 +325,19 @@ class TestMetadata:
                         "links": [
                             {
                                 "rel": "root",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying "
-                                "Spaghetti Monster Data Catalog.json",
+                                "href": "/it/is/here.json",
                                 "type": "application/json",
                                 "title": "Church of the Flying Spaghetti Monster root catalog",
                             },
                             {
                                 "rel": "self",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying "
-                                "Spaghetti Monster Data Catalog.json",
+                                "href": "/it/is/here.json",
                                 "type": "application/json",
                                 "title": "Church of the Flying Spaghetti Monster root catalog",
                             },
                             {
                                 "rel": "child",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/collections/Vintage "
-                                "Guitars.json",
+                                "href": "/here/is/the/collection.json",
                                 "type": "application/json",
                                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
                             },
@@ -360,8 +365,7 @@ class TestMetadata:
                                 "rel": "self",
                                 "type": "application/json",
                                 "title": "Vintage Guitars",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/collections/Vintage "
-                                "Guitars.json",
+                                "href": "/here/is/the/collection.json",
                             },
                             {"rel": "not myself today"},
                             {
@@ -402,6 +406,7 @@ class TestMetadata:
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
         dm.update_stac_collection.assert_not_called()
+        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_rebuild(organized_manager_class, fake_original_dataset):
@@ -432,15 +437,13 @@ class TestMetadata:
                     "links": [
                         {
                             "rel": "root",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/path/to/catalog.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
                         {
                             "rel": "self",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/path/to/catalog.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
@@ -451,7 +454,10 @@ class TestMetadata:
         )
         dm.update_stac_collection = mock.Mock()
         dm.check_stac_exists = mock.Mock(return_value=True)
+        dm.get_href = mock.Mock(return_value="/path/to/collection.json")
+
         dm.create_stac_collection(fake_original_dataset, rebuild=True)
+
         dm.publish_stac.assert_has_calls(
             [
                 mock.call(
@@ -468,22 +474,19 @@ class TestMetadata:
                         "links": [
                             {
                                 "rel": "root",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying "
-                                "Spaghetti Monster Data Catalog.json",
+                                "href": "/path/to/catalog.json",
                                 "type": "application/json",
                                 "title": "Church of the Flying Spaghetti Monster root catalog",
                             },
                             {
                                 "rel": "self",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying "
-                                "Spaghetti Monster Data Catalog.json",
+                                "href": "/path/to/catalog.json",
                                 "type": "application/json",
                                 "title": "Church of the Flying Spaghetti Monster root catalog",
                             },
                             {
                                 "rel": "child",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/collections/Vintage "
-                                "Guitars.json",
+                                "href": "/path/to/collection.json",
                                 "type": "application/json",
                                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
                             },
@@ -511,8 +514,7 @@ class TestMetadata:
                                 "rel": "self",
                                 "type": "application/json",
                                 "title": "Vintage Guitars",
-                                "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/collections/Vintage "
-                                "Guitars.json",
+                                "href": "/path/to/collection.json",
                             },
                             {
                                 "rel": "root",
@@ -552,6 +554,7 @@ class TestMetadata:
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
         dm.update_stac_collection.assert_not_called()
+        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_root_catalog_already_in_links(organized_manager_class, fake_original_dataset):
@@ -583,15 +586,13 @@ class TestMetadata:
                     "links": [
                         {
                             "rel": "root",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/path/to/catalog.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
                         {
                             "rel": "self",
-                            "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/Church of the Flying Spaghetti "
-                            "Monster Data Catalog.json",
+                            "href": "/path/to/catalog.json",
                             "type": "application/json",
                             "title": "Church of the Flying Spaghetti Monster root catalog",
                         },
@@ -607,7 +608,10 @@ class TestMetadata:
             )
         )
         dm.update_stac_collection = mock.Mock()
+        dm.get_href = mock.Mock(return_value="/path/to/collection.json")
+
         dm.create_stac_collection(fake_original_dataset)
+
         dm.publish_stac.assert_called_once_with(
             "Vintage Guitars",
             {
@@ -628,7 +632,7 @@ class TestMetadata:
                         "rel": "self",
                         "type": "application/json",
                         "title": "Vintage Guitars",
-                        "href": "/home/chris/proj/arbol/gridded-etl-tools/metadata/collections/Vintage Guitars.json",
+                        "href": "/path/to/collection.json",
                     },
                     {
                         "rel": "root",
@@ -666,6 +670,7 @@ class TestMetadata:
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
         dm.update_stac_collection.assert_not_called()
+        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_already_created(manager_class, fake_original_dataset, mocker):
