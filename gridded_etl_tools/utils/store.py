@@ -123,6 +123,7 @@ class StoreInterface(ABC):
             Tuple of content of stac entity as dict and the local path as a string
         """
 
+    @abstractmethod
     def get_metadata_path(self, title: str, stac_type: str) -> str:
         """
         Get the s3 path for a given STAC title and type
