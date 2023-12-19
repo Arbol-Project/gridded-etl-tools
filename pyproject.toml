@@ -37,7 +37,7 @@ dependencies = [
     "dask[array,diagnostics,distributed]==2023.3.2",
     "deprecation",
     "fsspec",
-    "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.1",
+    "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.2",
     "kerchunk",
     "multiformats",
     "natsort",
