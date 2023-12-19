@@ -68,6 +68,91 @@ class StoreInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    def metadata_exists(self, title: str, stac_type: str) -> bool:
+        """
+        Check whether metadata exists at a given local path
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        bool
+            Whether metadata exists at path
+        """
+
+    @abstractmethod
+    def push_metadata(self, title: str, stac_content: dict, stac_type: str):
+        """
+        Publish metadata entity to s3 store. Tracks historical state
+        of metadata as well
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_content : dict
+            content of the stac entity
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+        """
+
+    @abstractmethod
+    def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
+        """
+        Retrieve metadata entity from local store
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        dict
+            Tuple of content of stac entity as dict and the local path as a string
+        """
+
+    @abstractmethod
+    def get_metadata_path(self, title: str, stac_type: str) -> str:
+        """
+        Get the s3 path for a given STAC title and type
+
+        Parameters
+        ----------
+        title : str
+            STAC Entity title
+        stac_type : StacType
+            Path part corresponding to type of STAC entity
+            (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
+
+        Returns
+        -------
+        str
+            The s3 path for this entity as a string
+        """
+
+    @property
+    def path(self) -> str:
+        """
+        Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
+
+        Returns
+        -------
+        str
+            A URL string starting with "s3://" followed by the path to the Zarr.
+        """
+
     def dataset(self, **kwargs: dict) -> xr.Dataset | None:
         """
         Parameters
@@ -408,6 +493,18 @@ class IPLD(StoreInterface):
     def write_metadata_only(self, attributes: dict):
         raise NotImplementedError("Can't write metadata-only on the IPLD store. Use DatasetManager.to_zarr instead.")
 
+    def metadata_exists(self, title: str, stac_type: str) -> bool:
+        raise NotImplementedError
+
+    def push_metadata(self, title: str, stac_content: dict, stac_type: str):
+        raise NotImplementedError
+
+    def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
+        raise NotImplementedError
+
+    def get_metadata_path(self, title: str, stac_type: str) -> str:
+        raise NotImplementedError
+
 
 class Local(StoreInterface):
     """
@@ -501,8 +598,8 @@ class Local(StoreInterface):
             Path part corresponding to type of STAC entity
             (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
         """
-        metadata_path = self.get_metadata_path(title, stac_type)
-        if pathlib.Path.exists(metadata_path):
+        metadata_path = pathlib.Path(self.get_metadata_path(title, stac_type))
+        if metadata_path.exists():
             # Generate history file
             old_mod_time = datetime.datetime.fromtimestamp(metadata_path.stat().st_mtime)
             history_path = pathlib.Path() / "history" / title / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
@@ -553,9 +650,9 @@ class Local(StoreInterface):
             Whether metadata exists at path
         """
         metadata_path = self.get_metadata_path(title, stac_type)
-        return pathlib.Path.exists(metadata_path)
+        return pathlib.Path(metadata_path).exists()
 
-    def get_metadata_path(self, title: str, stac_type: str) -> pathlib.Path:
+    def get_metadata_path(self, title: str, stac_type: str) -> str:
         """
         Get the local path for a given STAC title and type
 
@@ -570,9 +667,9 @@ class Local(StoreInterface):
         Returns
         -------
         str
-            The s3 path for this entity as a pathlib.Path
+            The s3 path for this entity
         """
-        return (pathlib.Path() / "metadata" / stac_type / f"{title}.json").resolve()
+        return str((pathlib.Path() / "metadata" / stac_type / f"{title}.json").resolve())
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         # Edit both .zmetadata and .zattrs

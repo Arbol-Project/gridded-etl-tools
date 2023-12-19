@@ -25,7 +25,47 @@ def fake_original_dataset():
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
     longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
     data = xr.DataArray(
-        np.random.randn(138, 4, 4), dims=("time", "latitude", "longitude"), coords=(time, latitude, longitude)
+        np.random.randn(138, 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture()
+def forecast_dataset():
+    time = xr.DataArray(
+        np.array(original_times), dims="forecast_reference_time", coords={"forecast_reference_time": np.arange(138)}
+    )
+    step = xr.DataArray(np.arange(2, 10, 2))
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(138, 4, 4, 4),
+        dims=("forecast_reference_time", "latitude", "longitude", "step"),
+        coords=(time, latitude, longitude, step),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture()
+def hindcast_dataset():
+    time = xr.DataArray(
+        np.array(original_times), dims="hindcast_reference_time", coords={"hindcast_reference_time": np.arange(138)}
+    )
+    step = xr.DataArray(np.arange(2, 10, 2))
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(138, 4, 4, 4),
+        dims=("hindcast_reference_time", "latitude", "longitude", "step"),
+        coords=(time, latitude, longitude, step),
     )
 
     ds = xr.Dataset({"data": data})
@@ -120,9 +160,9 @@ class DummyManagerBase(dataset_manager.DatasetManager):
 
 
 class DummyManager(DummyManagerBase):
+    collection_name = "Vintage Guitars"
     concat_dimensions = ["z", "zz"]
     dataset_name = "DummyManager"
-    collection_name = "Vintage Guitars"
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY

@@ -1,6 +1,7 @@
 from enum import Enum
 import json
 import datetime
+import typing
 import shapely.geometry
 import numcodecs
 
@@ -14,6 +15,12 @@ from .store import IPLD
 
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
+
+
+class StacType(Enum):
+    ITEM = "datasets"
+    COLLECTION = "collections"
+    CATALOG = ""
 
 
 class Metadata(Convenience, IPFS):
@@ -36,7 +43,7 @@ class Metadata(Convenience, IPFS):
             "stac_version": "1.0.0",
             "type": "Feature",
             "id": cls.dataset_name,
-            "collection": cls.collection(),
+            "collection": cls.collection_name,
             "links": [],
             "assets": {
                 "zmetadata": {
@@ -60,19 +67,19 @@ class Metadata(Convenience, IPFS):
             The STAC Collection metadata template with all pre-fillable values populated
         """
         return {
-            "id": self.collection(),
+            "id": self.collection_name,
             "type": "Collection",
             "stac_extensions": ["https://stac-extensions.github.io/projection/v1.0.0/schema.json"],
             "stac_version": "1.0.0",
             "description": self.metadata["provider description"],
             "license": self.metadata["license"],
-            "collection": self.collection(),
+            "collection": self.collection_name,
             "title": self.metadata["title"],
             "extent": {"spatial": {"bbox": [[]]}, "temporal": {"interval": [[]]}},
-            "links": [{"rel": "self", "type": "application/json", "title": self.collection()}],
+            "links": [{"rel": "self", "type": "application/json", "title": self.collection_name}],
             "providers": [
                 {
-                    "name": f"{self.host_organization()}",
+                    "name": f"{self.organization}",
                     "description": "",  # provide description for your organization here
                     "roles": ["processor"],  #
                     "url": "",  # provide URL for your organization here
@@ -99,11 +106,11 @@ class Metadata(Convenience, IPFS):
             The STAC Catalog metadata template with all pre-fillable values populated
         """
         return {
-            "id": f"{cls.host_organization()}_data_catalog",
+            "id": f"{cls.organization}_data_catalog",
             "type": "Catalog",
-            "title": f"{cls.host_organization()} Data Catalog",
+            "title": f"{cls.organization} Data Catalog",
             "stac_version": "1.0.0",
-            "description": f"This catalog contains all the data uploaded to {cls.host_organization()} "
+            "description": f"This catalog contains all the data uploaded to {cls.organization} "
             "that has been issued STAC-compliant metadata. The catalogs and collections describe single "
             "providers. Each may contain one or multiple datasets. Each individual dataset has been documented as "
             "STAC Items.",
@@ -116,7 +123,7 @@ class Metadata(Convenience, IPFS):
         Placeholder for static metadata pertaining to each ETL
         """
 
-    def check_stac_exists(self, title: str, stac_type: "StacType") -> bool:
+    def check_stac_exists(self, title: str, stac_type: StacType) -> bool:
         """Check if a STAC entity exists in the backing store
 
         Parameters
@@ -131,12 +138,16 @@ class Metadata(Convenience, IPFS):
         bool
             Whether the entity exists in the backing store
         """
+        # TODO: The prevalance of this this pattern, if isinstance(self.store, IPLD): ... else: ..., probably
+        # indicates that StoreInterface needs to be rethought. Ideally, consumers of the interface wouldn't need to
+        # know which specific implementation they were using. Those details should be encapsulated by the interface
+        # definition and its implementations.
         if isinstance(self.store, IPLD):
             return self.check_stac_on_ipns(title)
         else:
             return self.store.metadata_exists(title, stac_type.value)
 
-    def publish_stac(self, title: str, stac_content: dict, stac_type: "StacType"):
+    def publish_stac(self, title: str, stac_content: dict, stac_type: StacType):
         """Publish a STAC entity to the backing store
 
         Parameters
@@ -153,7 +164,7 @@ class Metadata(Convenience, IPFS):
         else:
             self.store.push_metadata(title, stac_content, stac_type.value)
 
-    def retrieve_stac(self, title: str, stac_type: "StacType") -> tuple[dict, str]:
+    def retrieve_stac(self, title: str, stac_type: StacType) -> tuple[dict, str]:
         """Retrieve a STAC entity and its href from the backing store
 
         Parameters
@@ -173,7 +184,7 @@ class Metadata(Convenience, IPFS):
         else:
             return self.store.retrieve_metadata(title, stac_type.value)
 
-    def get_href(self, title: str, stac_type: "StacType") -> str:
+    def get_href(self, title: str, stac_type: StacType) -> str:
         """Get a STAC entity's href from the backing store. Might be
         an IPNS name, a local path or a s3 path depending on the store
 
@@ -192,7 +203,7 @@ class Metadata(Convenience, IPFS):
         if isinstance(self.store, IPLD):
             return self.ipns_generate_name(key=title)
         else:
-            return str(self.store.get_metadata_path(title, stac_type.value))
+            return self.store.get_metadata_path(title, stac_type.value)
 
     def create_root_stac_catalog(self):
         """
@@ -202,25 +213,25 @@ class Metadata(Convenience, IPFS):
         root_catalog_exists = self.check_stac_exists(root_catalog["title"], StacType.CATALOG)
         if not root_catalog_exists:
             # Publish the root catalog if it doesn't exist
-            self.info(f"Publishing root {self.host_organization()} STAC Catalog")
+            self.info(f"Publishing root {self.organization} STAC Catalog")
             catalog_href = self.get_href(root_catalog["title"], StacType.CATALOG)
             root_catalog["links"] = [
                 {
                     "rel": "root",
                     "href": catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization()} root catalog",
+                    "title": f"{self.organization} root catalog",
                 },
                 {
                     "rel": "self",
                     "href": catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization()} root catalog",
+                    "title": f"{self.organization} root catalog",
                 },
             ]
             self.publish_stac(root_catalog["title"], root_catalog, StacType.CATALOG)
         else:
-            self.info(f"Root {self.host_organization()} STAC Catalog already exists, building collection")
+            self.info(f"Root {self.organization} STAC Catalog already exists, building collection")
 
     def create_stac_collection(self, dataset: xr.Dataset, rebuild: bool = False):
         """
@@ -241,7 +252,7 @@ class Metadata(Convenience, IPFS):
         stac_coll = self.default_stac_collection
         # Check if the collection already exists to avoid duplication of effort
         # Populate and publish a collection if one doesn't exist, or a rebuild was requested
-        if rebuild or not self.check_stac_exists(self.collection(), StacType.COLLECTION):
+        if rebuild or not self.check_stac_exists(self.collection_name, StacType.COLLECTION):
             if rebuild:
                 self.info(
                     "Collection rebuild requested. Creating new collection, pushing it to IPFS, and populating the "
@@ -257,13 +268,13 @@ class Metadata(Convenience, IPFS):
                 ]
             ]
             # Create an href corresponding to the collection in order to note this in the collection and root catalog.
-            href = self.get_href(self.collection(), StacType.COLLECTION)
+            href = self.get_href(self.collection_name, StacType.COLLECTION)
             # Append collection to the root catalog if it doesn't already exist
             root_catalog, root_catalog_href = self.retrieve_stac(
                 self.default_root_stac_catalog()["title"], StacType.CATALOG
             )
             if not any(stac_coll["title"] in link_dict.values() for link_dict in root_catalog["links"]):
-                self.info(f"Appending collection link to root {self.host_organization()} STAC Catalog")
+                self.info(f"Appending collection link to root {self.organization} STAC Catalog")
                 root_catalog["links"].append(
                     {
                         "rel": "child",
@@ -286,16 +297,16 @@ class Metadata(Convenience, IPFS):
                     "rel": "root",
                     "href": root_catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization()} root catalog",
+                    "title": f"{self.organization} root catalog",
                 },
                 {
                     "rel": "parent",
                     "href": root_catalog_href,
                     "type": "application/json",
-                    "title": f"{self.host_organization()} root catalog",
+                    "title": f"{self.organization} root catalog",
                 },
             ]
-            self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
+            self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
         else:
             self.info("Found existing STAC Collection for this dataset, skipping creation and updating instead")
             self.update_stac_collection(dataset)
@@ -389,18 +400,19 @@ class Metadata(Convenience, IPFS):
             **dataset.encoding,
             **dataset[self.data_var()].encoding,
         }
-        all_md = {key: all_md[key] for key in zarr_attrs if key in all_md}
         rename_dict = {
             "preferred_chunks": "Zarr chunk size",
             "missing value": "Fill value",
             "Conventions": "CF convention",
         }
-        properties_dict = {rename_dict.get(k, k): v for k, v in all_md.items()}
+        properties_dict = {rename_dict.get(key, key): all_md[key] for key in zarr_attrs if key in all_md}
         # Reformat attributes
         for k, v in properties_dict.items():
             if type(v) is np.float32:
                 properties_dict[k] = round(float(v), 8)  # np.float32s aren't JSON serializable
-        properties_dict["dtype"] = str(properties_dict["dtype"])
+
+        if "dtype" in properties_dict:
+            properties_dict["dtype"] = str(properties_dict["dtype"])
 
         return properties_dict
 
@@ -415,7 +427,7 @@ class Metadata(Convenience, IPFS):
         """
         self.info("Registering STAC Item in IPFS and its parent STAC Collection")
         # Generate variables of interest
-        stac_coll, collection_href = self.retrieve_stac(str(self.collection()), StacType.COLLECTION)
+        stac_coll, collection_href = self.retrieve_stac(self.collection_name, StacType.COLLECTION)
         # Register links
         stac_item["links"].append(
             {
@@ -444,10 +456,15 @@ class Metadata(Convenience, IPFS):
                         "title": stac_item["assets"]["zmetadata"]["title"],
                     }
                 )
+
+        # TODO: It would be better to not have KeyError in here, as it it's easy for that to be a different exception
+        # than the one you think you're catching. It would be better to have retreive_stac and/or ipns_resolve return
+        # None if they can't find the key, and then use an if statement to check the return value for None.
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
             self.info("No previous STAC Item found")
             href = self.get_href(self.key(), StacType.ITEM)
+
         stac_item["links"].append(
             {
                 "rel": "self",
@@ -477,7 +494,7 @@ class Metadata(Convenience, IPFS):
                     "title": stac_item["assets"]["zmetadata"]["title"],
                 }
             )
-            self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
+            self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
 
     def update_stac_collection(self, dataset: xr.Dataset):
         """'
@@ -490,7 +507,7 @@ class Metadata(Convenience, IPFS):
         """
         self.info("Updating dataset's parent STAC Collection")
         # Get existing STAC Collection and add new datasets to it, if necessary
-        stac_coll = self.retrieve_stac(self.collection(), StacType.COLLECTION)[0]
+        stac_coll = self.retrieve_stac(self.collection_name, StacType.COLLECTION)[0]
         # Update spatial extent
         min_bbox_coords = np.minimum(stac_coll["extent"]["spatial"]["bbox"][0], [self.bbox_coords(dataset)])[0][0:2]
         max_bbox_coords = np.maximum(stac_coll["extent"]["spatial"]["bbox"][0], [self.bbox_coords(dataset)])[0][2:4]
@@ -503,7 +520,7 @@ class Metadata(Convenience, IPFS):
             ]
         ]
         # Publish STAC Collection with updated fields
-        self.publish_stac(self.collection(), stac_coll, StacType.COLLECTION)
+        self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
 
     def load_stac_metadata(self, key: str = None) -> str | dict:
         """
@@ -530,6 +547,8 @@ class Metadata(Convenience, IPFS):
                     "STAC metadata requested but no STAC object found at the provided key. Returning empty dictionary"
                 )
                 return {}
+
+        # else: raise exception?
 
     # NON-STAC METADATA
 
@@ -570,7 +589,9 @@ class Metadata(Convenience, IPFS):
 
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         for attr in dataset.attrs.keys():
-            if type(dataset.attrs[attr]) is dict or type(dataset.attrs[attr]) is None:
+            if type(dataset.attrs[attr]) is dict:
+                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
+            elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
 
         return dataset
@@ -593,10 +614,11 @@ class Metadata(Convenience, IPFS):
         dataset : xarray.Dataset
             The dataset being published, post-rename
         """
+        data_var = first(dataset.data_vars)
         try:
-            dataset = dataset.rename_vars({[key for key in dataset.data_vars][0]: self.data_var()})
+            dataset = dataset.rename_vars({data_var: self.data_var()})
         except ValueError:
-            self.info(f"Duplicate name conflict detected during rename, leaving {dataset.data_vars[0]} in place")
+            self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             pass
 
         return dataset
@@ -617,6 +639,13 @@ class Metadata(Convenience, IPFS):
             The dataset being published, after metadata update
 
         """
+        # TODO: This function modifies the passed in Dataset and then returns it. This is problematic since a user
+        # seeing a function that takes a T as an argument and then returns a T would be reasonable to assume that the
+        # passed in argument is not mutated and that the return value is a new instance of T. Generally speaking, it
+        # should be clear from the function signature whether a function has side effects (arguments or some other
+        # state is mutated) or if the function is a "pure" function, meaning there are no side effects, the arguments
+        # are not mutated, and the arguments are only used to compute a return value.
+
         # Encode fields for the data variable in the main encoding dict and the data var's own encoding dict (for
         # thoroughness)
         dataset.encoding = {
@@ -655,7 +684,7 @@ class Metadata(Convenience, IPFS):
                     "calendar": "proleptic_gregorian",
                 }
             )
-        elif "hindcast_reference_time" in dataset and self.time_dim == "hindcast_reference_time":
+        elif "hindcast_reference_time" in dataset and self.time_dim == "hindcast_reference_time":  # pragma NO BRANCH
             dataset.hindcast_reference_time.encoding.update(
                 {
                     "long_name": "initial time of forecast",
@@ -663,21 +692,14 @@ class Metadata(Convenience, IPFS):
                     "calendar": "proleptic_gregorian",
                 }
             )
+
         if "units" not in dataset[self.time_dim].encoding.keys():
             # reformat the dataset_start_date datetime to a CF compliant string if it exists....
-            if hasattr(self, "dataset_start_date"):
-                dataset[self.time_dim].encoding.update(
-                    {
-                        "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
-                    }
-                )
-            # otherwise use None to indicate this is unknown at present
-            else:
-                dataset[self.time_dim].encoding.update(
-                    {
-                        "units": None,
-                    }
-                )
+            dataset[self.time_dim].encoding.update(
+                {
+                    "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
+                }
+            )
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:
@@ -703,20 +725,25 @@ class Metadata(Convenience, IPFS):
             The dataset being published, after metadata update
 
         """
+        # TODO: See note for encode_vars, re: mutating and returning the same arg.
+
         # Load static metadata into the dataset's attributes
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
+        # Get existing stac_metadat, if possible
+        stac_metadata = None
+        if isinstance(self.store, IPLD):
+            try:
+                stac_metadata = self.load_stac_metadata()
+            except (KeyError, TimeoutError):
+                pass
+
         # Determine date to use for "created" field. On S3 and local, use current time. On IPLD, look for an existing
         # creation time.
-        now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
-        if isinstance(self.store, IPLD):
-            existing_stac_metadata = self.load_stac_metadata()
-            if existing_stac_metadata and "created" in existing_stac_metadata["properties"]:
-                created = existing_stac_metadata["properties"]["created"]
-            else:
-                created = now
+        if stac_metadata and "created" in stac_metadata["properties"]:
+            created = stac_metadata["properties"]["created"]
         else:
-            created = now
+            created = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
         dataset.attrs["created"] = created
 
         # Write the date range. Use existing data if possible to get the original start date. Even though the date
@@ -725,14 +752,13 @@ class Metadata(Convenience, IPFS):
         if isinstance(self.store, IPLD):
             # Set date range. Use start from previous dataset's metadata if it exists or the input dataset if this is
             # the first run.
-            try:
-                stac_metadata = self.load_stac_metadata()
+            if stac_metadata:
                 dataset.attrs["update_previous_end_date"] = stac_metadata["properties"]["date range"][1]
                 dataset.attrs["date range"] = (
                     stac_metadata["properties"]["date range"][0],
-                    datetime.datetime.strftime(self.get_date_range_from_dataset(dataset)[1], "%Y%m%d%H"),
+                    f"{self.get_date_range_from_dataset(dataset)[1]:%Y%m%d%H}",
                 )
-            except (KeyError, TimeoutError):
+            else:
                 dataset.attrs["update_previous_end_date"] = ""
                 dataset.attrs["date range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
         else:
@@ -792,7 +818,10 @@ class Metadata(Convenience, IPFS):
         return dataset
 
 
-class StacType(Enum):
-    ITEM = "datasets"
-    COLLECTION = "collections"
-    CATALOG = ""
+def first(i: typing.Iterable):
+    """Return the first item in an iterable
+
+    Raises:
+        StopIteration if iterable is empty.
+    """
+    return next(iter(i))
