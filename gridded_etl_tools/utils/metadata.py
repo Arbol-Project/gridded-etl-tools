@@ -589,7 +589,9 @@ class Metadata(Convenience, IPFS):
 
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         for attr in dataset.attrs.keys():
-            if type(dataset.attrs[attr]) is dict or dataset.attrs[attr] is None:
+            if type(dataset.attrs[attr]) is dict:
+                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
+            elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
 
         return dataset

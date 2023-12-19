@@ -1163,7 +1163,7 @@ class TestMetadata:
         merged.attrs = {"foo": "bar", "baz": None, "goo": {"gar": "gaz"}}
 
         assert md.set_zarr_metadata(dataset) is merged
-        assert merged.attrs == {"foo": "bar", "baz": "", "goo": ""}
+        assert merged.attrs == {"foo": "bar", "baz": "", "goo": '{"gar": "gaz"}'}
         md.rename_data_variable.assert_called_once_with(dataset)
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.encode_vars.assert_called_once_with(removed)
