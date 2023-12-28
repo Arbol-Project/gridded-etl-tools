@@ -288,7 +288,7 @@ class TestTransform:
     def test_local_kerchunk_netcdf_os_error(manager_class, mocker):
         fsspec = mocker.patch("gridded_etl_tools.utils.zarr_methods.fsspec")
         fs = fsspec.filesystem.return_value
-        infile = fs.open.return_value.__enter__.return_value
+        fs.open.return_value.__enter__.return_value
 
         SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.zarr_methods.SingleHdf5ToZarr")
         SingleHdf5ToZarr.side_effect = OSError

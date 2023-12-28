@@ -20,7 +20,6 @@ from typing import Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
-from itertools import starmap, repeat
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
