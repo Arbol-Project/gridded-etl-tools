@@ -20,7 +20,6 @@ from typing import Any
 from tqdm import tqdm
 from subprocess import Popen
 from contextlib import nullcontext
-from itertools import starmap, repeat
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
@@ -76,7 +75,7 @@ class Transform(Convenience):
                     for fil in self.input_files()
                     if any(
                         fil.suffix in file_ext
-                        for file_ext in [".nc", ".nc4", ".grib", ".grib1", ".grib2", "grb1", ".grb2"]
+                        for file_ext in [".nc", ".nc4", ".grib", ".grib1", ".grib2", ".grb1", ".grb2"]
                     )
                 ]
                 # Further filter down which files are processsed using an optional file filter string or integer
@@ -113,7 +112,7 @@ class Transform(Convenience):
         file_path: str,
         scan_indices: int = 0,
         local_file_path: pathlib.Path | None = None,
-    ):
+    ) -> dict:
         """
         Transform input NetCDF or GRIB into a JSON representing it as a Zarr. These JSONs can be merged into a
         MultiZarr that Xarray can open natively as a Zarr.
@@ -146,20 +145,25 @@ class Transform(Convenience):
             A JSON representation of a local/remote NetCDF or GRIB file produced by Kerchunk and readable by Xarray as
             a lazy Dataset.
         """
-        if not file_path.lower().startswith("s3://"):
-            scanned_zarr_json = self.local_kerchunk(file_path, scan_indices)
-        elif file_path.lower().startswith("s3://"):
+        if file_path.lower().startswith("s3://"):
             scanned_zarr_json = self.remote_kerchunk(file_path, scan_indices)
+        else:
+            scanned_zarr_json = self.local_kerchunk(file_path, scan_indices)
+
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up
         # dev. work.
         if self.use_local_zarr_jsons:
-            if not local_file_path and self.protocol == "file":
-                local_file_path = os.path.splitext(file_path)[0] + ".json"
-            elif not local_file_path and self.protocol == "s3":
-                raise NameError("Writing out local JSONS specified but no `local_file_path` variable was provided.")
+            if not local_file_path:
+                if self.protocol == "file":
+                    local_file_path = os.path.splitext(file_path)[0] + ".json"
+                else:
+                    raise ValueError(
+                        "Writing out local JSONS specified but no `local_file_path` variable was provided."
+                    )
+
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
-                memory_write_args = zip(scanned_zarr_json, repeat(local_file_path))
-                list(starmap(self.zarr_json_in_memory_to_file, memory_write_args))
+                for zarr_json in scanned_zarr_json:
+                    self.zarr_json_in_memory_to_file(zarr_json, local_file_path)
             else:
                 self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
@@ -189,10 +193,13 @@ class Transform(Convenience):
                 fs = fsspec.filesystem("file")
                 with fs.open(file_path) as infile:
                     scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
+
             elif self.file_type == "GRIB":
                 scanned_zarr_json = scan_grib(url=file_path, filter=self.grib_filter, inline_threshold=20)[
                     scan_indices
                 ]
+            else:
+                raise ValueError(f"Invalid value for file_type. Expected 'NetCDF' or 'GRIB', got {self.file_type}")
         except OSError as e:
             raise ValueError(f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}")
         return scanned_zarr_json
@@ -222,15 +229,31 @@ class Transform(Convenience):
         if self.file_type == "NetCDF":
             with s3fs.S3FileSystem().open(file_path, **s3_so) as infile:
                 scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path).translate()
+
         elif "GRIB" in self.file_type:
             scanned_zarr_json = scan_grib(
                 url=file_path, storage_options=s3_so, filter=self.grib_filter, inline_threshold=20
             )[scan_indices]
+
+        else:
+            raise ValueError(f"Expected NetCDF or GRIB, got {type(self.file_type)}")
+
+        # TODO: Code smell -- this code assumes zarr_jsons is already present on the data manager, but it's not obvious
+        # how that would come to pass. In this gridded_etl_tools the only time this attribute is assigned is in
+        # create_zarr_json, which happens to be the method that calls the method that calls this method, so any results
+        # of modifying zarr_jsons would presumably be obliterated at that point, anyway. In the meantime, the only way
+        # for this code to run without error is for the manager code to intialize zarr_jsons, which is fairly obscure.
+
         # append/extend to self.zarr_jsons for later use in an ETL's `transform` step
         if isinstance(scanned_zarr_json, dict):
             self.zarr_jsons.append(scanned_zarr_json)
+
         elif isinstance(scanned_zarr_json, list):  # some remote scans will return a list of GRIBs
             self.zarr_jsons.extend(scanned_zarr_json)
+
+        else:
+            raise ValueError(f"Expected dict or list, got {type(scanned_zarr_json)}")
+
         return scanned_zarr_json
 
     def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
