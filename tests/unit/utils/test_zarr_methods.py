@@ -1,4 +1,6 @@
 import json
+import os
+import pathlib
 
 from unittest import mock
 
@@ -410,4 +412,253 @@ class TestTransform:
             storage_options={"anon": True, "default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
+        )
+
+    @staticmethod
+    def test_export_zarr_json_in_memory_to_file(manager_class, tmpdir):
+        dm = manager_class()
+        local_file_path = tmpdir / "output_zarr_json.json"
+        json_data = {"hi": "mom!"}
+        dm.zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
+        with open(local_file_path) as f:
+            assert json.load(f) == json_data
+
+    @staticmethod
+    def test_export_zarr_json_in_memory_to_file_override_local_path(manager_class, tmpdir):
+        json_data = {"hi": "mom!"}
+        local_file_path = tmpdir / "output_zarr_json.json"
+
+        def file_path_from_zarr_json_attrs(scanned_zarr_json, local_file_path):
+            assert scanned_zarr_json == json_data
+            assert local_file_path == local_file_path
+
+            return tmpdir / "this_other_zarr.json"
+
+        dm = manager_class()
+        dm.file_path_from_zarr_json_attrs = file_path_from_zarr_json_attrs
+
+        dm.zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
+        assert not os.path.exists(local_file_path)
+        with open(tmpdir / "this_other_zarr.json") as f:
+            assert json.load(f) == json_data
+
+    @staticmethod
+    def test_preprocess_kerchunk(manager_class, example_zarr_json):
+        """
+        Test that the preprocess_kerchunk method successfully changes the _FillValue attribute of all arrays
+        """
+        orig_fill_value = json.loads(example_zarr_json["refs"]["latitude/.zarray"])["fill_value"]
+
+        # prepare a dataset manager and preprocess a Zarr JSON
+        class MyManagerClass(manager_class):
+            missing_value = -8888
+
+        dm = MyManagerClass()
+
+        pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])
+
+        # populate before/after fill value variables
+        modified_fill_value = int(json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"])
+
+        # test that None != -8888
+        assert orig_fill_value != modified_fill_value
+        assert modified_fill_value == -8888
+
+    @staticmethod
+    def test_parallel_subprocess_files(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+
+        N = 250
+        dm = manager_class()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
+
+        expected = [
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+
+        expected = list(map(str, input_files))
+        assert removed_files == expected
+
+    @staticmethod
+    def test_parallel_subprocess_files_keep_originals(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+
+        N = 250
+        dm = manager_class()
+        dm.archive_original_files = mock.Mock()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", keep_originals=True)
+
+        expected = [
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+        assert removed_files == []
+        dm.archive_original_files.assert_called_once_with(input_files)
+
+    @staticmethod
+    def test_parallel_subprocess_files_invert_file_order(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+
+        N = 250
+        dm = manager_class()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", invert_file_order=True)
+
+        expected = [
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.cat", f"fido_{n:03d}.dog"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+
+        expected = list(map(str, input_files))
+        assert removed_files == expected
+
+    @staticmethod
+    def test_convert_to_lowest_common_time_denom(manager_class):
+        dm = manager_class()
+        dm.parallel_subprocess_files = mock.Mock()
+
+        dm.convert_to_lowest_common_time_denom(["a", "b", "c"])
+        dm.parallel_subprocess_files.assert_called_once_with(
+            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", False
+        )
+
+    @staticmethod
+    def test_convert_to_lowest_common_time_denom_no_files(manager_class):
+        dm = manager_class()
+        with pytest.raises(FileNotFoundError):
+            dm.convert_to_lowest_common_time_denom([])
+
+    @staticmethod
+    def test_convert_to_lowest_common_time_denom_keep_originals(manager_class):
+        dm = manager_class()
+        dm.parallel_subprocess_files = mock.Mock()
+
+        dm.convert_to_lowest_common_time_denom(["a", "b", "c"], keep_originals=True)
+        dm.parallel_subprocess_files.assert_called_once_with(
+            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", True
+        )
+
+    @staticmethod
+    def test_ncs_to_nc4s(manager_class, tmpdir):
+        for fname in ["one.nc", "two.nc4", "three.foo", "four.nc", "five.nc"]:
+            with open(tmpdir / fname, "w") as f:
+                f.write("hi mom!")
+
+        dm = manager_class(custom_input_path=tmpdir)
+        dm.parallel_subprocess_files = mock.Mock()
+
+        dm.ncs_to_nc4s()
+
+        expected_files = [tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")]
+        dm.parallel_subprocess_files.assert_called_once_with(
+            expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", False
+        )
+
+    @staticmethod
+    def test_ncs_to_nc4s_no_files(manager_class, tmpdir):
+        dm = manager_class(custom_input_path=tmpdir)
+        with pytest.raises(FileNotFoundError):
+            dm.ncs_to_nc4s()
+
+    @staticmethod
+    def test_ncs_to_nc4s_keep_originals(manager_class, tmpdir):
+        for fname in ["one.nc", "two.nc4", "three.foo", "four.nc", "five.nc"]:
+            with open(tmpdir / fname, "w") as f:
+                f.write("hi mom!")
+
+        dm = manager_class(custom_input_path=tmpdir)
+        dm.parallel_subprocess_files = mock.Mock()
+
+        dm.ncs_to_nc4s(True)
+
+        expected_files = [tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")]
+        dm.parallel_subprocess_files.assert_called_once_with(
+            expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", True
         )

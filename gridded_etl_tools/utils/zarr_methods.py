@@ -12,18 +12,19 @@ import os
 import random
 import s3fs
 
+from contextlib import nullcontext
+from subprocess import Popen
+from typing import Any
+
 import pandas as pd
 import numpy as np
 import xarray as xr
 
-from typing import Any
-from tqdm import tqdm
-from subprocess import Popen
-from contextlib import nullcontext
+from dask.distributed import Client, LocalCluster
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
-from dask.distributed import Client, LocalCluster
+from tqdm import tqdm
 
 from .convenience import Convenience
 from .metadata import Metadata
@@ -256,7 +257,7 @@ class Transform(Convenience):
 
         return scanned_zarr_json
 
-    def zarr_json_in_memory_to_file(self, scanned_zarr_json: str, local_file_path: pathlib.Path):
+    def zarr_json_in_memory_to_file(self, scanned_zarr_json: dict, local_file_path: pathlib.Path):
         """
         Export a Kerchunked Zarr JSON to file.
         If necessary, create a file name for that JSON in situ based on its attributes.
@@ -347,7 +348,7 @@ class Transform(Convenience):
                 ref_names.add(re.match(file_match_pattern, ref).group(1))
         for ref in ref_names:
             fill_value_fix = json.loads(refs[f"{ref}/.zarray"])
-            fill_value_fix["fill_value"] = str(cls.missing_value)
+            fill_value_fix["fill_value"] = str(cls.missing_value)  # TODO: Do we need `str`? Gets dumped to json below
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 
@@ -389,7 +390,8 @@ class Transform(Convenience):
             # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib
             # objects
             commands.append(list(map(str, command_text + filenames)))
-        # Convert each comment to a Popen call b/c Popen doesn't block, hence processes will run in parallel
+
+        # Convert each command to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
             commands_slice = [Popen(cmd) for cmd in commands[index : index + 100]]
@@ -400,7 +402,8 @@ class Transform(Convenience):
                         os.remove(command.args[-2])
                     else:
                         os.remove(command.args[-1])
-        self.info(f"{(len(list(input_files)))} conversions finished, cleaning up original files")
+
+        self.info(f"{(len(input_files))} conversions finished, cleaning up original files")
         # Get rid of original files that were converted
         if keep_originals:
             self.archive_original_files(input_files)
@@ -420,8 +423,8 @@ class Transform(Convenience):
         keep_originals : bool, optional
             An optional flag to preserve the original files for debugging purposes. Defaults to False.
         """
-        if len(list(raw_files)) == 0:
-            raise FileNotFoundError("No files found to convert, exiting script")
+        if len(raw_files) == 0:
+            raise FileNotFoundError("No files found to convert, exiting script")  # Seems like more of a ValueError
         command_text = ["cdo", "-f", "nc4", "splitsel,1"]
         self.parallel_subprocess_files(raw_files, command_text, "", keep_originals)
 
@@ -440,10 +443,10 @@ class Transform(Convenience):
         """
         # Build a list of files for manipulation
         raw_files = [pathlib.Path(file) for file in glob.glob(str(self.local_input_path() / "*.nc"))]
-        if len(list(raw_files)) == 0:
+        if len(raw_files) == 0:
             raise FileNotFoundError("No files found to convert, exiting script")
         # convert raw NetCDFs to NetCDF4-Classics in parallel
-        self.info(f"Converting {(len(list(raw_files)))} NetCDFs to NetCDF4 Classic files")
+        self.info(f"Converting {(len(raw_files))} NetCDFs to NetCDF4 Classic files")
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
         self.parallel_subprocess_files(raw_files, command_text, ".nc4", keep_originals)
 

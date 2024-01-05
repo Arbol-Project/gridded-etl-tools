@@ -67,35 +67,6 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
     assert dm.time_dim == "hindcast_reference_time"
 
 
-def test_export_zarr_json_in_memory(manager_class: DatasetManager, example_zarr_json):
-    dm = get_manager(manager_class)
-    local_file_path = "output_zarr_json.json"
-    json_str = str(example_zarr_json)
-    dm.zarr_json_in_memory_to_file(json_str, local_file_path=local_file_path)
-    assert os.path.exists(local_file_path)
-    os.remove(local_file_path)
-
-
-def test_preprocess_kerchunk(mocker, manager_class: DatasetManager, example_zarr_json: dict):
-    """
-    Test that the preprocess_kerchunk method successfully changes the _FillValue attribute of all arrays
-    """
-    orig_fill_value = json.loads(example_zarr_json["refs"]["latitude/.zarray"])["fill_value"]
-
-    # prepare a dataset manager and preprocess a Zarr JSON
-    class MyManagerClass(manager_class):
-        missing_value = -8888
-
-    dm = get_manager(MyManagerClass)
-
-    pp_zarr_json = dm.preprocess_kerchunk(example_zarr_json["refs"])
-    # populate before/after fill value variables
-    modified_fill_value = int(json.loads(pp_zarr_json["latitude/.zarray"])["fill_value"])
-    # test that None != -8888
-    assert orig_fill_value != modified_fill_value
-    assert modified_fill_value == -8888
-
-
 def test_calculate_update_time_ranges(
     manager_class: DatasetManager,
     fake_original_dataset: xr.Dataset,
