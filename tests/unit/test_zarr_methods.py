@@ -1,5 +1,3 @@
-import os
-import json
 import pytest
 
 import numpy as np
