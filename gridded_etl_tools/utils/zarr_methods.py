@@ -81,9 +81,7 @@ class Transform(Convenience):
                 # Further filter down which files are processsed using an optional file filter string or integer
                 if file_filters:
                     input_files_list = [
-                        fil
-                        for fil in input_files_list
-                        if any(str_filter for str_filter in file_filters if str_filter in fil)
+                        fil for fil in input_files_list if any(file_filter in fil for file_filter in file_filters)
                     ]
                 # Now prepare the MultiZarr
                 self.info(
