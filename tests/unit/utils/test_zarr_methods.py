@@ -61,11 +61,11 @@ class TestTransform:
         md = manager_class()
         md._root_directory = tmp_path
 
-        md.create_zarr_json(file_filter="three")
+        md.create_zarr_json(file_filters=["three", "five"])
 
         mzz.assert_called_once_with(
-            path=[str(list(input_files.keys())[2])],
-            indicts=[list(input_files.values())[2]],
+            path=[str(list(input_files.keys())[i]) for i in [2, 4]],
+            indicts=[list(input_files.values())[i] for i in [2, 4]],
             remote_protocol="handshake",
             remote_options={"anon": True},
             identical_dims=["x", "y"],

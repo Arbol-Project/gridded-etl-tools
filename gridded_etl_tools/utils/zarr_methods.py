@@ -104,9 +104,6 @@ class Transform(Convenience):
             # misspecified.
             if not outfile_path:
                 outfile_path = self.zarr_json_path()
-            import ipdb
-
-            ipdb.set_trace(context=4)
             mzz.translate(filename=outfile_path)
             self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking)/60,2)} minutes")
         else:
