@@ -39,7 +39,7 @@ class Transform(Convenience):
     # KERCHUNKING
 
     def create_zarr_json(
-        self, force_overwrite: bool = True, file_filter: str | None = None, outfile_path: str | None = None
+        self, force_overwrite: bool = True, file_filter: list[str] | None = None, outfile_path: str | None = None
     ):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
@@ -57,7 +57,7 @@ class Transform(Convenience):
             Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
         file_filter
-            A string used to further filter down input files for kerchunkifying.
+            A list of strings used to further filter down input files for kerchunkifying.
             Useful if you want to kerchunkify only a subset of available files.
             Defaults to None.
         outfile_path
@@ -80,7 +80,7 @@ class Transform(Convenience):
                 ]
                 # Further filter down which files are processsed using an optional file filter string or integer
                 if file_filter:
-                    input_files_list = [fil for fil in input_files_list if file_filter in str(fil)]
+                    input_files_list = [fil for fil in input_files_list if str(fil) in file_filter]
                 # Now prepare the MultiZarr
                 self.info(
                     f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} "
