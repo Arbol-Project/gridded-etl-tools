@@ -3,11 +3,8 @@ import pytest
 import numpy as np
 import xarray as xr
 
-from unittest.mock import Mock
-from copy import deepcopy
-
 from gridded_etl_tools.dataset_manager import DatasetManager
-from ..common import get_manager, mock_output_root, remove_mock_output
+from ..common import get_manager, remove_mock_output
 
 
 @pytest.fixture(scope="function")
@@ -91,50 +88,6 @@ def test_calculate_update_time_ranges(
     append_update = datetime_ranges[-1]
     append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
     assert append_size == np.timedelta64(35, "D")
-
-
-def test_to_zarr(mocker, manager_class: DatasetManager, fake_original_dataset: xr.Dataset, setup_and_teardown):
-    """
-    Test that calls to `to_zarr` correctly run three times,
-     updating relevant metadata fields to show a parse is underway.
-
-    Test that metadata fields for date ranges, etc. are only populated to a datset
-     *after* a successful parse
-    """
-    dm = manager_class()
-    dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
-    pre_update_dict = {
-        "date range": ["2000010100", "2020123123"],
-        "update_date_range": ["202012293", "2020123123"],
-        "update_previous_end_date": "2020123023",
-        "update_in_progress": False,
-        "attribute relevant to updates": 1,
-        "another attribute": True,
-    }
-    post_update_dict = {
-        "date range": ["2000010100", "2021010523"],
-        "update_previous_end_date": "2020123123",
-        "update_in_progress": False,
-        "another attribute": True,
-    }
-    # Mock datasets
-    dataset = deepcopy(fake_original_dataset)
-    dataset.attrs.update(**pre_update_dict)
-    dm.custom_output_path = mock_output_root / "to_zarr_dataset.zarr/"
-    dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
-    # Mock functions
-    dm.pre_parse_quality_check = Mock()
-    # Tests
-    for key in pre_update_dict.keys():
-        assert dm.store.dataset().attrs[key] == pre_update_dict[key]
-
-    dataset.attrs.update(**post_update_dict)
-    dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
-
-    for key in post_update_dict.keys():
-        assert dm.store.dataset().attrs[key] == post_update_dict[key]
-
-    dm.pre_parse_quality_check.assert_called_once_with(dataset)
 
 
 def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: xr.Dataset):

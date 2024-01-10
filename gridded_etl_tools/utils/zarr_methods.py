@@ -462,9 +462,10 @@ class Transform(Convenience):
         # use the first file to define the originals_dir path
         first_file = files[0]
         originals_dir = first_file.parents[1] / (first_file.stem + "_originals")
+
         # move original files to the originals_dir
+        originals_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
         for file in files:
-            pathlib.Path.mkdir(originals_dir, mode=0o755, parents=True, exist_ok=True)
             file.rename(originals_dir / file.name)
 
 
@@ -475,7 +476,7 @@ class Publish(Transform, Metadata):
 
     # PARSING
 
-    def parse(self, *args, **kwargs) -> bool:
+    def parse(self) -> bool:
         """
         Open all raw files in self.local_input_path(). Transform the data contained in them into Zarr format and write
         to the store specified by `Attributes.store`.
@@ -542,6 +543,7 @@ class Publish(Transform, Metadata):
         if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
+        # TODO: Is anything relying on this return value? If return value is invariant, may as well not return a value.
         return True
 
     def publish_metadata(self):

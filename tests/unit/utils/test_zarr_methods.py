@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import pathlib
@@ -5,6 +6,8 @@ import pathlib
 from unittest import mock
 
 import pytest
+
+from gridded_etl_tools.utils import store
 
 
 @pytest.fixture
@@ -662,3 +665,386 @@ class TestTransform:
         dm.parallel_subprocess_files.assert_called_once_with(
             expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", True
         )
+
+    @staticmethod
+    def test_archive_original_files(manager_class, tmpdir):
+        tmpdir = pathlib.Path(tmpdir)
+        input_dir = tmpdir / "input_files"
+        input_dir.mkdir()
+        orig_files = [input_dir / fname for fname in ("one.nc", "two.nc4", "three.foo", "four.nc", "five.nc")]
+        for file in orig_files:
+            with open(file, "w") as f:
+                f.write("hi mom!")
+
+        dm = manager_class()
+        dm.archive_original_files(orig_files)
+
+        assert all([not file.exists() for file in orig_files])
+
+        moved_files = [
+            tmpdir / "one_originals" / fname for fname in ("one.nc", "two.nc4", "three.foo", "four.nc", "five.nc")
+        ]
+        assert all([file.exists() for file in moved_files])
+
+
+class TestPublish:
+    @staticmethod
+    def test_parse_ipld_first_time(manager_class, mocker):
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+
+        dm = manager_class(rebuild_requested=False)
+        dm.dataset_hash = "QmHiMom!"
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD, has_existing=False)
+        dm.update_zarr = mock.Mock()
+        dm.write_initial_zarr = mock.Mock()
+
+        assert dm.parse() is True
+
+        LocalCluster.assert_called_once_with(
+            processes=False,
+            dashboard_address="127.0.0.1:8787",
+            protocol="inproc://",
+            threads_per_worker=2,
+            n_workers=1,
+        )
+
+        dm.dask_configuration.assert_called_once_with()
+        dm.update_zarr.assert_not_called()
+        dm.write_initial_zarr.assert_called_once_with()
+
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
+
+    @staticmethod
+    def test_parse_ipld_update(manager_class, mocker):
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+        dm.update_zarr = mock.Mock()
+        dm.write_initial_zarr = mock.Mock()
+
+        assert dm.parse() is True
+
+        LocalCluster.assert_called_once_with(
+            processes=False,
+            dashboard_address="127.0.0.1:8787",
+            protocol="inproc://",
+            threads_per_worker=2,
+            n_workers=1,
+        )
+
+        dm.dask_configuration.assert_called_once_with()
+        dm.update_zarr.assert_called_once_with()
+        dm.write_initial_zarr.assert_not_called()
+
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
+
+    @staticmethod
+    def test_parse_not_ipld_rebuild(manager_class, mocker):
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+
+        dm = manager_class(rebuild_requested=True, allow_overwrite=True)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        dm.update_zarr = mock.Mock()
+        dm.write_initial_zarr = mock.Mock()
+
+        assert dm.parse() is True
+
+        LocalCluster.assert_called_once_with(
+            processes=False,
+            dashboard_address="127.0.0.1:8787",
+            protocol="inproc://",
+            threads_per_worker=2,
+            n_workers=1,
+        )
+
+        dm.dask_configuration.assert_called_once_with()
+        dm.update_zarr.assert_not_called()
+        dm.write_initial_zarr.assert_called_once_with()
+
+        Client.assert_called_once_with(cluster)
+        nullcontext.assert_not_called()
+
+    @staticmethod
+    def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+
+        dm = manager_class(rebuild_requested=True, allow_overwrite=False)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        dm.update_zarr = mock.Mock()
+        dm.write_initial_zarr = mock.Mock()
+
+        with pytest.raises(RuntimeError):
+            dm.parse()
+
+        LocalCluster.assert_called_once_with(
+            processes=False,
+            dashboard_address="127.0.0.1:8787",
+            protocol="inproc://",
+            threads_per_worker=2,
+            n_workers=1,
+        )
+
+        dm.dask_configuration.assert_called_once_with()
+        dm.update_zarr.assert_not_called()
+        dm.write_initial_zarr.assert_not_called()
+
+        Client.assert_called_once_with(cluster)
+        nullcontext.assert_not_called()
+
+    @staticmethod
+    def test_parse_ipld_update_ctrl_c(manager_class, mocker):
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+        dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
+        dm.write_initial_zarr = mock.Mock()
+
+        assert dm.parse() is True
+
+        LocalCluster.assert_called_once_with(
+            processes=False,
+            dashboard_address="127.0.0.1:8787",
+            protocol="inproc://",
+            threads_per_worker=2,
+            n_workers=1,
+        )
+
+        dm.dask_configuration.assert_called_once_with()
+        dm.update_zarr.assert_called_once_with()
+        dm.write_initial_zarr.assert_not_called()
+
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
+
+    @staticmethod
+    def test_publish_metadata(manager_class):
+        dm = manager_class()
+        dm.metadata = {"hi": "mom!"}
+        dm.time_dims = ["what", "is", "time", "really?"]
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.populate_metadata = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.create_root_stac_catalog = mock.Mock()
+        dm.create_stac_collection = mock.Mock()
+        dm.create_stac_item = mock.Mock()
+        current_zarr = dm.store.dataset.return_value
+
+        dm.publish_metadata()
+
+        dm.populate_metadata.assert_not_called()
+        dm.set_key_dims.assert_not_called()
+        dm.create_root_stac_catalog.assert_called_once_with()
+        dm.create_stac_collection.assert_called_once_with(current_zarr)
+        dm.create_stac_item.assert_called_once_with(current_zarr)
+
+    @staticmethod
+    def test_publish_metadata_no_current_zarr(manager_class):
+        dm = manager_class()
+        dm.metadata = {"hi": "mom!"}
+        dm.time_dims = ["what", "is", "time", "really?"]
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.populate_metadata = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.create_root_stac_catalog = mock.Mock()
+        dm.create_stac_collection = mock.Mock()
+        dm.create_stac_item = mock.Mock()
+        dm.store.dataset.return_value = None
+
+        with pytest.raises(RuntimeError):
+            dm.publish_metadata()
+
+        dm.populate_metadata.assert_not_called()
+        dm.set_key_dims.assert_not_called()
+        dm.create_root_stac_catalog.assert_not_called()
+        dm.create_stac_collection.assert_not_called()
+        dm.create_stac_item.assert_not_called()
+
+    @staticmethod
+    def test_publish_metadata_populate_metadata(manager_class):
+        dm = manager_class()
+        dm.time_dims = ["what", "is", "time", "really?"]
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.populate_metadata = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.create_root_stac_catalog = mock.Mock()
+        dm.create_stac_collection = mock.Mock()
+        dm.create_stac_item = mock.Mock()
+        current_zarr = dm.store.dataset.return_value
+
+        dm.publish_metadata()
+
+        dm.populate_metadata.assert_called_once_with()
+        dm.set_key_dims.assert_not_called()
+        dm.create_root_stac_catalog.assert_called_once_with()
+        dm.create_stac_collection.assert_called_once_with(current_zarr)
+        dm.create_stac_item.assert_called_once_with(current_zarr)
+
+    @staticmethod
+    def test_publish_metadata_set_key_dims(manager_class):
+        dm = manager_class()
+        dm.metadata = {"hi": "mom!"}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.populate_metadata = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.create_root_stac_catalog = mock.Mock()
+        dm.create_stac_collection = mock.Mock()
+        dm.create_stac_item = mock.Mock()
+        current_zarr = dm.store.dataset.return_value
+
+        dm.publish_metadata()
+
+        dm.populate_metadata.assert_not_called()
+        dm.set_key_dims.assert_called_once_with()
+        dm.create_root_stac_catalog.assert_called_once_with()
+        dm.create_stac_collection.assert_called_once_with(current_zarr)
+        dm.create_stac_item.assert_called_once_with(current_zarr)
+
+    @staticmethod
+    def test_to_zarr_ipld(manager_class, mocker):
+        dm = manager_class()
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.move_post_parse_attrs_to_dict = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD)
+
+        dataset = mock.Mock()
+        dm.to_zarr(dataset, "foo", bar="baz")
+
+        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.store.write_metadata_only.assert_not_called()
+        dm.move_post_parse_attrs_to_dict.assert_not_called()
+
+    @staticmethod
+    def test_to_zarr_ipld_dry_run(manager_class, mocker):
+        dm = manager_class()
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.move_post_parse_attrs_to_dict = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD)
+        dm.dry_run = True
+
+        dataset = mock.Mock()
+        dm.to_zarr(dataset, "foo", bar="baz")
+
+        dataset.to_zarr.assert_not_called()
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.store.write_metadata_only.assert_not_called()
+        dm.move_post_parse_attrs_to_dict.assert_not_called()
+
+    @staticmethod
+    def test_to_zarr_not_ipld(manager_class, mocker):
+        dm = manager_class()
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.move_post_parse_attrs_to_dict = mock.Mock()
+        dm.move_post_parse_attrs_to_dict.return_value = (post_dataset, post_parse_attrs) = (mock.Mock(), mock.Mock())
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        dataset = mock.Mock()
+        dataset.get.return_value = "is it?"
+        dm.to_zarr(dataset, "foo", bar="baz")
+
+        post_dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dataset.get.assert_called_once_with("update_is_append_only")
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.store.write_metadata_only.assert_has_calls(
+            [
+                mock.call(update_attrs={"update_in_progress": True, "update_is_append_only": "is it?"}),
+                mock.call(update_attrs=post_parse_attrs),
+            ]
+        )
+        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+
+    @staticmethod
+    def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
+        """
+        Integration test that calls to `to_zarr` correctly run three times, updating relevant metadata fields to show a
+        parse is underway.
+
+        Test that metadata fields for date ranges, etc. are only populated to a datset *after* a successful parse
+        """
+        dm = manager_class()
+        dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
+        pre_update_dict = {
+            "date range": ["2000010100", "2020123123"],
+            "update_date_range": ["202012293", "2020123123"],
+            "update_previous_end_date": "2020123023",
+            "update_in_progress": False,
+            "attribute relevant to updates": 1,
+            "another attribute": True,
+        }
+        post_update_dict = {
+            "date range": ["2000010100", "2021010523"],
+            "update_previous_end_date": "2020123123",
+            "update_in_progress": False,
+            "another attribute": True,
+        }
+
+        # Mock datasets
+        dataset = copy.deepcopy(fake_original_dataset)
+        dataset.attrs.update(**pre_update_dict)
+        dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
+        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+
+        # Mock functions
+        dm.pre_parse_quality_check = mock.Mock()
+
+        # Tests
+        for key in pre_update_dict.keys():
+            assert dm.store.dataset().attrs[key] == pre_update_dict[key]
+
+        dataset.attrs.update(**post_update_dict)
+        dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+
+        for key in post_update_dict.keys():
+            assert dm.store.dataset().attrs[key] == post_update_dict[key]
+
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_move_post_parse_attrs_to_dict(manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.update_attributes = dm.update_attributes + ["some irrelevant attribute"]
+        fake_original_dataset.attrs = {
+            "date range": ["2000010100", "2020123123"],
+            "update_date_range": ["202012293", "2020123123"],
+            "update_previous_end_date": "2020123023",
+            "update_in_progress": False,
+        }
+
+        dataset, update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
+        assert update_attrs == {
+            "update_in_progress": False,
+            "date range": ["2000010100", "2020123123"],
+            "update_previous_end_date": "2020123023",
+        }
+        assert dataset is not fake_original_dataset
+        assert fake_original_dataset.attrs == {
+            "date range": ["2000010100", "2020123123"],
+            "update_date_range": ["202012293", "2020123123"],
+            "update_previous_end_date": "2020123023",
+            "update_in_progress": False,
+        }
+        assert dataset.attrs == {
+            "update_date_range": ["202012293", "2020123123"],
+            "update_in_progress": False,
+        }
