@@ -348,7 +348,7 @@ class Transform(Convenience):
                 ref_names.add(re.match(file_match_pattern, ref).group(1))
         for ref in ref_names:
             fill_value_fix = json.loads(refs[f"{ref}/.zarray"])
-            fill_value_fix["fill_value"] = str(cls.missing_value)  # TODO: Do we need `str`? Gets dumped to json below
+            fill_value_fix["fill_value"] = cls.missing_value
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 
@@ -424,7 +424,7 @@ class Transform(Convenience):
             An optional flag to preserve the original files for debugging purposes. Defaults to False.
         """
         if len(raw_files) == 0:
-            raise FileNotFoundError("No files found to convert, exiting script")  # Seems like more of a ValueError
+            raise ValueError("No files found to convert, exiting script")
         command_text = ["cdo", "-f", "nc4", "splitsel,1"]
         self.parallel_subprocess_files(raw_files, command_text, "", keep_originals)
 
@@ -543,8 +543,7 @@ class Publish(Transform, Metadata):
         if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
-        # TODO: Is anything relying on this return value? If return value is invariant, may as well not return a value.
-        return True
+        self.info("Parse run successfully.")
 
     def publish_metadata(self):
         """

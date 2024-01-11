@@ -615,7 +615,7 @@ class TestTransform:
     @staticmethod
     def test_convert_to_lowest_common_time_denom_no_files(manager_class):
         dm = manager_class()
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(ValueError):
             dm.convert_to_lowest_common_time_denom([])
 
     @staticmethod
@@ -701,7 +701,7 @@ class TestPublish:
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
 
-        assert dm.parse() is True
+        dm.parse()
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -730,7 +730,7 @@ class TestPublish:
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
 
-        assert dm.parse() is True
+        dm.parse()
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -760,7 +760,7 @@ class TestPublish:
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
 
-        assert dm.parse() is True
+        dm.parse()
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -820,7 +820,7 @@ class TestPublish:
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
 
-        assert dm.parse() is True
+        dm.parse()
 
         LocalCluster.assert_called_once_with(
             processes=False,
