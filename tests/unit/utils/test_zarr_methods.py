@@ -1048,3 +1048,278 @@ class TestPublish:
             "update_date_range": ["202012293", "2020123123"],
             "update_in_progress": False,
         }
+
+    @staticmethod
+    def test_dask_configuration_ipld(manager_class, mocker):
+        dask_config = {}
+
+        def dask_config_set(config):
+            dask_config.update(config)
+
+        dask = mocker.patch("gridded_etl_tools.utils.zarr_methods.dask")
+        dask.config.set = dask_config_set
+
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.IPLD)
+
+        dm.dask_configuration()
+
+        assert dask_config == {
+            "distributed.scheduler.worker-saturation": dm.dask_scheduler_worker_saturation,
+            "distributed.scheduler.worker-ttl": None,
+            "distributed.worker.memory.target": dm.dask_worker_mem_target,
+            "distributed.worker.memory.spill": dm.dask_worker_mem_spill,
+            "distributed.worker.memory.pause": dm.dask_worker_mem_pause,
+            "distributed.worker.memory.terminate": dm.dask_worker_mem_terminate,
+            "scheduler": "threads",
+        }
+
+    @staticmethod
+    def test_dask_configuration_not_ipld(manager_class, mocker):
+        dask_config = {}
+
+        def dask_config_set(config):
+            dask_config.update(config)
+
+        dask = mocker.patch("gridded_etl_tools.utils.zarr_methods.dask")
+        dask.config.set = dask_config_set
+
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        dm.dask_configuration()
+
+        assert dask_config == {
+            "distributed.scheduler.worker-saturation": dm.dask_scheduler_worker_saturation,
+            "distributed.scheduler.worker-ttl": None,
+            "distributed.worker.memory.target": dm.dask_worker_mem_target,
+            "distributed.worker.memory.spill": dm.dask_worker_mem_spill,
+            "distributed.worker.memory.pause": dm.dask_worker_mem_pause,
+            "distributed.worker.memory.terminate": dm.dask_worker_mem_terminate,
+        }
+
+    @staticmethod
+    def test_pre_initial_dataset(manager_class):
+        dm = manager_class()
+        dm.transformed_dataset = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.set_zarr_metadata = mock.Mock()
+
+        dataset1 = dm.transformed_dataset.return_value
+        dataset2 = dataset1.transpose.return_value
+        dataset3 = dataset2.chunk.return_value
+        dataset4 = dm.set_zarr_metadata.return_value
+
+        assert dm.pre_initial_dataset() is dataset4
+
+        dm.transformed_dataset.assert_called_once_with()
+        dm.set_key_dims.assert_called_once_with()
+        dataset1.transpose.assert_called_once_with(*dm.standard_dims)
+        dataset2.chunk.assert_called_once_with(dm.requested_dask_chunks)
+        dm.set_zarr_metadata(dataset3)
+
+    @staticmethod
+    def test_transformed_dataset(manager_class):
+        dm = manager_class()
+        dm.zarr_json_to_dataset = mock.Mock()
+        assert dm.transformed_dataset() is dm.zarr_json_to_dataset.return_value
+        dm.zarr_json_to_dataset.assert_called_once_with()
+
+    @staticmethod
+    def test_zarr_hash_to_dataset(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        dataset = xr.open_zarr.return_value
+
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.IPLD)
+        mapper = dm.store.mapper.return_value
+
+        assert dm.zarr_hash_to_dataset("QmHiMom") is dataset
+
+        dm.store.mapper.assert_called_once_with(set_root=False)
+        mapper.set_root.assert_called_once_with("QmHiMom")
+        xr.open_zarr.assert_called_once_with(mapper)
+
+    @staticmethod
+    def test_zarr_json_to_dataset(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.postprocess_zarr = mock.Mock()
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset() is dm.postprocess_zarr.return_value
+        dm.zarr_json_path.assert_called_once_with()
+        xr.open_dataset.assert_called_once_with(
+            "reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/zarr.json",
+                    "remote_protocol": "handshake",
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=True,
+        )
+        dm.postprocess_zarr.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_zarr_json_to_dataset_explicit_args(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.postprocess_zarr = mock.Mock()
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dm.postprocess_zarr.return_value
+        dm.zarr_json_path.assert_not_called()
+        xr.open_dataset.assert_called_once_with(
+            "reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/different.json",
+                    "remote_protocol": "handshake",
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=False,
+        )
+        dm.postprocess_zarr.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_postprocess_zarr(manager_class):
+        dm = manager_class()
+        dataset = object()
+        assert dm.postprocess_zarr(dataset) is dataset
+
+    @staticmethod
+    def test_set_key_dims(manager_class):
+        dm = manager_class()
+
+        dm.set_key_dims()
+        assert dm.standard_dims == ["time", "latitude", "longitude"]
+        assert dm.time_dim == "time"
+
+    @staticmethod
+    def test_set_key_dims_hindcast(manager_class):
+        dm = manager_class()
+        dm.hindcast = True
+        dm.ensemble = True
+        dm.forecast = True
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "hindcast_reference_time",
+            "forecast_reference_offset",
+            "step",
+            "ensemble",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "hindcast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_ensemble(manager_class):
+        dm = manager_class()
+        dm.ensemble = True
+        dm.forecast = True
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "forecast_reference_time",
+            "step",
+            "ensemble",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_forecast(manager_class):
+        dm = manager_class()
+        dm.forecast = True
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "forecast_reference_time",
+            "step",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_write_initial_zarr_ipld(manager_class):
+        class DummyHash:
+            def __str__(self):
+                return "QmHiMom"
+
+        dm = manager_class()
+        dm.pre_initial_dataset = mock.Mock()
+        dm.store = mock.Mock(spec=store.IPLD)
+        dm.to_zarr = mock.Mock()
+        dm.dataset_hash = None
+
+        dataset = dm.pre_initial_dataset.return_value
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = DummyHash()
+
+        dm.write_initial_zarr()
+
+        dm.pre_initial_dataset.assert_called_once_with()
+        dm.store.mapper.assert_called_once_with(set_root=False)
+        dm.to_zarr.assert_called_once_with(dataset, mapper, consolidated=True, mode="w")
+        assert dm.dataset_hash == "QmHiMom"
+
+    @staticmethod
+    def test_write_initial_zarr_not_ipld(manager_class):
+        class DummyHash:
+            def __str__(self):
+                return "QmHiMom"
+
+        dm = manager_class()
+        dm.pre_initial_dataset = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.to_zarr = mock.Mock()
+        dm.dataset_hash = None
+
+        dataset = dm.pre_initial_dataset.return_value
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = DummyHash()
+
+        dm.write_initial_zarr()
+
+        dm.pre_initial_dataset.assert_called_once_with()
+        dm.store.mapper.assert_called_once_with(set_root=False)
+        dm.to_zarr.assert_called_once_with(dataset, mapper, consolidated=True, mode="w")
+        assert dm.dataset_hash is None
+
+    @staticmethod
+    def test_update_zarr(manager_class):
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.transformed_dataset = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.update_setup = mock.Mock()
+        dm.update_parse_operations = mock.Mock()
+
+        original_dataset = dm.store.dataset.return_value
+        update_dataset = dm.transformed_dataset.return_value
+        dm.update_setup.return_value = (insert_times, append_times) = (object(), object())
+        dm.update_zarr()
+
+        dm.store.dataset.assert_called_once_with()
+        dm.transformed_dataset.assert_called_once_with()
+        dm.set_key_dims.assert_called_once_with()
+        dm.update_setup.assert_called_once_with(original_dataset, update_dataset)
+        dm.update_parse_operations.assert_called_once_with(
+            original_dataset, update_dataset, insert_times, append_times
+        )

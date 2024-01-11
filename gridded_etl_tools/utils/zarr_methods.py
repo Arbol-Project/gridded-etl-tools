@@ -1,20 +1,21 @@
 import datetime
-import multiprocessing
-import time
-import json
-import re
-import fsspec
-import pprint
-import dask
-import pathlib
 import glob
+import multiprocessing
+import json
 import os
+import pathlib
+import pprint
 import random
-import s3fs
+import re
+import time
 
 from contextlib import nullcontext
 from subprocess import Popen
 from typing import Any
+
+import dask
+import fsspec
+import s3fs
 
 import pandas as pd
 import numpy as np
@@ -717,10 +718,10 @@ class Publish(Transform, Metadata):
 
         return dataset
 
-    def transformed_dataset(self, custom: bool = False):
+    def transformed_dataset(self):
         """
         Overall method to return the fully processed and transformed dataset
-        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
+        Defaults to returning zarr_json_to_dataset but can be overridden to return a custom transformation instead
         """
         return self.zarr_json_to_dataset()
 
@@ -811,10 +812,7 @@ class Publish(Transform, Metadata):
 
         The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
         """
-        if not self.forecast and not self.ensemble:
-            self.standard_dims = ["time", "latitude", "longitude"]
-            self.time_dim = "time"
-        elif self.hindcast:
+        if self.hindcast:
             self.standard_dims = [
                 "hindcast_reference_time",
                 "forecast_reference_offset",
@@ -830,6 +828,9 @@ class Publish(Transform, Metadata):
         elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
+        else:
+            self.standard_dims = ["time", "latitude", "longitude"]
+            self.time_dim = "time"
 
     # INITIAL
 
