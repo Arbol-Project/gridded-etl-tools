@@ -687,9 +687,6 @@ class TestTransform:
         assert all([file.exists() for file in moved_files])
 
 
-import psutil
-
-
 class fake_vmem(dict):
     """
     Fake a vmem object with 16gb total memory using a dict
