@@ -441,8 +441,8 @@ class Transform(Convenience):
         keep_originals : bool
             An optional flag to preserve the original files for debugging purposes. Defaults to False.
         """
-        # Build a list of files for manipulation
-        raw_files = [pathlib.Path(file) for file in glob.glob(str(self.local_input_path() / "*.nc"))]
+        # Build a list of files for manipulation, sorted so unit tests can have a consistent expected value
+        raw_files = sorted([pathlib.Path(file) for file in glob.glob(str(self.local_input_path() / "*.nc"))])
         if len(raw_files) == 0:
             raise FileNotFoundError("No files found to convert, exiting script")
         # convert raw NetCDFs to NetCDF4-Classics in parallel

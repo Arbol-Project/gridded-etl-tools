@@ -639,7 +639,7 @@ class TestTransform:
 
         dm.ncs_to_nc4s()
 
-        expected_files = [tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")]
+        expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
         dm.parallel_subprocess_files.assert_called_once_with(
             expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", False
         )
@@ -661,7 +661,7 @@ class TestTransform:
 
         dm.ncs_to_nc4s(True)
 
-        expected_files = [tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")]
+        expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
         dm.parallel_subprocess_files.assert_called_once_with(
             expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", True
         )
@@ -687,12 +687,25 @@ class TestTransform:
         assert all([file.exists() for file in moved_files])
 
 
+import psutil
+
+
+class fake_vmem(dict):
+    """
+    Fake a vmem object with 16gb total memory using a dict
+    """
+
+    def __init__(self):
+        self.total = 2**34
+
+
 class TestPublish:
     @staticmethod
     def test_parse_ipld_first_time(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
         Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
         nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dataset_hash = "QmHiMom!"
@@ -723,6 +736,7 @@ class TestPublish:
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
         Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
         nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
@@ -753,6 +767,7 @@ class TestPublish:
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
         nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=True)
         dm.dask_configuration = mock.Mock()
@@ -783,6 +798,7 @@ class TestPublish:
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
         nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=False)
         dm.dask_configuration = mock.Mock()
@@ -813,6 +829,7 @@ class TestPublish:
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
         Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
         nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
