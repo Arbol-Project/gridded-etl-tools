@@ -120,11 +120,12 @@ class S3Extractor(Extractor):
         remote_file_path
             An S3 file URL path to the climate file to be transformed and added to `DatasetManager.zarr_jsons`
         scan_indices
-            Indices of the raw climate data to be read
+            Indices of the raw climate data to be read. This is a quirk particular to certain GRIB files that package
+            many datasets w/in one GRIB file. The index tells Kerchunk which to pull out and process.
         tries
             Allow a number of failed requests before failing permanently
         local_file_path
-            A local file path to save the kerchunked Zarr JSON to
+            An optional local file path to save the kerchunked Zarr JSON to
         informative_id
             A string to identify the request in logs. Defaults to just the given remote file path
 
@@ -138,6 +139,9 @@ class S3Extractor(Extractor):
         FileNotFoundError
             If the request fails more than the given amount of tries
         """
+        if not remote_file_path.lower().startswith("s3://"):
+            raise ValueError(f"Given path {remote_file_path} is not an S3 path")
+
         # Default to using the raw file name to identify the request in the log message
         if informative_id is None:
             informative_id = remote_file_path
@@ -162,6 +166,7 @@ class S3Extractor(Extractor):
                     f" , attempt {counter}"
                 )
                 counter += 1
+                time.sleep(retry_delay)
         else:
             self.dm.info(f"Couldn't find or download a remote file for {informative_id}")
             raise FileNotFoundError(f"Too many ({counter}) failed download attempts from server")
