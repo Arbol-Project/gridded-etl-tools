@@ -5,10 +5,9 @@ Classes for managing CHIRPS global, gridded precipitation data
 import glob
 import datetime
 import pathlib
-import re
-import requests
 import xarray as xr
 from gridded_etl_tools.dataset_manager import DatasetManager
+from gridded_etl_tools.utils.extractor import FTPExtractor
 
 
 class CHIRPS(DatasetManager):
@@ -138,7 +137,7 @@ class CHIRPS(DatasetManager):
     @property
     def dataset_download_url(self) -> str:
         """URL to download location of the dataset. May be an FTP site, API base URL, or otherwise."""
-        return "https://data.chc.ucsb.edu/products/CHIRPS-2.0"
+        return "ftp.chc.ucsb.edu"
 
     @property
     def file_type(self) -> str:
@@ -171,69 +170,56 @@ class CHIRPS(DatasetManager):
         """Value to round bbox values by"""
         return 3
 
-    def extract(self, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs) -> bool:
+    def extract(self, *, date_range: tuple[datetime.datetime, datetime.datetime] | None = None, **kwargs) -> bool:
         """
-        Check CHIRPS HTTP server for files from the end year of or after our data's end date. Download necessary files.
-        Check newest file and return `True` if it has newer data than us or `False` otherwise.
+        Download climate data netCDF files from CHIRPS's FTP server. Files are assumed to be stored in the format
+        'chirps-*YEAR*.nc' where year is any year in the given date range. If the date range is unspecified, check
+        for an existing dataset and use the end date of the existing dataset as the start date for the date range.
+
+        Check newest file downloaded and return `True` if it has newer data than in the existing Zarr or `False`
+        otherwise.
 
         Parameters
         ----------
         date_range: list, optional
-            A flag to specify a date range for download (and parsing). Assumes two isoformatted date strings. Defaults
-            to None.
+            Optional start and end date to extract. Assumes two isoformatted date strings.
+            Defaults to None.
 
         Returns
         -------
         bool
-            A boolean indicating whether to proceed with a parse operation or not
+            `True` if local data has newer data than the existing Zarr or `False` otherwise
         """
-        # Find previous end date so the manager can start downloading the day after it
+        super().extract()
         if not date_range:
+            # Find previous end date so the manager can start downloading the day after it
             try:
                 self.info("Calculating new start date based on end date in STAC metadata")
                 end_date = self.get_metadata_date_range()["end"] + datetime.timedelta(days=1)
             except (KeyError, ValueError):
-                self.info(
-                    "Because no metadata found, starting file search from the dataset beginning of "
-                    f"{self.dataset_start_date}"
-                )
+                self.info("Because no metadata found, starting file search from beginning {self.dataset_start_date}")
                 end_date = self.dataset_start_date
             download_year_range = range(end_date.year, datetime.datetime.now().year + 1)
         else:
             self.info("Calculating start and end dates based on the provided date range.")
             end_date = date_range[1]
             download_year_range = range(date_range[0].year, end_date.year + 1)
-        # find all files in the relevant remote server folder
-        url = f"{self.dataset_download_url}/{self.remote_path}"
-        self.info(f"connecting to {url}")
-        index = requests.get(url).text
-        # loop through every year from end date until present year and download any files that are newer than ones we
-        # have on our server
-        for year in download_year_range:
-            pattern = rf"<a.+>(chirps-.+{year}.+\.nc)</a></td><td[^>]+>([^<]+[0-9])\s*</td>"
-            matches = re.findall(pattern, index, re.MULTILINE)
-            if len(matches) > 0:
-                file_name, _ = matches[0]
-                local_path = self.local_input_path() / file_name
-                self.info(f"downloading remote file {file_name}")
-                remote_file = requests.get(f"{url}{file_name}").content
-                with open(local_path, "wb") as local_file:
-                    local_file.write(remote_file)
-        # check if newest file on our server has newer data
-        try:
-            newest_file_end_date = self.get_newest_file_date_range()[1]
-        except IndexError as e:
-            self.info(
-                f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}"
-            )
-            return False
-        self.info(f"newest file ends at {newest_file_end_date}")
-        if newest_file_end_date >= end_date:
-            self.info(f"newest file has newer data than our end date {end_date}, triggering parse")
-            return True
-        else:
-            self.info(f"newest file doesn't have data past our existing end date {end_date}")
-            return False
+
+        # Connect to CHIRPS FTP and request files for all needed years
+        extractor = FTPExtractor(self)
+        with extractor(self.dataset_download_url) as ftp:
+            ftp.cwd = self.remote_path
+            requests: list[pathlib.Path] = []
+            # Loop through every year in the date range and queue requests
+            for year in download_year_range:
+                pattern = rf"chirps-.+{year}.+\.nc"
+                requests.extend(ftp.find(pattern))
+            # Request downloads using a thread pool, although the downloads will happen synchronously because FTP
+            # doesn't support multithreading.
+            ftp.pool(ftp.request, [[request, self.local_input_path()] for request in requests])
+
+        # Check if newest local file has newer data
+        return self.check_if_new_data(end_date)
 
     def prepare_input_files(self, keep_originals: bool = False):
         """
@@ -348,7 +334,7 @@ class CHIRPSFinal05(CHIRPSFinal):
     @property
     def remote_path(self) -> str:
         """path on CHIRPS server to relevant files"""
-        return "global_daily/netcdf/p05/"
+        return "/pub/org/chc/products/CHIRPS-2.0/global_daily/netcdf/p05/"
 
     @property
     def spatial_resolution(self) -> float:
@@ -383,7 +369,7 @@ class CHIRPSFinal25(CHIRPSFinal):
     @property
     def remote_path(self) -> str:
         """path on CHIRPS server to relevant files"""
-        return "global_daily/netcdf/p25/"
+        return "/pub/org/chc/products/CHIRPS-2.0/global_daily/netcdf/p25/"
 
     @property
     def spatial_resolution(self) -> float:
@@ -405,7 +391,7 @@ class CHIRPSPrelim05(CHIRPS):
     @property
     def remote_path(self) -> str:
         """path on CHIRPS server to relevant files"""
-        return "prelim/global_daily/netcdf/p05/"
+        return "/pub/org/chc/products/CHIRPS-2.0/prelim/global_daily/netcdf/p05/"
 
     @property
     def spatial_resolution(self) -> float:
