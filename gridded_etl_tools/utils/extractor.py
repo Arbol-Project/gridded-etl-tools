@@ -120,11 +120,12 @@ class S3Extractor(Extractor):
         remote_file_path
             An S3 file URL path to the climate file to be transformed and added to `DatasetManager.zarr_jsons`
         scan_indices
-            Indices of the raw climate data to be read
+            Indices of the raw climate data to be read. This is a quirk particular to certain GRIB files that package
+            many datasets w/in one GRIB file. The index tells Kerchunk which to pull out and process.
         tries
             Allow a number of failed requests before failing permanently
         local_file_path
-            A local file path to save the kerchunked Zarr JSON to
+            An optional local file path to save the kerchunked Zarr JSON to
         informative_id
             A string to identify the request in logs. Defaults to just the given remote file path
 
@@ -138,6 +139,9 @@ class S3Extractor(Extractor):
         FileNotFoundError
             If the request fails more than the given amount of tries
         """
+        if not remote_file_path.lower().startswith("s3://"):
+            raise ValueError(f"Given path {remote_file_path} is not an S3 path")
+
         # Default to using the raw file name to identify the request in the log message
         if informative_id is None:
             informative_id = remote_file_path
@@ -162,6 +166,7 @@ class S3Extractor(Extractor):
                     f" , attempt {counter}"
                 )
                 counter += 1
+                time.sleep(retry_delay)
         else:
             self.dm.info(f"Couldn't find or download a remote file for {informative_id}")
             raise FileNotFoundError(f"Too many ({counter}) failed download attempts from server")
@@ -201,7 +206,7 @@ class FTPExtractor(Extractor):
         Raises
         ------
         ValueError
-            If FTPExtractor.
+            If host parameter hasn't been set
         """
         if not hasattr(self, "host"):
             raise ValueError("FTPExtractor must have a host parameter to open connection")
@@ -237,11 +242,11 @@ class FTPExtractor(Extractor):
         return self
 
     @property
-    def cwd(self) -> pathlib.Path:
+    def cwd(self) -> pathlib.PurePosixPath:
         """
         Returns
         -------
-        pathlib.Path
+        pathlib.PurePosixPath
             The object's working directory on the FTP server
 
         Raises
@@ -250,14 +255,14 @@ class FTPExtractor(Extractor):
             If the FTP connection is not open yet
         """
         try:
-            return pathlib.Path(self.ftp.pwd())
+            return pathlib.PurePosixPath(self.ftp.pwd())
         except ftplib.error_perm:
             raise RuntimeError(
                 "FTP connection must be opened from a context manager before getting the working directory."
             )
 
     @cwd.setter
-    def cwd(self, path: pathlib.Path):
+    def cwd(self, path: pathlib.PurePosixPath):
         """
         Change working directory on the FTP server to the given path. The connection must already be opened using
         `FTPExtractor.__enter__`.
@@ -280,7 +285,9 @@ class FTPExtractor(Extractor):
         except ftplib.error_perm:
             raise RuntimeError("Error changing directory. Is the FTP connection open?")
 
-    def request(self, source: pathlib.Path, destination: pathlib.Path = pathlib.Path()) -> bool:
+    def request(
+        self, source: pathlib.PurePosixPath, destination: pathlib.PurePosixPath = pathlib.PurePosixPath()
+    ) -> bool:
         """
         Download the given source path within the FTP server's current working directory to the given destination.
 
@@ -318,6 +325,9 @@ class FTPExtractor(Extractor):
                 # Use a semaphore to limit the number of simultaneous downloads to 1 even in multithreaded
                 # environments. This is either a requirement of ftplib or a common requirement of FTP servers.
                 with self.semaphore:
+                    self.dm.info(
+                        "Using a single thread as a requirement of FTP even if multiple threads are available"
+                    )
                     self.ftp.retrbinary(f"RETR {source}", fp.write)
             except ftplib.error_perm:
                 raise RuntimeError(f"Error retrieving {source} from {self.host} in {self.cwd}")
@@ -325,7 +335,7 @@ class FTPExtractor(Extractor):
         # If the exception wasn't raised, the file was downloaded successfully
         return True
 
-    def find(self, pattern: str) -> typing.Iterator[pathlib.Path]:
+    def find(self, pattern: str) -> typing.Iterator[pathlib.PurePosixPath]:
         """
         Create an generator over all files in the FTP server's current working directory matching the given regex
         pattern. The FTP connection must already be opened using `FTPExtractor.__enter__`.
@@ -337,14 +347,14 @@ class FTPExtractor(Extractor):
 
         Yields
         ------
-        pathlib.Path
+        pathlib.PurePosixPath
             The next file matched
         """
         for file_name in self.ftp.nlst():
             if re.match(pattern, file_name):
-                yield pathlib.Path(file_name)
+                yield pathlib.PurePosixPath(file_name)
 
-    def batch_requests(self, pattern: str = ".*") -> list[pathlib.Path]:
+    def batch_requests(self, pattern: str = ".*") -> list[pathlib.PurePosixPath]:
         """
         Get a list of paths in the current working directory to download, optionally matching a given pattern. If no
         pattern is given, match all files. The result of this function can be passed to `FTPExtractor.pool` along with
@@ -357,7 +367,7 @@ class FTPExtractor(Extractor):
 
         Returns
         -------
-        list[pathlib.Path]
+        list[pathlib.PurePosixPath]
             List of paths to files in the current working directory matching the pattern
         """
         return list(self.find(pattern))
