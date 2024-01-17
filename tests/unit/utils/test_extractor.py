@@ -94,10 +94,9 @@ class TestS3Extractor:
         args = [rfp, 0, 5, lfp, None]
 
         extract.dm.kerchunkify = Mock(autospec=True, side_effect=Exception('mocked error'))
-        time.sleep = Mock()
+        time.sleep = Mock()  # avoid actually sleeping for large period of time
 
         with pytest.raises(FileNotFoundError):
             extract.request(*args)
 
-# class TestFTPExtractor:
-#     @staticmethod
+        assert time.sleep.call_count == 5
