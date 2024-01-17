@@ -1,4 +1,6 @@
 import multiprocessing
+import pytest
+import time
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils import extractor
@@ -78,7 +80,24 @@ class TestS3Extractor:
         args = [rfp, 0, 5, lfp, None]
         kwargs = {"file_path": rfp, "scan_indices": 0, "local_file_path": lfp}
 
-        kerchunkify = extract.dm.kerchunkify = Mock(autospec=True)
+        extract.dm.kerchunkify = Mock(autospec=True)
 
         extract.request(*args)
-        kerchunkify.assert_called_once_with(**kwargs)
+        extract.dm.kerchunkify.assert_called_once_with(**kwargs)
+
+    @staticmethod
+    def test_s3_request_fail(mocker, manager_class):
+        extract = extractor.S3Extractor(manager_class)
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, None]
+
+        extract.dm.kerchunkify = Mock(autospec=True, side_effect=Exception('mocked error'))
+        time.sleep = Mock()
+
+        with pytest.raises(FileNotFoundError):
+            extract.request(*args)
+
+# class TestFTPExtractor:
+#     @staticmethod
