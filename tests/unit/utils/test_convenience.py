@@ -33,6 +33,9 @@ class DummyFtpClient:
     def __exit__(self, *exc_args):
         self.contexts -= 1
 
+    def close(self):
+        return Exception
+
     def nlst(self):
         return ["one.txt", "two.dat", "three.dat"]
 

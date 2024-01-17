@@ -1,9 +1,12 @@
 import multiprocessing
 import pytest
 import time
+import ftplib
+from pathlib import PurePosixPath
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils import extractor
+from .test_convenience import DummyFtpClient
 
 
 class DummyPool:
@@ -20,7 +23,7 @@ class DummyPool:
 
 class TestExtractor:
     @staticmethod
-    def test_pool(mocker, manager_class):
+    def test_pool(manager_class):
         extract = extractor.Extractor(manager_class)
 
         request_function = Mock()
@@ -37,7 +40,7 @@ class TestExtractor:
         assert final_result
 
     @staticmethod
-    def test_pool_failed_dl(mocker, manager_class):
+    def test_pool_failed_dl(manager_class):
         extract = extractor.Extractor(manager_class)
 
         request_function = Mock()
@@ -54,7 +57,7 @@ class TestExtractor:
         assert not final_result
 
     @staticmethod
-    def test_pool_no_dl(mocker, manager_class):
+    def test_pool_no_dl(manager_class):
         extract = extractor.Extractor(manager_class)
 
         request_function = Mock()
@@ -72,7 +75,7 @@ class TestExtractor:
 
 class TestS3Extractor:
     @staticmethod
-    def test_s3_request(mocker, manager_class):
+    def test_s3_request(manager_class):
         extract = extractor.S3Extractor(manager_class)
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
@@ -98,5 +101,18 @@ class TestS3Extractor:
 
         with pytest.raises(FileNotFoundError):
             extract.request(*args)
-
         assert time.sleep.call_count == 5
+
+class TestFTPExtractor:
+    @staticmethod
+    def test_pattern(manager_class):
+        extract = extractor.FTPExtractor(manager_class)
+        ftplib.FTP = Mock(return_value=DummyFtpClient())
+        host = "what a great host"
+
+        pattern = ".dat"
+
+        expected_files = [PurePosixPath("two.dat"), PurePosixPath("three.dat")]
+        with extract(host) as ftp:
+            assert list(ftp.find(pattern)) == expected_files
+

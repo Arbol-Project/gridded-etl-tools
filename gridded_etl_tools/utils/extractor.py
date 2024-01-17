@@ -351,7 +351,7 @@ class FTPExtractor(Extractor):
             The next file matched
         """
         for file_name in self.ftp.nlst():
-            if re.match(pattern, file_name):
+            if re.search(pattern, file_name):
                 yield pathlib.PurePosixPath(file_name)
 
     def batch_requests(self, pattern: str = ".*") -> list[pathlib.PurePosixPath]:
