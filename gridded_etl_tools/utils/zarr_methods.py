@@ -603,13 +603,16 @@ class Publish(Transform, Metadata):
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
-                self.store.write_metadata_only(
-                    update_attrs={
-                        "update_in_progress": True,
-                        "update_is_append_only": dataset.get("update_is_append_only"),
-                        "initial_parse": not self.store.has_existing,
-                    }
-                )
+                if self.store.has_existing:
+                    self.store.write_metadata_only(
+                        update_attrs={
+                            "update_in_progress": True,
+                            "update_is_append_only": dataset.get("update_is_append_only"),
+                            "initial_parse": False,
+                        }
+                    )
+                else:
+                    dataset.attrs["initial_parse"] = True
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
                 dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
