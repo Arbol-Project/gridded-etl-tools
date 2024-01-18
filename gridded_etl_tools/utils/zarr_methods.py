@@ -599,7 +599,6 @@ class Publish(Transform, Metadata):
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
-            exists_at_start = self.store.has_existing
             if not isinstance(self.store, IPLD):
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
@@ -608,7 +607,7 @@ class Publish(Transform, Metadata):
                     update_attrs={
                         "update_in_progress": True,
                         "update_is_append_only": dataset.get("update_is_append_only"),
-                        "initial_parse": not exists_at_start,
+                        "initial_parse": not self.store.has_existing,
                     }
                 )
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
