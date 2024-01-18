@@ -612,7 +612,7 @@ class Publish(Transform, Metadata):
                         }
                     )
                 else:
-                    dataset.attrs["initial_parse"] = True
+                    dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
                 dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
@@ -645,7 +645,7 @@ class Publish(Transform, Metadata):
             A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
         """
         dataset = dataset.copy()
-        update_attrs = {"update_in_progress": False, "initial_parse" : False}
+        update_attrs = {"update_in_progress": False, "initial_parse": False}
         # Build a dictionary of attributes to update post-parse
         for attr in self.update_attributes:
             if attr in dataset.attrs:

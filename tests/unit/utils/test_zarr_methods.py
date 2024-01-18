@@ -995,6 +995,23 @@ class TestPublish:
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
     @staticmethod
+    def test_to_zarr_not_ipld_initial(manager_class, mocker):
+        dm = manager_class()
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.move_post_parse_attrs_to_dict = mock.Mock()
+        dm.move_post_parse_attrs_to_dict.return_value = (post_dataset, post_parse_attrs) = (mock.Mock(), mock.Mock())
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+
+        dataset = mock.Mock()
+        dataset.get.return_value = "is it?"
+        dm.to_zarr(dataset, "foo", bar="baz")
+
+        post_dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.store.write_metadata_only.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
+        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+
+    @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
         """
         Integration test that calls to `to_zarr` correctly run three times, updating relevant metadata fields to show a
@@ -1096,6 +1113,7 @@ class TestPublish:
             "update_date_range": ["202012293", "2020123123"],
             "update_previous_end_date": "2020123023",
             "update_in_progress": False,
+            "initial_parse": False,
         }
 
         dataset, update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
@@ -1103,6 +1121,7 @@ class TestPublish:
             "update_in_progress": False,
             "date range": ["2000010100", "2020123123"],
             "update_previous_end_date": "2020123023",
+            "initial_parse": False,
         }
         assert dataset is not fake_original_dataset
         assert fake_original_dataset.attrs == {
@@ -1110,8 +1129,10 @@ class TestPublish:
             "update_date_range": ["202012293", "2020123123"],
             "update_previous_end_date": "2020123023",
             "update_in_progress": False,
+            "initial_parse": False,
         }
         assert dataset.attrs == {
+            "initial_parse": False,
             "update_date_range": ["202012293", "2020123123"],
             "update_in_progress": False,
         }
