@@ -608,7 +608,7 @@ class Publish(Transform, Metadata):
                     update_attrs={
                         "update_in_progress": True,
                         "update_is_append_only": dataset.get("update_is_append_only"),
-                        "initial_parse" : not exists_at_start,
+                        "initial_parse": not exists_at_start,
                     }
                 )
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse

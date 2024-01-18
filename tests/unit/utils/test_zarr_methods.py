@@ -982,7 +982,13 @@ class TestPublish:
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_has_calls(
             [
-                mock.call(update_attrs={"update_in_progress": True, "update_is_append_only": "is it?", "initial_parse" : False}),
+                mock.call(
+                    update_attrs={
+                        "update_in_progress": True,
+                        "update_is_append_only": "is it?",
+                        "initial_parse": False,
+                    }
+                ),
                 mock.call(update_attrs=post_parse_attrs),
             ]
         )
@@ -1004,14 +1010,14 @@ class TestPublish:
             "update_previous_end_date": "2020123023",
             "update_in_progress": False,
             "attribute relevant to updates": 1,
-            "another attribute": True
+            "another attribute": True,
         }
         post_update_dict = {
             "date range": ["2000010100", "2021010523"],
             "update_previous_end_date": "2020123123",
             "update_in_progress": False,
             "another attribute": True,
-            "initial_parse" : False
+            "initial_parse": False,
         }
 
         # Mock datasets
@@ -1050,14 +1056,14 @@ class TestPublish:
             "update_in_progress": False,
             "attribute relevant to updates": 1,
             "another attribute": True,
-            "initial_parse" : True
+            "initial_parse": True,
         }
         post_update_dict = {
             "date range": ["2000010100", "2021010523"],
             "update_previous_end_date": "2020123123",
             "update_in_progress": False,
             "another attribute": True,
-            "initial_parse" : False
+            "initial_parse": False,
         }
 
         # Mock datasets
