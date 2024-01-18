@@ -982,7 +982,7 @@ class TestPublish:
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_has_calls(
             [
-                mock.call(update_attrs={"update_in_progress": True, "update_is_append_only": "is it?"}),
+                mock.call(update_attrs={"update_in_progress": True, "update_is_append_only": "is it?", "initial_parse" : False}),
                 mock.call(update_attrs=post_parse_attrs),
             ]
         )
