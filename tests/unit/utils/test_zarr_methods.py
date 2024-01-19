@@ -5,6 +5,7 @@ import pathlib
 
 from unittest import mock
 
+import numpy
 import pytest
 
 from gridded_etl_tools.utils import store
@@ -484,7 +485,7 @@ class TestTransform:
             def __eq__(self, other):
                 return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
 
-            def __repr__(self):
+            def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
         mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
@@ -529,14 +530,14 @@ class TestTransform:
             def __eq__(self, other):
                 return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
 
-            def __repr__(self):
+            def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
         mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
 
         removed_files = []
 
-        def remove(path):
+        def remove(path):  # pragma NO COVER
             removed_files.append(path)
 
         os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
@@ -574,7 +575,7 @@ class TestTransform:
             def __eq__(self, other):
                 return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
 
-            def __repr__(self):
+            def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
         mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
@@ -1370,8 +1371,7 @@ class TestPublish:
     @staticmethod
     def test_write_initial_zarr_not_ipld(manager_class):
         class DummyHash:
-            def __str__(self):
-                return "QmHiMom"
+            ...
 
         dm = manager_class()
         dm.pre_initial_dataset = mock.Mock()
@@ -1411,3 +1411,335 @@ class TestPublish:
         dm.update_parse_operations.assert_called_once_with(
             original_dataset, update_dataset, insert_times, append_times
         )
+
+    @staticmethod
+    def test_update_setup(manager_class, fake_original_dataset, fake_complex_update_dataset):
+        dm = manager_class()
+        insert_times, update_times = dm.update_setup(fake_original_dataset, fake_complex_update_dataset)
+        assert insert_times == [
+            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+        ] + list(
+            numpy.arange(
+                numpy.datetime64("2021-10-16T00:00:00.000000000"),
+                numpy.datetime64("2021-10-24T00:00:00.000000000"),
+                numpy.timedelta64(1, "[D]"),
+            )
+        ) + [
+            numpy.datetime64("2021-11-11T00:00:00.000000000"),
+            numpy.datetime64("2021-12-11T00:00:00.000000000"),
+        ] + list(
+            numpy.arange(
+                numpy.datetime64("2021-12-25T00:00:00.000000000"),
+                numpy.datetime64("2022-01-06T00:00:00.000000000"),
+                numpy.timedelta64(1, "[D]"),
+            )
+        ) + [
+            numpy.datetime64("2022-01-14T00:00:00.000000000"),
+        ]
+        assert update_times == list(
+            numpy.arange(
+                numpy.datetime64("2022-02-01T00:00:00.000000000"),
+                numpy.datetime64("2022-03-09T00:00:00.000000000"),
+                numpy.timedelta64(1, "[D]"),
+            )
+        )
+
+    @staticmethod
+    def test_update_setup_no_time_dimension(manager_class, fake_original_dataset, fake_complex_update_dataset):
+        update_dataset = fake_complex_update_dataset.sel(time=[numpy.datetime64("2021-10-10T00:00:00.000000000")])
+        update_dataset = update_dataset.squeeze()
+        assert "time" not in update_dataset.dims
+        dm = manager_class()
+        insert_times, update_times = dm.update_setup(fake_original_dataset, update_dataset)
+        assert insert_times == [
+            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+        ]
+        assert update_times == []
+
+    @staticmethod
+    def test_update_parse_operations(manager_class, fake_original_dataset):
+        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
+        update_dataset = object()
+        insert_times = []
+        append_times = [object()]
+
+        dm = manager_class()
+        dm.update_quality_check = mock.Mock()
+        dm.insert_into_dataset = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+
+        dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
+        dm.insert_into_dataset.assert_not_called()
+        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times, original_chunks)
+
+    @staticmethod
+    def test_update_parse_operations_insert_but_overwrite_not_allowed(manager_class, fake_original_dataset):
+        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
+        update_dataset = object()
+        insert_times = [object()]
+        append_times = [object()]
+
+        dm = manager_class()
+        dm.update_quality_check = mock.Mock()
+        dm.insert_into_dataset = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+
+        dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
+        dm.insert_into_dataset.assert_not_called()
+        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times, original_chunks)
+
+    @staticmethod
+    def test_update_parse_operations_insert(manager_class, fake_original_dataset):
+        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
+        update_dataset = object()
+        insert_times = [object()]
+        append_times = []
+
+        dm = manager_class()
+        dm.overwrite_allowed = True
+        dm.update_quality_check = mock.Mock()
+        dm.insert_into_dataset = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+
+        dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
+        dm.insert_into_dataset.assert_called_once_with(
+            fake_original_dataset, update_dataset, insert_times, original_chunks
+        )
+        dm.append_to_dataset.assert_not_called()
+
+    @staticmethod
+    def test_insert_into_dataset_ipld(manager_class):
+        dm = manager_class()
+        dm.dataset_hash = "browns"
+        dm.store = mock.Mock(spec=store.IPLD)
+        dm.prep_update_dataset = mock.Mock()
+        dm.calculate_update_time_ranges = mock.Mock()
+        dm.to_zarr = mock.Mock()
+
+        original_dataset = object()
+        update_dataset = object()
+        insert_times = object()
+        original_chunks = object()
+
+        slice1 = mock.Mock()
+        slice2 = mock.Mock()
+        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        insert_dataset.attrs = {}
+        insert_dataset.sel.side_effect = [slice1, slice2]
+
+        dm.calculate_update_time_ranges.return_value = (
+            (("breakfast", "second breakfast"), ("dusk", "dawn")),
+            (("the shire", "mordor"), ("vegas", "atlantic city")),
+        )
+
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = 42
+
+        dm.insert_into_dataset(original_dataset, update_dataset, insert_times, original_chunks)
+
+        dm.store.mapper.assert_called_once_with()
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
+
+        insert_dataset.sel.assert_has_calls(
+            [mock.call(time=slice("breakfast", "second breakfast")), mock.call(time=slice("dusk", "dawn"))]
+        )
+        dm.to_zarr.assert_has_calls(
+            [
+                mock.call(slice1.drop.return_value, mapper, region={"time": slice("the shire", "mordor")}),
+                mock.call(slice2.drop.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+            ]
+        )
+
+        assert insert_dataset.attrs == {"update_is_append_only": False}
+        assert dm.dataset_hash == "42"
+
+    @staticmethod
+    def test_insert_into_dataset_not_ipld_dry_run(manager_class):
+        dm = manager_class()
+        dm.dataset_hash = "browns"
+        dm.dry_run = True
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.prep_update_dataset = mock.Mock()
+        dm.calculate_update_time_ranges = mock.Mock()
+        dm.to_zarr = mock.Mock()
+
+        original_dataset = object()
+        update_dataset = object()
+        insert_times = object()
+        original_chunks = object()
+
+        slice1 = mock.Mock()
+        slice2 = mock.Mock()
+        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        insert_dataset.attrs = {}
+        insert_dataset.sel.side_effect = [slice1, slice2]
+
+        dm.calculate_update_time_ranges.return_value = (
+            (("breakfast", "second breakfast"), ("dusk", "dawn")),
+            (("the shire", "mordor"), ("vegas", "atlantic city")),
+        )
+
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = 42
+
+        dm.insert_into_dataset(original_dataset, update_dataset, insert_times, original_chunks)
+
+        dm.store.mapper.assert_called_once_with()
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
+
+        insert_dataset.sel.assert_has_calls(
+            [mock.call(time=slice("breakfast", "second breakfast")), mock.call(time=slice("dusk", "dawn"))]
+        )
+        dm.to_zarr.assert_has_calls(
+            [
+                mock.call(slice1.drop.return_value, mapper, region={"time": slice("the shire", "mordor")}),
+                mock.call(slice2.drop.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+            ]
+        )
+
+        assert insert_dataset.attrs == {"update_is_append_only": False}
+        assert dm.dataset_hash == "browns"
+
+    @staticmethod
+    def test_append_to_dataset_ipld(manager_class):
+        dm = manager_class()
+        dm.dataset_hash = "browns"
+        dm.store = mock.Mock(spec=store.IPLD)
+        dm.prep_update_dataset = mock.Mock()
+        dm.calculate_update_time_ranges = mock.Mock()
+        dm.to_zarr = mock.Mock()
+
+        update_dataset = object()
+        insert_times = object()
+        original_chunks = object()
+
+        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        append_dataset.attrs = {}
+
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = 42
+
+        dm.append_to_dataset(update_dataset, insert_times, original_chunks)
+
+        dm.store.mapper.assert_called_once_with()
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+
+        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
+
+        assert append_dataset.attrs == {"update_is_append_only": True}
+        assert dm.dataset_hash == "42"
+
+    @staticmethod
+    def test_append_to_dataset_not_ipld_dry_run(manager_class):
+        dm = manager_class()
+        dm.dataset_hash = "browns"
+        dm.dry_run = True
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.prep_update_dataset = mock.Mock()
+        dm.calculate_update_time_ranges = mock.Mock()
+        dm.to_zarr = mock.Mock()
+
+        update_dataset = object()
+        insert_times = object()
+        original_chunks = object()
+
+        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        append_dataset.attrs = {}
+
+        mapper = dm.store.mapper.return_value
+        mapper.freeze.return_value = 42
+
+        dm.append_to_dataset(update_dataset, insert_times, original_chunks)
+
+        dm.store.mapper.assert_called_once_with()
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+
+        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
+
+        assert append_dataset.attrs == {"update_is_append_only": True}
+        assert dm.dataset_hash == "browns"
+
+    @staticmethod
+    def test_prep_update_dataset(manager_class, fake_complex_update_dataset):
+        # Give the transpose call in prep_update_dataset something to do
+        dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
+        assert dataset.data.dims == ("longitude", "latitude", "time")
+        chunks = {"time": 5}
+        time_values = numpy.arange(
+            numpy.datetime64("2022-02-01T00:00:00.000000000"),
+            numpy.datetime64("2022-03-09T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        dm = manager_class()
+        dm.set_zarr_metadata = lambda x: x
+
+        assert len(dataset.time) > len(time_values)
+
+        dataset = dm.prep_update_dataset(dataset, time_values, chunks)
+
+        assert numpy.array_equal(dataset.time, time_values)
+        dataset.chunks["time"][0] == 5
+        dataset.chunks["latitude"][0] == 4
+        dataset.chunks["longitude"][0] == 4
+        assert dataset.data.dims == ("time", "latitude", "longitude")
+
+    @staticmethod
+    def test_prep_update_dataset_no_time_dimension(manager_class, fake_complex_update_dataset):
+        # Give the transpose call in prep_update_dataset something to do
+        dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
+        assert dataset.data.dims == ("longitude", "latitude", "time")
+        dataset = dataset.sel(time=[numpy.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
+        chunks = {"time": 5}
+        time_values = numpy.arange(
+            numpy.datetime64("2022-02-01T00:00:00.000000000"),
+            numpy.datetime64("2022-03-09T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        dm = manager_class()
+        dm.set_zarr_metadata = lambda x: x
+
+        assert "time" not in dataset.dims
+
+        dataset = dm.prep_update_dataset(dataset, time_values, chunks)
+
+        assert numpy.array_equal(dataset.time, time_values[:1])
+        dataset.chunks["time"][0] == 5
+        dataset.chunks["latitude"][0] == 4
+        dataset.chunks["longitude"][0] == 4
+        assert dataset.data.dims == ("time", "latitude", "longitude")
+
+    @staticmethod
+    def test_calculate_update_time_ranges(
+        manager_class,
+        fake_original_dataset,
+        fake_complex_update_dataset,
+    ):
+        """
+        Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated
+        """
+        # prepare a dataset manager
+        dm = manager_class()
+        dm.set_key_dims()
+        datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
+            fake_original_dataset, fake_complex_update_dataset
+        )
+        # Test that 7 distinct updates -- 6 inserts and 1 append -- have been prepared
+        assert len(regions_indices) == 7
+        # Test that all of the updates are of the expected sizes
+        insert_range_sizes = []
+        for region in regions_indices:
+            index_range = region[1] - region[0]
+            insert_range_sizes.append(index_range)
+        assert insert_range_sizes == [1, 8, 1, 1, 12, 1, 1]
+        # Test that the append is of the expected size
+        append_update = datetime_ranges[-1]
+        append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
+        assert append_size == numpy.timedelta64(35, "D")
