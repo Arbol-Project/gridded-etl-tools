@@ -4,7 +4,7 @@ import time
 import ftplib
 from pathlib import PurePosixPath
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, PropertyMock
 from gridded_etl_tools.utils import extractor
 from .test_convenience import DummyFtpClient
 
@@ -105,7 +105,20 @@ class TestS3Extractor:
 
 class TestFTPExtractor:
     @staticmethod
-    def test_pattern(manager_class):
+    def test_context_manager(manager_class):
+        extract = extractor.FTPExtractor(manager_class)
+        ftplib.FTP = DummyFtpClient()
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            pass
+
+        ftplib.FTP.login.assert_called_once()
+        ftplib.FTP.close.assert_called_once()
+
+
+    @staticmethod
+    def test_batch_requests(manager_class):
         extract = extractor.FTPExtractor(manager_class)
         ftplib.FTP = Mock(return_value=DummyFtpClient())
         host = "what a great host"
@@ -114,5 +127,22 @@ class TestFTPExtractor:
 
         expected_files = [PurePosixPath("two.dat"), PurePosixPath("three.dat")]
         with extract(host) as ftp:
-            assert list(ftp.find(pattern)) == expected_files
+            found_files = ftp.batch_requests(pattern)  # uses find method
+        
+        assert found_files == expected_files
+
+    @staticmethod
+    def test_cwd(mocker, manager_class):
+        extract = extractor.FTPExtractor(manager_class)
+        ftplib.FTP = DummyFtpClient()
+        ftplib.FTP.pwd = Mock(return_value="")
+
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            ftp.cwd = "over there"
+            ftp.cwd
+
+        ftplib.FTP.pwd.assert_called_once()
+        ftplib.FTP.cwd.assert_called_once_with("over there")
 

@@ -14,6 +14,7 @@ class DummyFtpClient:
     def __init__(self):
         self.contexts = 0
         self.login = Mock()
+        self.close = Mock()
         self.cwd = Mock()
         self.commands = []
         self.files = {
@@ -36,7 +37,7 @@ class DummyFtpClient:
     def close(self):
         return Exception
 
-    def nlst(self):
+    def nlst(self, *args):
         return ["one.txt", "two.dat", "three.dat"]
 
     def sendcmd(self, command):
@@ -53,6 +54,12 @@ class DummyFtpClient:
 
     def size(self, filename):
         return len(self.files[filename]["contents"])
+    
+    def pwd(self):
+        return "over here"
+
+    class error_perm(Exception):
+        pass
 
 
 class TestConvenience:
