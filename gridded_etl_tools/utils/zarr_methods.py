@@ -1,21 +1,20 @@
 import datetime
-import glob
 import multiprocessing
-import json
-import os
-import pathlib
-import pprint
-import random
-import re
 import time
+import json
+import re
+import fsspec
+import pprint
+import dask
+import pathlib
+import glob
+import os
+import random
+import s3fs
 
 from contextlib import nullcontext
 from subprocess import Popen
 from typing import Any
-
-import dask
-import fsspec
-import s3fs
 
 import pandas as pd
 import numpy as np
@@ -600,17 +599,20 @@ class Publish(Transform, Metadata):
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
-            exists_at_start = self.store.has_existing
-            if not isinstance(self.store, IPLD) and exists_at_start:
+            if not isinstance(self.store, IPLD):
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
-                self.store.write_metadata_only(
-                    update_attrs={
-                        "update_in_progress": True,
-                        "update_is_append_only": dataset.get("update_is_append_only"),
-                    }
-                )
+                if self.store.has_existing:
+                    self.store.write_metadata_only(
+                        update_attrs={
+                            "update_in_progress": True,
+                            "update_is_append_only": dataset.get("update_is_append_only"),
+                            "initial_parse": False,
+                        }
+                    )
+                else:
+                    dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
                 dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
@@ -620,7 +622,7 @@ class Publish(Transform, Metadata):
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
             # Don't use update-in-progress metadata flag on IPLD
-            if not isinstance(self.store, IPLD) and exists_at_start:
+            if not isinstance(self.store, IPLD):
                 # Indicate in metadata that update is complete.
                 self.info("Writing metadata after writing data to indicate write is finished.")
                 self.store.write_metadata_only(update_attrs=post_parse_attrs)
@@ -643,7 +645,7 @@ class Publish(Transform, Metadata):
             A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
         """
         dataset = dataset.copy()
-        update_attrs = {"update_in_progress": False}
+        update_attrs = {"update_in_progress": False, "initial_parse": False}
         # Build a dictionary of attributes to update post-parse
         for attr in self.update_attributes:
             if attr in dataset.attrs:
@@ -721,7 +723,7 @@ class Publish(Transform, Metadata):
     def transformed_dataset(self):
         """
         Overall method to return the fully processed and transformed dataset
-        Defaults to returning zarr_json_to_dataset but can be overridden to return a custom transformation instead
+        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
         """
         return self.zarr_json_to_dataset()
 
@@ -812,7 +814,10 @@ class Publish(Transform, Metadata):
 
         The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
         """
-        if self.hindcast:
+        if not self.forecast and not self.ensemble:
+            self.standard_dims = ["time", "latitude", "longitude"]
+            self.time_dim = "time"
+        elif self.hindcast:
             self.standard_dims = [
                 "hindcast_reference_time",
                 "forecast_reference_offset",
@@ -828,9 +833,6 @@ class Publish(Transform, Metadata):
         elif self.forecast:
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
-        else:
-            self.standard_dims = ["time", "latitude", "longitude"]
-            self.time_dim = "time"
 
     # INITIAL
 

@@ -98,6 +98,7 @@ def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: 
         "update_previous_end_date": "2020123123",
         "another attribute": True,
         "update_in_progress": False,
+        "initial_parse": False,
     }
     # Mock datasets
     dataset = fake_original_dataset

@@ -2,6 +2,7 @@ import os
 import pytest
 import shutil
 
+from unittest.mock import Mock
 from ..common import (
     run_etl,
     clean_up_input_paths,
@@ -68,6 +69,7 @@ def setup_and_teardown_per_test(
     """
     # Force ipns_publish to use offline mode to make tests run faster
     mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.pre_parse_quality_check", Mock())  # speeds things up
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
     mocker.patch(
         "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
