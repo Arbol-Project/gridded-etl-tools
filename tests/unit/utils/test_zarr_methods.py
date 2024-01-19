@@ -1344,28 +1344,22 @@ class TestPublish:
         insert_times, update_times = dm.update_setup(fake_original_dataset, fake_complex_update_dataset)
         assert insert_times == [
             numpy.datetime64("2021-10-10T00:00:00.000000000"),
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-17T00:00:00.000000000"),
-            numpy.datetime64("2021-10-18T00:00:00.000000000"),
-            numpy.datetime64("2021-10-19T00:00:00.000000000"),
-            numpy.datetime64("2021-10-20T00:00:00.000000000"),
-            numpy.datetime64("2021-10-21T00:00:00.000000000"),
-            numpy.datetime64("2021-10-22T00:00:00.000000000"),
-            numpy.datetime64("2021-10-23T00:00:00.000000000"),
+        ] + list(
+            numpy.arange(
+                numpy.datetime64("2021-10-16T00:00:00.000000000"),
+                numpy.datetime64("2021-10-24T00:00:00.000000000"),
+                numpy.timedelta64(1, "[D]"),
+            )
+        ) + [
             numpy.datetime64("2021-11-11T00:00:00.000000000"),
             numpy.datetime64("2021-12-11T00:00:00.000000000"),
-            numpy.datetime64("2021-12-25T00:00:00.000000000"),
-            numpy.datetime64("2021-12-26T00:00:00.000000000"),
-            numpy.datetime64("2021-12-27T00:00:00.000000000"),
-            numpy.datetime64("2021-12-28T00:00:00.000000000"),
-            numpy.datetime64("2021-12-29T00:00:00.000000000"),
-            numpy.datetime64("2021-12-30T00:00:00.000000000"),
-            numpy.datetime64("2021-12-31T00:00:00.000000000"),
-            numpy.datetime64("2022-01-01T00:00:00.000000000"),
-            numpy.datetime64("2022-01-02T00:00:00.000000000"),
-            numpy.datetime64("2022-01-03T00:00:00.000000000"),
-            numpy.datetime64("2022-01-04T00:00:00.000000000"),
-            numpy.datetime64("2022-01-05T00:00:00.000000000"),
+        ] + list(
+            numpy.arange(
+                numpy.datetime64("2021-12-25T00:00:00.000000000"),
+                numpy.datetime64("2022-01-06T00:00:00.000000000"),
+                numpy.timedelta64(1, "[D]"),
+            )
+        ) + [
             numpy.datetime64("2022-01-14T00:00:00.000000000"),
         ]
         assert update_times == list(
