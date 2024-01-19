@@ -1597,6 +1597,7 @@ class TestPublish:
     def test_prep_update_dataset(manager_class, fake_complex_update_dataset):
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
+        assert dataset.data.dims == ("longitude", "latitude", "time")
         chunks = {"time": 5}
         time_values = numpy.arange(
             numpy.datetime64("2022-02-01T00:00:00.000000000"),
@@ -1614,16 +1615,13 @@ class TestPublish:
         dataset.chunks["time"][0] == 5
         dataset.chunks["latitude"][0] == 4
         dataset.chunks["longitude"][0] == 4
-
-        # TODO: I'd like to be able to verify order of coordinates after transpose, but can't figure out how get
-        # coordinate order programatically in xarray. Ideally we'd have something like:
-        #
-        #     assert dataset.coords_in_order == ["time", "latitude", "longitude"]
+        assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
     def test_prep_update_dataset_no_time_dimension(manager_class, fake_complex_update_dataset):
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
+        assert dataset.data.dims == ("longitude", "latitude", "time")
         dataset = dataset.sel(time=[numpy.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
         chunks = {"time": 5}
         time_values = numpy.arange(
@@ -1642,11 +1640,7 @@ class TestPublish:
         dataset.chunks["time"][0] == 5
         dataset.chunks["latitude"][0] == 4
         dataset.chunks["longitude"][0] == 4
-
-        # TODO: I'd like to be able to verify order of coordinates after transpose, but can't figure out how get
-        # coordinate order programatically in xarray. Ideally we'd have something like:
-        #
-        #     assert dataset.coords_in_order == ["time", "latitude", "longitude"]
+        assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
     def test_calculate_update_time_ranges(
