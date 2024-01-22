@@ -864,7 +864,6 @@ class Publish(Transform, Metadata):
         """
         original_dataset = self.store.dataset()
         update_dataset = self.transformed_dataset()
-        self.pre_chunk_dataset = update_dataset
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
@@ -1044,6 +1043,7 @@ class Publish(Transform, Metadata):
             update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals}).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
+        self.pre_chunk_dataset = update_dataset
         update_dataset = update_dataset.chunk(new_chunks)
         update_dataset = self.set_zarr_metadata(update_dataset)
 
