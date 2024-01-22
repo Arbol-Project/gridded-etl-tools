@@ -864,6 +864,7 @@ class Publish(Transform, Metadata):
         """
         original_dataset = self.store.dataset()
         update_dataset = self.transformed_dataset()
+        self.pre_chunk_dataset = update_dataset
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
