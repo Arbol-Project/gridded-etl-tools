@@ -98,12 +98,13 @@ class TestS3Extractor:
         lfp = "/local/sand/depo/castle1.json"
         args = [rfp, 0, 5, lfp, None]
 
-        extract.dm.kerchunkify = Mock(autospec=True, side_effect=Exception('mocked error'))
+        extract.dm.kerchunkify = Mock(autospec=True, side_effect=Exception("mocked error"))
         time.sleep = Mock()  # avoid actually sleeping for large period of time
 
         with pytest.raises(FileNotFoundError):
             extract.request(*args)
         assert time.sleep.call_count == 5
+
 
 class TestFTPExtractor:
     @staticmethod
@@ -115,7 +116,7 @@ class TestFTPExtractor:
 
         with extract(host) as ftp:
             pass
-        
+
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once()
         ftp_client.close.assert_called_once()
@@ -131,7 +132,7 @@ class TestFTPExtractor:
         expected_files = [pathlib.PurePosixPath("two.dat"), pathlib.PurePosixPath("three.dat")]
         with extract(host) as ftp:
             found_files = ftp.batch_requests(pattern)  # uses find method
-        
+
         assert found_files == expected_files
 
     @staticmethod
@@ -185,6 +186,4 @@ class TestFTPExtractor:
         assert ftp_client.host == host
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once_with()
-        assert ftp_client.commands == [
-            "RETR two.dat"
-        ]
+        assert ftp_client.commands == ["RETR two.dat"]
