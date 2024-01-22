@@ -313,7 +313,7 @@ class FTPExtractor(Extractor):
         """
         # Build a file name using the source name if an existing directory was given as the destination. Otherwise, use
         # the destination as the full path to the output file.
-        if destination.is_dir():
+        if pathlib.Path(destination).is_dir():
             output = destination / source.name
         else:
             output = destination
@@ -351,7 +351,7 @@ class FTPExtractor(Extractor):
             The next file matched
         """
         for file_name in self.ftp.nlst():
-            if re.match(pattern, file_name):
+            if re.search(pattern, file_name):
                 yield pathlib.PurePosixPath(file_name)
 
     def batch_requests(self, pattern: str = ".*") -> list[pathlib.PurePosixPath]:
