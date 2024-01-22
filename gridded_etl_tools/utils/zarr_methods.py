@@ -40,7 +40,7 @@ class Transform(Convenience):
     # KERCHUNKING
 
     def create_zarr_json(
-        self, force_overwrite: bool = True, file_filter: str | None = None, outfile_path: str | None = None
+        self, force_overwrite: bool = True, file_filters: list[str] | None = None, outfile_path: str | None = None
     ):
         """
         Convert list of local input files (MultiZarr) to a single JSON representing a "virtual" Zarr
@@ -57,8 +57,8 @@ class Transform(Convenience):
         force_overwrite : bool, optional
             Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
-        file_filter
-            A string used to further filter down input files for kerchunkifying.
+        file_filters
+            A list of strings used to further filter down input files for kerchunkifying.
             Useful if you want to kerchunkify only a subset of available files.
             Defaults to None.
         outfile_path
@@ -80,8 +80,10 @@ class Transform(Convenience):
                     )
                 ]
                 # Further filter down which files are processsed using an optional file filter string or integer
-                if file_filter:
-                    input_files_list = [fil for fil in input_files_list if file_filter in str(fil)]
+                if file_filters:
+                    input_files_list = [
+                        fil for fil in input_files_list if any(file_filter in fil for file_filter in file_filters)
+                    ]
                 # Now prepare the MultiZarr
                 self.info(
                     f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} "
@@ -599,17 +601,20 @@ class Publish(Transform, Metadata):
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
-            exists_at_start = self.store.has_existing
-            if not isinstance(self.store, IPLD) and exists_at_start:
+            if not isinstance(self.store, IPLD):
                 # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
-                self.store.write_metadata_only(
-                    update_attrs={
-                        "update_in_progress": True,
-                        "update_is_append_only": dataset.get("update_is_append_only"),
-                    }
-                )
+                if self.store.has_existing:
+                    self.store.write_metadata_only(
+                        update_attrs={
+                            "update_in_progress": True,
+                            "update_is_append_only": dataset.get("update_is_append_only"),
+                            "initial_parse": False,
+                        }
+                    )
+                else:
+                    dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
                 dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
@@ -619,7 +624,7 @@ class Publish(Transform, Metadata):
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
             # Don't use update-in-progress metadata flag on IPLD
-            if not isinstance(self.store, IPLD) and exists_at_start:
+            if not isinstance(self.store, IPLD):
                 # Indicate in metadata that update is complete.
                 self.info("Writing metadata after writing data to indicate write is finished.")
                 self.store.write_metadata_only(update_attrs=post_parse_attrs)
@@ -642,7 +647,7 @@ class Publish(Transform, Metadata):
             A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
         """
         dataset = dataset.copy()
-        update_attrs = {"update_in_progress": False}
+        update_attrs = {"update_in_progress": False, "initial_parse": False}
         # Build a dictionary of attributes to update post-parse
         for attr in self.update_attributes:
             if attr in dataset.attrs:
@@ -717,7 +722,7 @@ class Publish(Transform, Metadata):
 
         return dataset
 
-    def transformed_dataset(self, custom: bool = False):
+    def transformed_dataset(self):
         """
         Overall method to return the fully processed and transformed dataset
         Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead

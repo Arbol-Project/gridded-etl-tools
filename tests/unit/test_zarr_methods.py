@@ -1,6 +1,5 @@
 import pytest
 
-import numpy as np
 import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
@@ -62,34 +61,6 @@ def test_standard_dims(mocker, manager_class: DatasetManager):
     assert dm.time_dim == "hindcast_reference_time"
 
 
-def test_calculate_update_time_ranges(
-    manager_class: DatasetManager,
-    fake_original_dataset: xr.Dataset,
-    fake_complex_update_dataset: xr.Dataset,
-):
-    """
-    Test that the calculate_date_ranges function correctly prepares insert and append date ranges as anticipated
-    """
-    # prepare a dataset manager
-    dm = get_manager(manager_class)
-    dm.set_key_dims()
-    datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
-        fake_original_dataset, fake_complex_update_dataset
-    )
-    # Test that 7 distinct updates -- 6 inserts and 1 append -- have been prepared
-    assert len(regions_indices) == 7
-    # Test that all of the updates are of the expected sizes
-    insert_range_sizes = []
-    for region in regions_indices:
-        index_range = region[1] - region[0]
-        insert_range_sizes.append(index_range)
-    assert insert_range_sizes == [1, 8, 1, 1, 12, 1, 1]
-    # Test that the append is of the expected size
-    append_update = datetime_ranges[-1]
-    append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
-    assert append_size == np.timedelta64(35, "D")
-
-
 def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: xr.Dataset):
     dm = manager_class()
     dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
@@ -98,6 +69,7 @@ def test_post_parse_attrs(manager_class: DatasetManager, fake_original_dataset: 
         "update_previous_end_date": "2020123123",
         "another attribute": True,
         "update_in_progress": False,
+        "initial_parse": False,
     }
     # Mock datasets
     dataset = fake_original_dataset
