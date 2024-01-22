@@ -24,7 +24,7 @@ class DummyPool:
 class TestExtractor:
     @staticmethod
     def test_pool(manager_class):
-        extract = extractor.Extractor(manager_class)
+        extract = extractor.Extractor(manager_class())
 
         request_function = Mock()
         batch_processor = [request_function] * 3
@@ -41,7 +41,7 @@ class TestExtractor:
 
     @staticmethod
     def test_pool_failed_dl(manager_class):
-        extract = extractor.Extractor(manager_class)
+        extract = extractor.Extractor(manager_class())
 
         request_function = Mock()
         batch_processor = [request_function] * 3
@@ -58,7 +58,7 @@ class TestExtractor:
 
     @staticmethod
     def test_pool_no_dl(manager_class):
-        extract = extractor.Extractor(manager_class)
+        extract = extractor.Extractor(manager_class())
 
         request_function = Mock()
         batch_processor = [request_function] * 3
@@ -76,7 +76,7 @@ class TestExtractor:
 class TestS3Extractor:
     @staticmethod
     def test_s3_request(manager_class):
-        extract = extractor.S3Extractor(manager_class)
+        extract = extractor.S3Extractor(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
@@ -90,13 +90,13 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_fail(mocker, manager_class):
-        extract = extractor.S3Extractor(manager_class)
+        extract = extractor.S3Extractor(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
         args = [rfp, 0, 5, lfp, None]
 
-        extract.dm.kerchunkify = Mock(autospec=True, side_effect=Exception("mocked error"))
+        extract.dm.kerchunkify = Mock(side_effect=Exception("mocked error"))
         time.sleep = Mock()  # avoid actually sleeping for large period of time
 
         with pytest.raises(FileNotFoundError):
@@ -107,7 +107,7 @@ class TestS3Extractor:
 class TestFTPExtractor:
     @staticmethod
     def test_context_manager(manager_class):
-        extract = extractor.FTPExtractor(manager_class)
+        extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.close = Mock()
         host = "what a great host"
@@ -121,7 +121,7 @@ class TestFTPExtractor:
 
     @staticmethod
     def test_batch_requests(manager_class):
-        extract = extractor.FTPExtractor(manager_class)
+        extract = extractor.FTPExtractor(manager_class())
         host = "what a great host"
 
         pattern = ".dat"
@@ -134,7 +134,7 @@ class TestFTPExtractor:
 
     @staticmethod
     def test_cwd(manager_class):
-        extract = extractor.FTPExtractor(manager_class)
+        extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.pwd = Mock(return_value="")
 
@@ -153,7 +153,7 @@ class TestFTPExtractor:
         Test that CWD returns errors as expected if `cwd` is called when a connection
         is closed
         """
-        extract = extractor.FTPExtractor(manager_class)
+        extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.login = Mock(side_effect=ftp_client.__enter__)
         ftp_client.close = Mock(side_effect=ftp_client.__exit__)
@@ -170,7 +170,7 @@ class TestFTPExtractor:
 
     @staticmethod
     def test_requests(mocker, manager_class, tmp_path):
-        extract = extractor.FTPExtractor(manager_class)
+        extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
 
