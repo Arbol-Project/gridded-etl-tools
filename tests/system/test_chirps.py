@@ -5,7 +5,6 @@ import pytest
 import xarray
 import shutil
 import glob
-import datetime
 
 from unittest.mock import Mock
 

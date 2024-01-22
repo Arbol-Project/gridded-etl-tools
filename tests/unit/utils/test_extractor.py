@@ -112,7 +112,7 @@ class TestFTPExtractor:
         ftp_client.close = Mock()
         host = "what a great host"
 
-        with extract(host) as ftp:
+        with extract(host) as ftp:  # noqa: F841
             pass
 
         assert ftp_client.contexts == 0
@@ -122,7 +122,6 @@ class TestFTPExtractor:
     @staticmethod
     def test_batch_requests(manager_class):
         extract = extractor.FTPExtractor(manager_class)
-        ftp_client = ftplib.FTP = DummyFtpClient()
         host = "what a great host"
 
         pattern = ".dat"
