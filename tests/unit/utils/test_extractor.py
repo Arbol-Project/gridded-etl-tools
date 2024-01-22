@@ -39,7 +39,7 @@ class TestExtractor:
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
         starmap.assert_called_with(batch_processor, batch_requests)
-        assert final_result
+        assert final_result is True
 
     @staticmethod
     def test_pool_failed_dl(manager_class):
@@ -56,7 +56,7 @@ class TestExtractor:
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
         starmap.assert_called_with(batch_processor, batch_requests)
-        assert not final_result
+        assert final_result is False
 
     @staticmethod
     def test_pool_no_dl(manager_class):
@@ -66,7 +66,7 @@ class TestExtractor:
         batch_processor = [request_function] * 3
         batch_requests = []
 
-        threadpool = multiprocessing.pool.ThreadPool = Mock(side_effect=DummyPool())
+        threadpool = multiprocessing.pool.ThreadPool = Mock(side_effect=ValueError)
         starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[])
 
         final_result = extract.pool(batch_processor, batch_requests)
