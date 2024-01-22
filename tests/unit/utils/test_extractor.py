@@ -3,10 +3,8 @@ import pytest
 import time
 import ftplib
 import pathlib
-import io
-import _io
 
-from unittest.mock import Mock, MagicMock, PropertyMock, patch
+from unittest.mock import Mock
 from gridded_etl_tools.utils import extractor
 from .test_convenience import DummyFtpClient
 

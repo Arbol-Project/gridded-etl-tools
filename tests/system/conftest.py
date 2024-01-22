@@ -23,6 +23,14 @@ def heads_path(root):
 
 
 @pytest.fixture
+def extracted_input_path(root):
+    """
+    Paths where test_initial input will be generated
+    """
+    return root / pathlib.Path("chirps_extracted_input")
+
+
+@pytest.fixture
 def initial_input_path(root):
     """
     Paths where test_initial input will be generated
