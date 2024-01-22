@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import pathlib
+import ftplib
 from unittest.mock import Mock
 
 import numpy as np
@@ -14,7 +15,6 @@ class DummyFtpClient:
     def __init__(self):
         self.contexts = 0
         self.login = Mock()
-        self.close = Mock()
         self.cwd = Mock()
         self.commands = []
         self.files = {
@@ -54,12 +54,11 @@ class DummyFtpClient:
 
     def size(self, filename):
         return len(self.files[filename]["contents"])
-    
-    def pwd(self):
-        return "over here"
 
-    class error_perm(Exception):
-        pass
+    def pwd(self):
+        if self.contexts == 0:
+            raise ftplib.error_perm
+        return "over here"
 
 
 class TestConvenience:

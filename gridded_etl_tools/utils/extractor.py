@@ -313,7 +313,7 @@ class FTPExtractor(Extractor):
         """
         # Build a file name using the source name if an existing directory was given as the destination. Otherwise, use
         # the destination as the full path to the output file.
-        if destination.is_dir():
+        if pathlib.Path(destination).is_dir():
             output = destination / source.name
         else:
             output = destination

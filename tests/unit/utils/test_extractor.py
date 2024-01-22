@@ -2,9 +2,11 @@ import multiprocessing
 import pytest
 import time
 import ftplib
-from pathlib import PurePosixPath
+import pathlib
+import io
+import _io
 
-from unittest.mock import Mock, patch, PropertyMock
+from unittest.mock import Mock, MagicMock, PropertyMock, patch
 from gridded_etl_tools.utils import extractor
 from .test_convenience import DummyFtpClient
 
@@ -107,35 +109,36 @@ class TestFTPExtractor:
     @staticmethod
     def test_context_manager(manager_class):
         extract = extractor.FTPExtractor(manager_class)
-        ftplib.FTP = DummyFtpClient()
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.close = Mock()
         host = "what a great host"
 
         with extract(host) as ftp:
             pass
-
-        ftplib.FTP.login.assert_called_once()
-        ftplib.FTP.close.assert_called_once()
-
+        
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once()
+        ftp_client.close.assert_called_once()
 
     @staticmethod
     def test_batch_requests(manager_class):
         extract = extractor.FTPExtractor(manager_class)
-        ftplib.FTP = Mock(return_value=DummyFtpClient())
+        ftp_client = ftplib.FTP = DummyFtpClient()
         host = "what a great host"
 
         pattern = ".dat"
 
-        expected_files = [PurePosixPath("two.dat"), PurePosixPath("three.dat")]
+        expected_files = [pathlib.PurePosixPath("two.dat"), pathlib.PurePosixPath("three.dat")]
         with extract(host) as ftp:
             found_files = ftp.batch_requests(pattern)  # uses find method
         
         assert found_files == expected_files
 
     @staticmethod
-    def test_cwd(mocker, manager_class):
+    def test_cwd(manager_class):
         extract = extractor.FTPExtractor(manager_class)
-        ftplib.FTP = DummyFtpClient()
-        ftplib.FTP.pwd = Mock(return_value="")
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.pwd = Mock(return_value="")
 
         host = "what a great host"
 
@@ -143,6 +146,45 @@ class TestFTPExtractor:
             ftp.cwd = "over there"
             ftp.cwd
 
-        ftplib.FTP.pwd.assert_called_once()
-        ftplib.FTP.cwd.assert_called_once_with("over there")
+        ftp_client.pwd.assert_called_once()
+        ftp_client.cwd.assert_called_once_with("over there")
 
+    @staticmethod
+    def test_cwd_connection_not_open(mocker, manager_class):
+        """
+        Test that CWD returns errors as expected if `cwd` is called when a connection
+        is closed
+        """
+        extract = extractor.FTPExtractor(manager_class)
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.login = Mock(side_effect=ftp_client.__enter__)
+        ftp_client.close = Mock(side_effect=ftp_client.__exit__)
+
+        host = "what a great host"
+
+        with extract(host) as ftp_session:
+            ftp_session.cwd
+
+        with pytest.raises(RuntimeError):
+            ftp_session.cwd
+
+        # TODO create a test for the cwd.setter
+
+    @staticmethod
+    def test_requests(mocker, manager_class, tmp_path):
+        extract = extractor.FTPExtractor(manager_class)
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
+
+        host = "what a great host"
+
+        out_path = pathlib.PurePosixPath(tmp_path)
+        with extract(host) as ftp:
+            ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
+
+        assert ftp_client.host == host
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once_with()
+        assert ftp_client.commands == [
+            "RETR two.dat"
+        ]
