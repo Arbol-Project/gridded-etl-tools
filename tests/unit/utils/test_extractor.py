@@ -32,7 +32,7 @@ class TestExtractor:
         thread_count = max(1, multiprocessing.cpu_count() - 1)
 
         threadpool = multiprocessing.pool.ThreadPool = DummyPool()
-        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[True])
+        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[True, False, True])
 
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
@@ -49,7 +49,7 @@ class TestExtractor:
         thread_count = max(1, multiprocessing.cpu_count() - 1)
 
         threadpool = multiprocessing.pool.ThreadPool = DummyPool()
-        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[])
+        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[False, False, False])
 
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
