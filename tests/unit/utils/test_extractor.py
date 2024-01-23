@@ -185,11 +185,28 @@ class TestFTPExtractor:
         host = "what a great host"
 
         with extract(host) as ftp:
+            assert ftp.cwd == pathlib.PosixPath("")
             ftp.cwd = "over there"
-            ftp.cwd
 
         ftp_client.pwd.assert_called_once()
         ftp_client.cwd.assert_called_once_with("over there")
+
+    @staticmethod
+    def test_cwd_setter_no_such_path(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.pwd = Mock(return_value="")
+        ftp_client.nlst = Mock(return_value=None)
+
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.cwd = "over there"
+
+        ftp_client.pwd.assert_not_called()
+        ftp_client.cwd.assert_not_called()
+        ftp_client.nlst.assert_called_once_with("over there")
 
     @staticmethod
     def test_cwd_connection_not_open(mocker, manager_class):
