@@ -505,7 +505,7 @@ class TestTransform:
         dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
 
         expected = [
-            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
             for n in range(N)
         ]
         assert subprocesses == expected
@@ -554,7 +554,7 @@ class TestTransform:
         dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
 
         expected = [
-            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
             for n in range(N)
         ]
         assert subprocesses == expected
@@ -598,7 +598,7 @@ class TestTransform:
         dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", keep_originals=True)
 
         expected = [
-            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
             for n in range(N)
         ]
         assert subprocesses == expected
@@ -642,7 +642,7 @@ class TestTransform:
         dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", invert_file_order=True)
 
         expected = [
-            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.cat", f"fido_{n:03d}.dog"], waited=True, append=False)
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}", f"fido_{n:03d}.dog"], waited=True, append=False)
             for n in range(N)
         ]
         assert subprocesses == expected

@@ -384,7 +384,7 @@ class Transform(Convenience):
         # set up and run conversion subprocess on command line
         commands = []
         for existing_file in input_files:
-            new_file = existing_file.with_suffix(replacement_suffix)
+            new_file = existing_file.with_suffix("")
             if invert_file_order:
                 filenames = [new_file, existing_file]
             else:
@@ -1018,6 +1018,7 @@ class Publish(Transform, Metadata):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
+
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         if not self.dry_run:
