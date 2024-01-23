@@ -109,7 +109,6 @@ class TestS3Extractor:
         rfp = "t4://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
         args = [rfp, 0, 5, lfp, None]
-        kwargs = {"file_path": rfp, "scan_indices": 0, "local_file_path": lfp}
 
         extract.dm.kerchunkify = Mock(autospec=True)
 
@@ -119,7 +118,7 @@ class TestS3Extractor:
         extract.dm.kerchunkify.assert_not_called()
 
     @staticmethod
-    def test_s3_request_fail(mocker, manager_class):
+    def test_s3_request_fail(manager_class):
         extract = extractor.S3Extractor(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
@@ -225,7 +224,7 @@ class TestFTPExtractor:
         ftp_client.cwd.assert_called_once_with("over there")
 
     @staticmethod
-    def test_cwd_connection_not_open(mocker, manager_class):
+    def test_cwd_connection_not_open(manager_class):
         """
         Test that CWD returns errors as expected if `cwd` is called when a connection
         is closed
@@ -246,7 +245,7 @@ class TestFTPExtractor:
         # TODO create a test for the cwd.setter
 
     @staticmethod
-    def test_request(mocker, manager_class, tmp_path):
+    def test_request(manager_class, tmp_path):
         extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
@@ -280,7 +279,7 @@ class TestFTPExtractor:
         assert ftp_client.commands == ["RETR two.dat"]
 
     @staticmethod
-    def test_request_client_error(mocker, manager_class, tmp_path):
+    def test_request_client_error(manager_class, tmp_path):
         extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftplib.error_perm)
