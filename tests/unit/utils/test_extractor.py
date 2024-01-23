@@ -142,12 +142,26 @@ class TestFTPExtractor:
         ftp_client.close = Mock()
         host = "what a great host"
 
-        with extract(host) as ftp:  # noqa: F841
+        with extract(host):
             pass
 
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once()
         ftp_client.close.assert_called_once()
+
+    @staticmethod
+    def test_context_manager_no_host(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.close = Mock()
+
+        with pytest.raises(ValueError):
+            with extract:
+                pass
+
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_not_called()
+        ftp_client.close.assert_not_called()
 
     @staticmethod
     def test_batch_requests(manager_class):
