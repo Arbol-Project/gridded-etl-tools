@@ -384,7 +384,13 @@ class Transform(Convenience):
         # set up and run conversion subprocess on command line
         commands = []
         for existing_file in input_files:
-            new_file = existing_file.with_suffix("")
+            # CDO specifies the extension via an environment variable, not an argument...
+            if "cdo" in command_text:
+                new_file = existing_file.with_suffix("")
+                os.environ["CDO_FILE_SUFFIX"] = replacement_suffix
+            # ...but other tools use arguments
+            else:
+                new_file = existing_file.with_suffix(replacement_suffix)
             if invert_file_order:
                 filenames = [new_file, existing_file]
             else:
@@ -393,7 +399,6 @@ class Transform(Convenience):
             # objects
             commands.append(list(map(str, command_text + filenames)))
         # CDO responds to an environment variable when assigning file suffixes
-        os.environ["CDO_FILE_SUFFIX"] = replacement_suffix
         # Convert each command to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -413,7 +418,7 @@ class Transform(Convenience):
         self.info("Cleanup finished")
 
     def convert_to_lowest_common_time_denom(
-        self, raw_files: list, replacement_suffix: str = "", keep_originals: bool = False
+        self, raw_files: list, keep_originals: bool = False
     ):
         """
         Decompose a set of raw files aggregated by week, month, year, or other irregular time denominator
@@ -434,7 +439,7 @@ class Transform(Convenience):
         self.parallel_subprocess_files(
             input_files=raw_files,
             command_text=command_text,
-            replacement_suffix=replacement_suffix,
+            replacement_suffix=".nc4",
             keep_originals=keep_originals,
         )
 
@@ -458,7 +463,7 @@ class Transform(Convenience):
         # convert raw NetCDFs to NetCDF4-Classics in parallel
         self.info(f"Converting {(len(raw_files))} NetCDFs to NetCDF4 Classic files")
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
-        self.parallel_subprocess_files(raw_files, command_text, ".nc4", keep_originals)
+        self.parallel_subprocess_files(input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals)
 
     def archive_original_files(self, files: list):
         """

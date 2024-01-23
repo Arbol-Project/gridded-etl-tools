@@ -558,7 +558,54 @@ class TestTransform:
             for n in range(N)
         ]
         assert subprocesses == expected
-        assert os.environ["CDO_FILE_SUFFIX"] == ".cat"
+        assert "CDO_FILE_SUFFIX" not in os.environ
+
+    @staticmethod
+    def test_parallel_subprocess_files_replacement_suffix_cdo(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):  # pragma NO COVER
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):  # pragma NO COVER
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+        os.environ = {}
+
+        N = 250
+        dm = manager_class()
+        dm.archive_original_files = mock.Mock()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        assert "CDO_FILE_SUFFIX" not in os.environ
+
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
+
+        expected = [
+            DummyPopen(["cdo", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+        assert os.environ["CDO_FILE_SUFFIX"] == ".nc4"
 
     @staticmethod
     def test_parallel_subprocess_files_keep_originals(mocker, manager_class):
@@ -659,7 +706,7 @@ class TestTransform:
         dm.parallel_subprocess_files.assert_called_once_with(
             input_files=["a", "b", "c"],
             command_text=["cdo", "-f", "nc4c", "splitsel,1"],
-            replacement_suffix="",
+            replacement_suffix=".nc4",
             keep_originals=False,
         )
 
@@ -670,19 +717,6 @@ class TestTransform:
             dm.convert_to_lowest_common_time_denom([])
 
     @staticmethod
-    def test_convert_to_lowest_common_time_denom_replacement_suffix(manager_class):
-        dm = manager_class()
-        dm.parallel_subprocess_files = mock.Mock()
-
-        dm.convert_to_lowest_common_time_denom(["a", "b", "c"], replacement_suffix=".nc4", keep_originals=False)
-        dm.parallel_subprocess_files.assert_called_once_with(
-            input_files=["a", "b", "c"],
-            command_text=["cdo", "-f", "nc4c", "splitsel,1"],
-            replacement_suffix=".nc4",
-            keep_originals=False,
-        )
-
-    @staticmethod
     def test_convert_to_lowest_common_time_denom_keep_originals(manager_class):
         dm = manager_class()
         dm.parallel_subprocess_files = mock.Mock()
@@ -691,7 +725,7 @@ class TestTransform:
         dm.parallel_subprocess_files.assert_called_once_with(
             input_files=["a", "b", "c"],
             command_text=["cdo", "-f", "nc4c", "splitsel,1"],
-            replacement_suffix="",
+            replacement_suffix=".nc4",
             keep_originals=True,
         )
 
