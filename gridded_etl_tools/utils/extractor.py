@@ -7,7 +7,7 @@ Consolidation of functions useful during the extract step of an ETL cycle for a 
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
 import pathlib
