@@ -711,6 +711,9 @@ class Publish(Transform, Metadata):
 
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
+        # store a version of the dataset that is not re-chunked for use in the pre-parse quality check
+        # this is necessary for performance reasons (rechunking for every point comparison is slow)
+        self.pre_chunk_dataset = dataset
         dataset = dataset.chunk(self.requested_dask_chunks)
         self.info(f"Chunks after rechunk are {dataset.chunks}")
 
@@ -1040,6 +1043,7 @@ class Publish(Transform, Metadata):
             update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals}).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
+        self.pre_chunk_dataset = update_dataset
         update_dataset = update_dataset.chunk(new_chunks)
         update_dataset = self.set_zarr_metadata(update_dataset)
 
@@ -1168,7 +1172,8 @@ class Publish(Transform, Metadata):
         random_vals = {}
         for i in range(checks):
             random_coords = self.get_random_coords(dataset)
-            random_val = dataset[self.data_var()].sel(**random_coords).values
+            # Use a version of the dataset that has not been rechunked for performance reasons
+            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
