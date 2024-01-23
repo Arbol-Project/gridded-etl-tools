@@ -209,6 +209,22 @@ class TestFTPExtractor:
         ftp_client.nlst.assert_called_once_with("over there")
 
     @staticmethod
+    def test_cwd_client_error(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.pwd = Mock(return_value="")
+        ftp_client.cwd = Mock(side_effect=ftplib.error_perm)
+
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.cwd = "over there"
+
+        ftp_client.pwd.assert_not_called()
+        ftp_client.cwd.assert_called_once_with("over there")
+
+    @staticmethod
     def test_cwd_connection_not_open(mocker, manager_class):
         """
         Test that CWD returns errors as expected if `cwd` is called when a connection
