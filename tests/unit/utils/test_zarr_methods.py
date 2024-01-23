@@ -56,6 +56,7 @@ class TestTransform:
             identical_dims=["x", "y"],
             concat_dims=["z", "zz"],
             preprocess=md.preprocess_kerchunk,
+            postprocess=md.postprocess_kerchunk,
         )
 
         outfile = tmp_path / "datasets" / "merged_zarr_jsons" / "DummyManager_zarr.json"
@@ -77,6 +78,7 @@ class TestTransform:
             identical_dims=["x", "y"],
             concat_dims=["z", "zz"],
             preprocess=md.preprocess_kerchunk,
+            postprocess=md.postprocess_kerchunk,
         )
 
         outfile = tmp_path / "datasets" / "merged_zarr_jsons" / "DummyManager_zarr.json"
@@ -98,6 +100,7 @@ class TestTransform:
             identical_dims=["x", "y"],
             concat_dims=["z", "zz"],
             preprocess=md.preprocess_kerchunk,
+            postprocess=md.postprocess_kerchunk,
         )
 
         outfile = tmp_path / "datasets" / "merged_zarr_jsons" / "DummyManager_zarr.json"
@@ -119,6 +122,7 @@ class TestTransform:
             identical_dims=["x", "y"],
             concat_dims=["z", "zz"],
             preprocess=md.preprocess_kerchunk,
+            postprocess=md.postprocess_kerchunk,
         )
 
         mzz.return_value.translate.assert_called_once_with(filename="put/it/here")
@@ -158,6 +162,7 @@ class TestTransform:
             identical_dims=["x", "y"],
             concat_dims=["z", "zz"],
             preprocess=md.preprocess_kerchunk,
+            postprocess=md.postprocess_kerchunk,
         )
 
         outfile = tmp_path / "datasets" / "merged_zarr_jsons" / "DummyManager_zarr.json"
