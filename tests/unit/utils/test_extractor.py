@@ -32,7 +32,7 @@ class TestExtractor:
         thread_count = max(1, multiprocessing.cpu_count() - 1)
 
         threadpool = multiprocessing.pool.ThreadPool = DummyPool()
-        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[True])
+        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[True, False, True])
 
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
@@ -49,7 +49,7 @@ class TestExtractor:
         thread_count = max(1, multiprocessing.cpu_count() - 1)
 
         threadpool = multiprocessing.pool.ThreadPool = DummyPool()
-        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[])
+        starmap = multiprocessing.pool.ThreadPool.starmap = Mock(autospec=True, return_value=[False, False, False])
 
         final_result = extract.pool(batch_processor, batch_requests)
         assert threadpool.processes == thread_count
@@ -89,7 +89,36 @@ class TestS3Extractor:
         extract.dm.kerchunkify.assert_called_once_with(**kwargs)
 
     @staticmethod
-    def test_s3_request_fail(mocker, manager_class):
+    def test_s3_request_with_informative_id(manager_class):
+        extract = extractor.S3Extractor(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, "informative information"]
+        kwargs = {"file_path": rfp, "scan_indices": 0, "local_file_path": lfp}
+
+        extract.dm.kerchunkify = Mock(autospec=True)
+
+        extract.request(*args)
+        extract.dm.kerchunkify.assert_called_once_with(**kwargs)
+
+    @staticmethod
+    def test_s3_request_remote_file_is_not_on_s3(manager_class):
+        extract = extractor.S3Extractor(manager_class())
+
+        rfp = "t4://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, None]
+
+        extract.dm.kerchunkify = Mock(autospec=True)
+
+        with pytest.raises(ValueError):
+            extract.request(*args)
+
+        extract.dm.kerchunkify.assert_not_called()
+
+    @staticmethod
+    def test_s3_request_fail(manager_class):
         extract = extractor.S3Extractor(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
@@ -112,12 +141,26 @@ class TestFTPExtractor:
         ftp_client.close = Mock()
         host = "what a great host"
 
-        with extract(host) as ftp:  # noqa: F841
+        with extract(host):
             pass
 
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once()
         ftp_client.close.assert_called_once()
+
+    @staticmethod
+    def test_context_manager_no_host(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.close = Mock()
+
+        with pytest.raises(ValueError):
+            with extract:
+                pass
+
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_not_called()
+        ftp_client.close.assert_not_called()
 
     @staticmethod
     def test_batch_requests(manager_class):
@@ -141,14 +184,47 @@ class TestFTPExtractor:
         host = "what a great host"
 
         with extract(host) as ftp:
+            assert ftp.cwd == pathlib.PosixPath("")
             ftp.cwd = "over there"
-            ftp.cwd
 
         ftp_client.pwd.assert_called_once()
         ftp_client.cwd.assert_called_once_with("over there")
 
     @staticmethod
-    def test_cwd_connection_not_open(mocker, manager_class):
+    def test_cwd_setter_no_such_path(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.pwd = Mock(return_value="")
+        ftp_client.nlst = Mock(return_value=None)
+
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.cwd = "over there"
+
+        ftp_client.pwd.assert_not_called()
+        ftp_client.cwd.assert_not_called()
+        ftp_client.nlst.assert_called_once_with("over there")
+
+    @staticmethod
+    def test_cwd_client_error(manager_class):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.pwd = Mock(return_value="")
+        ftp_client.cwd = Mock(side_effect=ftplib.error_perm)
+
+        host = "what a great host"
+
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.cwd = "over there"
+
+        ftp_client.pwd.assert_not_called()
+        ftp_client.cwd.assert_called_once_with("over there")
+
+    @staticmethod
+    def test_cwd_connection_not_open(manager_class):
         """
         Test that CWD returns errors as expected if `cwd` is called when a connection
         is closed
@@ -169,7 +245,7 @@ class TestFTPExtractor:
         # TODO create a test for the cwd.setter
 
     @staticmethod
-    def test_requests(mocker, manager_class, tmp_path):
+    def test_request(manager_class, tmp_path):
         extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
@@ -184,3 +260,38 @@ class TestFTPExtractor:
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once_with()
         assert ftp_client.commands == ["RETR two.dat"]
+
+    @staticmethod
+    def test_request_destination_is_not_a_directory(manager_class, tmp_path):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
+
+        host = "what a great host"
+
+        out_path = pathlib.PurePosixPath(tmp_path) / "himom.dat"
+        with extract(host) as ftp:
+            ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
+
+        assert ftp_client.host == host
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once_with()
+        assert ftp_client.commands == ["RETR two.dat"]
+
+    @staticmethod
+    def test_request_client_error(manager_class, tmp_path):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.retrbinary = Mock(side_effect=ftplib.error_perm)
+
+        host = "what a great host"
+
+        out_path = pathlib.PurePosixPath(tmp_path)
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
+
+        assert ftp_client.host == host
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once_with()
+        assert ftp_client.commands == []
