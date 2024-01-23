@@ -392,7 +392,8 @@ class Transform(Convenience):
             # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib
             # objects
             commands.append(list(map(str, command_text + filenames)))
-
+        # CDO responds to an environment variable when assigning file suffixes
+        os.environ["CDO_FILE_SUFFIX"] = replacement_suffix
         # Convert each command to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -427,8 +428,10 @@ class Transform(Convenience):
         """
         if len(raw_files) == 0:
             raise ValueError("No files found to convert, exiting script")
-        command_text = ["cdo", "-f", "nc4", "splitsel,1"]
-        self.parallel_subprocess_files(raw_files, command_text, "", keep_originals)
+        command_text = ["cdo", "-f", "nc4c", "splitsel,1"]
+        self.parallel_subprocess_files(
+            input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
+        )
 
     def ncs_to_nc4s(self, keep_originals: bool = False):
         """

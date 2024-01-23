@@ -610,7 +610,7 @@ class TestTransform:
 
         dm.convert_to_lowest_common_time_denom(["a", "b", "c"])
         dm.parallel_subprocess_files.assert_called_once_with(
-            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", False
+            ["a", "b", "c"], ["cdo", "-f", "nc4c", "splitsel,1"], "", False
         )
 
     @staticmethod
@@ -626,7 +626,7 @@ class TestTransform:
 
         dm.convert_to_lowest_common_time_denom(["a", "b", "c"], keep_originals=True)
         dm.parallel_subprocess_files.assert_called_once_with(
-            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", True
+            ["a", "b", "c"], ["cdo", "-f", "nc4c", "splitsel,1"], "", True
         )
 
     @staticmethod
