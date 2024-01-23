@@ -278,3 +278,21 @@ class TestFTPExtractor:
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once_with()
         assert ftp_client.commands == ["RETR two.dat"]
+
+    @staticmethod
+    def test_request_client_error(mocker, manager_class, tmp_path):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.retrbinary = Mock(side_effect=ftplib.error_perm)
+
+        host = "what a great host"
+
+        out_path = pathlib.PurePosixPath(tmp_path)
+        with extract(host) as ftp:
+            with pytest.raises(RuntimeError):
+                ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
+
+        assert ftp_client.host == host
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once_with()
+        assert ftp_client.commands == []
