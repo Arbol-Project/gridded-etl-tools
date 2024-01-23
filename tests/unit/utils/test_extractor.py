@@ -246,7 +246,7 @@ class TestFTPExtractor:
         # TODO create a test for the cwd.setter
 
     @staticmethod
-    def test_requests(mocker, manager_class, tmp_path):
+    def test_request(mocker, manager_class, tmp_path):
         extract = extractor.FTPExtractor(manager_class())
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
@@ -254,6 +254,23 @@ class TestFTPExtractor:
         host = "what a great host"
 
         out_path = pathlib.PurePosixPath(tmp_path)
+        with extract(host) as ftp:
+            ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
+
+        assert ftp_client.host == host
+        assert ftp_client.contexts == 0
+        ftp_client.login.assert_called_once_with()
+        assert ftp_client.commands == ["RETR two.dat"]
+
+    @staticmethod
+    def test_request_destination_is_not_a_directory(manager_class, tmp_path):
+        extract = extractor.FTPExtractor(manager_class())
+        ftp_client = ftplib.FTP = DummyFtpClient()
+        ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
+
+        host = "what a great host"
+
+        out_path = pathlib.PurePosixPath(tmp_path) / "himom.dat"
         with extract(host) as ftp:
             ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
 
