@@ -89,6 +89,20 @@ class TestS3Extractor:
         extract.dm.kerchunkify.assert_called_once_with(**kwargs)
 
     @staticmethod
+    def test_s3_request_with_informative_id(manager_class):
+        extract = extractor.S3Extractor(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, "informative information"]
+        kwargs = {"file_path": rfp, "scan_indices": 0, "local_file_path": lfp}
+
+        extract.dm.kerchunkify = Mock(autospec=True)
+
+        extract.request(*args)
+        extract.dm.kerchunkify.assert_called_once_with(**kwargs)
+
+    @staticmethod
     def test_s3_request_remote_file_is_not_on_s3(manager_class):
         extract = extractor.S3Extractor(manager_class())
 
