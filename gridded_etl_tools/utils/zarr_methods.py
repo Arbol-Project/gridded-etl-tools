@@ -11,10 +11,12 @@ import glob
 import os
 import random
 import s3fs
+import zarr
 
 from contextlib import nullcontext
 from subprocess import Popen
-from typing import Any
+from typing import Any, Union
+from collections.abc import MutableMapping
 
 import pandas as pd
 import numpy as np
@@ -319,6 +321,7 @@ class Transform(Convenience):
             identical_dims=cls.identical_dimensions,
             concat_dims=cls.concat_dimensions,
             preprocess=cls.preprocess_kerchunk,
+            postprocess=cls.postprocess_kerchunk,
         )
         return opts
 
@@ -353,6 +356,29 @@ class Transform(Convenience):
             fill_value_fix["fill_value"] = cls.missing_value
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
+
+    @classmethod
+    def postprocess_kerchunk(
+        cls, out_zarr: Union[zarr._storage.store.BaseStore, MutableMapping]
+    ) -> Union[zarr._storage.store.BaseStore, MutableMapping]:
+        """
+        Class method to modify the in-memory Zarr created by Kerchunk for each file
+        using Zarr methods. Useful where manipulating individual files via the reference dictionary in
+        'preprocess_kerchunk' is either clumsy or impossible.
+
+        Meant to be inherited and manipulated by child dataset managers as appropriate
+
+        Parameters
+        ----------
+        out_zarr
+            The Zarr returned by a kerchunk read of an individual Kerchunk JSON
+
+        Returns
+        -------
+        out_zarr
+            A modified version of the Zarr returned by a kerchunk read of an individual Kerchunk JSON
+        """
+        return out_zarr
 
     # CONVERT FILES
 
