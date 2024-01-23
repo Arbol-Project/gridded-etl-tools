@@ -191,12 +191,11 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
         return_value=appended_input_path,
     )
     dm = get_manager(manager_class, appended_input_path)
-    # Test that prepare_input_files successfully expands 2 files to 32 files
+    # Test that prepare_input_files successfully expands 2 files to 32
     assert len(list(dm.input_files())) == 2
-    dm.convert_to_lowest_common_time_denom(list(dm.input_files()), keep_originals=False)
+    dm.convert_to_lowest_common_time_denom(list(dm.input_files()), replacement_suffix=".nc4", keep_originals=False)
     assert len(list(dm.input_files())) == 32
-    # Test that ncs_to_nc4s converts all NC files to NC4s, removing the original NCs in the process
-    dm.ncs_to_nc4s(keep_originals=False)
+    # assert all 32 new files are NC4 files
     input_ncs = [pathlib.Path(file) for file in glob.glob(str(dm.local_input_path() / "*.nc"))]
     input_nc4s = dm.input_files()
     assert len(input_ncs) == 0

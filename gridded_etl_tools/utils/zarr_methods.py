@@ -412,7 +412,9 @@ class Transform(Convenience):
             self.archive_original_files(input_files)
         self.info("Cleanup finished")
 
-    def convert_to_lowest_common_time_denom(self, raw_files: list, keep_originals: bool = False):
+    def convert_to_lowest_common_time_denom(
+        self, raw_files: list, replacement_suffix: str = "", keep_originals: bool = False
+    ):
         """
         Decompose a set of raw files aggregated by week, month, year, or other irregular time denominator
         into a set of smaller files, one per the lowest common time denominator -- hour, day, etc.
@@ -430,7 +432,10 @@ class Transform(Convenience):
             raise ValueError("No files found to convert, exiting script")
         command_text = ["cdo", "-f", "nc4c", "splitsel,1"]
         self.parallel_subprocess_files(
-            input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
+            input_files=raw_files,
+            command_text=command_text,
+            replacement_suffix=replacement_suffix,
+            keep_originals=keep_originals,
         )
 
     def ncs_to_nc4s(self, keep_originals: bool = False):
