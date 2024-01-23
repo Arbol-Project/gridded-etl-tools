@@ -1183,8 +1183,7 @@ class Publish(Transform, Metadata):
             dataset = dataset.assign_coords(**orig_coords)
         for i in range(checks):
             random_coords = self.get_random_coords(dataset)
-            # Use a version of the dataset that has not been rechunked for performance reasons
-            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
+            random_val = dataset[self.data_var()].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
