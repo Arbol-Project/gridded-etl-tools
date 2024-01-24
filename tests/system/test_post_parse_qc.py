@@ -1,6 +1,9 @@
 import os
 import pytest
 import shutil
+import random
+import xarray as xr
+import numpy as np
 
 from unittest.mock import Mock
 from ..common import (
@@ -156,7 +159,7 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
 
 def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_path):
     """
-    Test that the original dataset is correctly reformatted when fed incorect data
+    Test that the original dataset is correctly reformatted when fed incorrect data
     """
     # Prepare a dataset manager
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
@@ -178,9 +181,30 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
     dm.original_files = list(dm.input_files())
-    # Exits if time in original file doesn't match time in prod dataset
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
     prod_ds = dm.store.dataset()
     random_coords = dm.get_random_coords(prod_ds)
+
+    # pass if values match
+    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
+    random_coords["time"] = random.choice(orig_ds["time"].values)
+    assert dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+
+    # raise ValueError if one dataset doesn't match the other
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
+    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
+    random_coords["time"] = random.choice(orig_ds["time"].values)
+    orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
+    with pytest.raises(ValueError):
+        dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+    
+    # raise ValueError if one dataset is all NaNs
+    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
+    random_coords["time"] = random.choice(orig_ds["time"].values)
+    orig_ds["precip"].values = np.full_like(orig_ds['precip'], np.nan)
+    with pytest.raises(ValueError):
+        dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+
+    # Exit if time in original file doesn't match time in prod dataset
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
     orig_ds, orig_file_path = dm.get_original_ds(random_coords)
     assert not dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
