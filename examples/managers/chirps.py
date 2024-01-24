@@ -259,9 +259,7 @@ class CHIRPS(DatasetManager):
         else:
             # Convert input files to daily NetCDFs
             self.info(f"Converting {(len(list(yearlies)))} yearly NetCDF file(s) to daily NetCDFs")
-            self.convert_to_lowest_common_time_denom(
-                raw_files=yearlies, replacement_suffix=".nc4", keep_originals=keep_originals
-            )
+            self.convert_to_lowest_common_time_denom(raw_files=yearlies, keep_originals=keep_originals)
 
         self.info("Finished preparing input files")
 

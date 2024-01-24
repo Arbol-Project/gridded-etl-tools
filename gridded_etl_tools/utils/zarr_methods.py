@@ -417,12 +417,12 @@ class Transform(Convenience):
             self.archive_original_files(input_files)
         self.info("Cleanup finished")
 
-    def convert_to_lowest_common_time_denom(
-        self, raw_files: list, keep_originals: bool = False
-    ):
+    def convert_to_lowest_common_time_denom(self, raw_files: list, keep_originals: bool = False):
         """
         Decompose a set of raw files aggregated by week, month, year, or other irregular time denominator
         into a set of smaller files, one per the lowest common time denominator -- hour, day, etc.
+
+        Converts to a NetCDF4 Classic file as this has shown consistently performance for parsing
 
         Parameters
         ----------
@@ -463,7 +463,9 @@ class Transform(Convenience):
         # convert raw NetCDFs to NetCDF4-Classics in parallel
         self.info(f"Converting {(len(raw_files))} NetCDFs to NetCDF4 Classic files")
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
-        self.parallel_subprocess_files(input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals)
+        self.parallel_subprocess_files(
+            input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
+        )
 
     def archive_original_files(self, files: list):
         """
@@ -830,12 +832,13 @@ class Publish(Transform, Metadata):
         Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
         a forecast (ensemble mean) dataset, or a "normal" observational dataset.
 
-        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
+        The self.dataset_category property defaults to "observation". If a dataset provides a different type of data,
+         the property should be specific in that dataset's manager; otherwise the default value suffices.
         """
-        if not self.forecast and not self.ensemble:
+        if self.dataset_category == "observation":
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-        elif self.hindcast:
+        elif self.dataset_category == "hindcast":
             self.standard_dims = [
                 "hindcast_reference_time",
                 "forecast_reference_offset",
@@ -845,12 +848,18 @@ class Publish(Transform, Metadata):
                 "longitude",
             ]
             self.time_dim = "hindcast_reference_time"
-        elif self.ensemble:
+        elif self.dataset_category == "ensemble":
             self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
-        elif self.forecast:
+        elif self.dataset_category == "forecast":
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
+        else:
+            raise ValueError(
+                "Dataset is not correctly specified as an observation, forecast, ensemble, or hindcast, "
+                "preventing the correct assignment of standard_dims and the time_dim. Please revise the "
+                "dataset's ETL manager to correctly specify one of these properties."
+            )
 
     # INITIAL
 

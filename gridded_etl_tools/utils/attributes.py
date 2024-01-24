@@ -219,6 +219,18 @@ class Attributes(ABC):
     Tags for dataset.
     """
 
+    dataset_category: str = "observation"
+    """
+    The type of climate data provided in a given dataset. Used to control various processes.
+    Valid options include "observation", "forecast", "ensemble", and "hindcast".
+
+    Defaults to "observation".
+
+    Ensembles and hindcasts are necessarily forecasts and semantically should be understood
+    to provide (more elaborated) forecast data with 5 and 6 dimensions. Accordingly, "forecast"
+    should be understood to specify 4 dimensional forecast data w/out ensembles or hindcasts.
+    """
+
     forecast: bool = False
     """
     ``True`` if the dataset provides forecast data.
