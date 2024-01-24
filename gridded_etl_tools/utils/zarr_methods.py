@@ -722,16 +722,16 @@ class Publish(Transform, Metadata):
         self.set_key_dims()
         dataset = dataset.transpose(*self.standard_dims)
 
+        # Add metadata to dataset
+        dataset = self.set_zarr_metadata(dataset)
+
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
         # store a version of the dataset that is not re-chunked for use in the pre-parse quality check
         # this is necessary for performance reasons (rechunking for every point comparison is slow)
-        self.pre_chunk_dataset = dataset
+        self.pre_chunk_dataset = dataset.copy()
         dataset = dataset.chunk(self.requested_dask_chunks)
         self.info(f"Chunks after rechunk are {dataset.chunks}")
-
-        # Add metadata to dataset
-        dataset = self.set_zarr_metadata(dataset)
 
         # Log the state of the dataset before writing
         self.info(f"Initial dataset\n{dataset}")
@@ -986,13 +986,13 @@ class Publish(Transform, Metadata):
         insert_dataset = self.prep_update_dataset(update_dataset, insert_times, original_chunks)
         date_ranges, regions = self.calculate_update_time_ranges(original_dataset, insert_dataset)
         for dates, region in zip(date_ranges, regions):
-            insert_slice = insert_dataset.sel(**{self.time_dim: slice(dates[0], dates[1])})
+            insert_slice = insert_dataset.sel(**{self.time_dim: slice(*dates)})
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
                 insert_slice.drop(self.standard_dims[1:]),
                 mapper,
-                region={self.time_dim: slice(region[0], region[1])},
+                region={self.time_dim: slice(*region)},
             )
 
         if not self.dry_run:
@@ -1057,12 +1057,14 @@ class Publish(Transform, Metadata):
             update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals}).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
-        self.pre_chunk_dataset = update_dataset
-        update_dataset = update_dataset.chunk(new_chunks)
+
+        # Add metadata to dataset
         update_dataset = self.set_zarr_metadata(update_dataset)
+        # Rechunk, storing a non-rechunked version for pre-parse quality checks
+        self.pre_chunk_dataset = update_dataset.copy()
+        update_dataset = update_dataset.chunk(new_chunks)
 
         self.info(f"Update dataset\n{update_dataset}")
-
         return update_dataset
 
     def calculate_update_time_ranges(
@@ -1161,7 +1163,7 @@ class Publish(Transform, Metadata):
 
         # VALUES CHECK
         # Check 100 values for NAs and extreme values
-        self.check_random_values(dataset, checks=100)
+        self.check_random_values(dataset.copy(), checks=100)
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
@@ -1184,10 +1186,18 @@ class Publish(Transform, Metadata):
             Intended for later reuse checking the same coordinates after a dataset is parsed.
         """
         random_vals = {}
+        # insert operations will create datasets w/ only time coordinates and index values for other coords
+        # this will cause comparison w/ the `pre_chunk_dataset` below to fail as index values != actual vals
+        # therefore we repopulate the original values to enable comparisons
+        if len(dataset.coords) == 1:
+            orig_coords = {
+                coord: self.pre_chunk_dataset.coords[coord].values
+                for coord in self.pre_chunk_dataset.drop(self.time_dim).coords
+            }
+            dataset = dataset.assign_coords(**orig_coords)
         for i in range(checks):
             random_coords = self.get_random_coords(dataset)
-            # Use a version of the dataset that has not been rechunked for performance reasons
-            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
+            random_val = dataset[self.data_var()].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
