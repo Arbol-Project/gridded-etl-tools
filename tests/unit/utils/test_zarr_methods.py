@@ -1308,16 +1308,15 @@ class TestPublish:
         dm.set_zarr_metadata = mock.Mock()
 
         dataset1 = dm.transformed_dataset.return_value
-        dataset2 = dataset1.transpose.return_value
-        dataset3 = dm.set_zarr_metadata.return_value
-        dataset4 = dataset3.chunk.return_value
+        dataset2 = dm.set_zarr_metadata.return_value
+        dataset3 = dataset2.chunk.return_value
 
-        assert dm.pre_initial_dataset() is dataset4
+        assert dm.pre_initial_dataset() is dataset3
 
         dm.transformed_dataset.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
         dataset1.transpose.assert_called_once_with(*dm.standard_dims)
-        dataset3.chunk.assert_called_once_with(dm.requested_dask_chunks)
+        dataset2.chunk.assert_called_once_with(dm.requested_dask_chunks)
         dm.set_zarr_metadata(dataset3)
 
     @staticmethod
