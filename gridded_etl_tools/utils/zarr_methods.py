@@ -834,6 +834,11 @@ class Publish(Transform, Metadata):
 
         The self.dataset_category property defaults to "observation". If a dataset provides a different type of data,
          the property should be specific in that dataset's manager; otherwise the default value suffices.
+
+        Raises
+        ------
+        ValueError
+            Return a ValueError if `dataset_category` is misspecified
         """
         if self.dataset_category == "observation":
             self.standard_dims = ["time", "latitude", "longitude"]
