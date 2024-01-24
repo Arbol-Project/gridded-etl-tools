@@ -2,7 +2,6 @@ import os
 import pytest
 import shutil
 import random
-import xarray as xr
 import numpy as np
 
 from unittest.mock import Mock
@@ -196,11 +195,11 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
     with pytest.raises(ValueError):
         dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
-    
+
     # raise ValueError if one dataset is all NaNs
     orig_ds, orig_file_path = dm.get_original_ds(random_coords)
     random_coords["time"] = random.choice(orig_ds["time"].values)
-    orig_ds["precip"].values = np.full_like(orig_ds['precip'], np.nan)
+    orig_ds["precip"].values = np.full_like(orig_ds["precip"], np.nan)
     with pytest.raises(ValueError):
         dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
 
