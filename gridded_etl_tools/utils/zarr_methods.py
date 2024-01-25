@@ -11,10 +11,12 @@ import glob
 import os
 import random
 import s3fs
+import zarr
 
 from contextlib import nullcontext
 from subprocess import Popen
-from typing import Any
+from typing import Any, Union
+from collections.abc import MutableMapping
 
 import pandas as pd
 import numpy as np
@@ -319,6 +321,7 @@ class Transform(Convenience):
             identical_dims=cls.identical_dimensions,
             concat_dims=cls.concat_dimensions,
             preprocess=cls.preprocess_kerchunk,
+            postprocess=cls.postprocess_kerchunk,
         )
         return opts
 
@@ -354,6 +357,29 @@ class Transform(Convenience):
             refs[f"{ref}/.zarray"] = json.dumps(fill_value_fix)
         return refs
 
+    @classmethod
+    def postprocess_kerchunk(
+        cls, out_zarr: Union[zarr._storage.store.BaseStore, MutableMapping]
+    ) -> Union[zarr._storage.store.BaseStore, MutableMapping]:
+        """
+        Class method to modify the in-memory Zarr created by Kerchunk for each file
+        using Zarr methods. Useful where manipulating individual files via the reference dictionary in
+        'preprocess_kerchunk' is either clumsy or impossible.
+
+        Meant to be inherited and manipulated by child dataset managers as appropriate
+
+        Parameters
+        ----------
+        out_zarr
+            The Zarr returned by a kerchunk read of an individual Kerchunk JSON
+
+        Returns
+        -------
+        out_zarr
+            A modified version of the Zarr returned by a kerchunk read of an individual Kerchunk JSON
+        """
+        return out_zarr
+
     # CONVERT FILES
 
     def parallel_subprocess_files(
@@ -384,7 +410,13 @@ class Transform(Convenience):
         # set up and run conversion subprocess on command line
         commands = []
         for existing_file in input_files:
-            new_file = existing_file.with_suffix(replacement_suffix)
+            # CDO specifies the extension via an environment variable, not an argument...
+            if "cdo" in command_text:
+                new_file = existing_file.with_suffix("")
+                os.environ["CDO_FILE_SUFFIX"] = replacement_suffix
+            # ...but other tools use arguments
+            else:
+                new_file = existing_file.with_suffix(replacement_suffix)
             if invert_file_order:
                 filenames = [new_file, existing_file]
             else:
@@ -392,7 +424,7 @@ class Transform(Convenience):
             # map will convert the file names to strings because some command line tools (e.g. gdal) don't like Pathlib
             # objects
             commands.append(list(map(str, command_text + filenames)))
-
+        # CDO responds to an environment variable when assigning file suffixes
         # Convert each command to a Popen call b/c Popen doesn't block, hence processes will run in parallel
         # Only run 100 processes at a time to prevent BlockingIOErrors
         for index in range(0, len(commands), 100):
@@ -416,6 +448,8 @@ class Transform(Convenience):
         Decompose a set of raw files aggregated by week, month, year, or other irregular time denominator
         into a set of smaller files, one per the lowest common time denominator -- hour, day, etc.
 
+        Converts to a NetCDF4 Classic file as this has shown consistently performance for parsing
+
         Parameters
         ----------
         raw_files : list
@@ -427,8 +461,13 @@ class Transform(Convenience):
         """
         if len(raw_files) == 0:
             raise ValueError("No files found to convert, exiting script")
-        command_text = ["cdo", "-f", "nc4", "splitsel,1"]
-        self.parallel_subprocess_files(raw_files, command_text, "", keep_originals)
+        command_text = ["cdo", "-f", "nc4c", "splitsel,1"]
+        self.parallel_subprocess_files(
+            input_files=raw_files,
+            command_text=command_text,
+            replacement_suffix=".nc4",
+            keep_originals=keep_originals,
+        )
 
     def ncs_to_nc4s(self, keep_originals: bool = False):
         """
@@ -450,7 +489,9 @@ class Transform(Convenience):
         # convert raw NetCDFs to NetCDF4-Classics in parallel
         self.info(f"Converting {(len(raw_files))} NetCDFs to NetCDF4 Classic files")
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
-        self.parallel_subprocess_files(raw_files, command_text, ".nc4", keep_originals)
+        self.parallel_subprocess_files(
+            input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
+        )
 
     def archive_original_files(self, files: list):
         """
@@ -545,7 +586,7 @@ class Publish(Transform, Metadata):
         if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
-        self.info("Parse run successfully.")
+        self.info("Parse run successful")
 
     def publish_metadata(self):
         """
@@ -709,13 +750,16 @@ class Publish(Transform, Metadata):
         self.set_key_dims()
         dataset = dataset.transpose(*self.standard_dims)
 
-        # Re-chunk
-        self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
-        dataset = dataset.chunk(self.requested_dask_chunks)
-        self.info(f"Chunks after rechunk are {dataset.chunks}")
-
         # Add metadata to dataset
         dataset = self.set_zarr_metadata(dataset)
+
+        # Re-chunk
+        self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
+        # store a version of the dataset that is not re-chunked for use in the pre-parse quality check
+        # this is necessary for performance reasons (rechunking for every point comparison is slow)
+        self.pre_chunk_dataset = dataset.copy()
+        dataset = dataset.chunk(self.requested_dask_chunks)
+        self.info(f"Chunks after rechunk are {dataset.chunks}")
 
         # Log the state of the dataset before writing
         self.info(f"Initial dataset\n{dataset}")
@@ -814,12 +858,18 @@ class Publish(Transform, Metadata):
         Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
         a forecast (ensemble mean) dataset, or a "normal" observational dataset.
 
-        The self.forecast and self.ensemble instance variables are set in the `init` of a dataset and default to False.
+        The self.dataset_category property defaults to "observation". If a dataset provides a different type of data,
+         the property should be specific in that dataset's manager; otherwise the default value suffices.
+
+        Raises
+        ------
+        ValueError
+            Return a ValueError if `dataset_category` is misspecified
         """
-        if not self.forecast and not self.ensemble:
+        if self.dataset_category == "observation":
             self.standard_dims = ["time", "latitude", "longitude"]
             self.time_dim = "time"
-        elif self.hindcast:
+        elif self.dataset_category == "hindcast":
             self.standard_dims = [
                 "hindcast_reference_time",
                 "forecast_reference_offset",
@@ -829,12 +879,18 @@ class Publish(Transform, Metadata):
                 "longitude",
             ]
             self.time_dim = "hindcast_reference_time"
-        elif self.ensemble:
+        elif self.dataset_category == "ensemble":
             self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
-        elif self.forecast:
+        elif self.dataset_category == "forecast":
             self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
             self.time_dim = "forecast_reference_time"
+        else:
+            raise ValueError(
+                "Dataset is not correctly specified as an observation, forecast, ensemble, or hindcast, "
+                "preventing the correct assignment of standard_dims and the time_dim. Please revise the "
+                "dataset's ETL manager to correctly specify one of these properties."
+            )
 
     # INITIAL
 
@@ -970,13 +1026,13 @@ class Publish(Transform, Metadata):
         insert_dataset = self.prep_update_dataset(update_dataset, insert_times, original_chunks)
         date_ranges, regions = self.calculate_update_time_ranges(original_dataset, insert_dataset)
         for dates, region in zip(date_ranges, regions):
-            insert_slice = insert_dataset.sel(**{self.time_dim: slice(dates[0], dates[1])})
+            insert_slice = insert_dataset.sel(**{self.time_dim: slice(*dates)})
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
                 insert_slice.drop(self.standard_dims[1:]),
                 mapper,
-                region={self.time_dim: slice(region[0], region[1])},
+                region={self.time_dim: slice(*region)},
             )
 
         if not self.dry_run:
@@ -1007,6 +1063,7 @@ class Publish(Transform, Metadata):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
+
         self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
 
         if not self.dry_run:
@@ -1040,11 +1097,14 @@ class Publish(Transform, Metadata):
             update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals}).transpose(*self.standard_dims)
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
-        update_dataset = update_dataset.chunk(new_chunks)
+
+        # Add metadata to dataset
         update_dataset = self.set_zarr_metadata(update_dataset)
+        # Rechunk, storing a non-rechunked version for pre-parse quality checks
+        self.pre_chunk_dataset = update_dataset.copy()
+        update_dataset = update_dataset.chunk(new_chunks)
 
         self.info(f"Update dataset\n{update_dataset}")
-
         return update_dataset
 
     def calculate_update_time_ranges(
@@ -1143,7 +1203,7 @@ class Publish(Transform, Metadata):
 
         # VALUES CHECK
         # Check 100 values for NAs and extreme values
-        self.check_random_values(dataset, checks=100)
+        self.check_random_values(dataset.copy(), checks=100)
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
@@ -1166,6 +1226,15 @@ class Publish(Transform, Metadata):
             Intended for later reuse checking the same coordinates after a dataset is parsed.
         """
         random_vals = {}
+        # insert operations will create datasets w/ only time coordinates and index values for other coords
+        # this will cause comparison w/ the `pre_chunk_dataset` below to fail as index values != actual vals
+        # therefore we repopulate the original values to enable comparisons
+        if len(dataset.coords) == 1:
+            orig_coords = {
+                coord: self.pre_chunk_dataset.coords[coord].values
+                for coord in self.pre_chunk_dataset.drop(self.time_dim).coords
+            }
+            dataset = dataset.assign_coords(**orig_coords)
         for i in range(checks):
             random_coords = self.get_random_coords(dataset)
             random_val = dataset[self.data_var()].sel(**random_coords).values
@@ -1473,9 +1542,12 @@ class Publish(Transform, Metadata):
             orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
-        # Raise an error if the values differ more than the permitted threshold
+        # Raise an error if the values differ more than the permitted threshold,
+        # return infinity (indicating one value is infinite), or if only one value is NaN
         self.info(f"{orig_val}, {prod_val}")
-        if abs(orig_val - prod_val) > threshold:
+        if (abs(orig_val - prod_val) > threshold and abs(orig_val - prod_val) != np.inf) or sum(
+            np.isnan([orig_val, prod_val])
+        ) == 1:
             raise ValueError(
                 f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
             )
