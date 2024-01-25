@@ -12,14 +12,14 @@ HERE = pathlib.Path(__file__).parent
 INPUTS = HERE / "inputs"
 
 
-@pytest.fixture()
+@pytest.fixture
 def example_zarr_json():
     example_json = INPUTS / "chirps_example_zarr.json"
     zarr_json = json.loads(open(example_json).read())
     return zarr_json
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_original_dataset():
     time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
@@ -35,7 +35,7 @@ def fake_original_dataset():
     return ds
 
 
-@pytest.fixture()
+@pytest.fixture
 def forecast_dataset():
     time = xr.DataArray(
         np.array(original_times), dims="forecast_reference_time", coords={"forecast_reference_time": np.arange(138)}
@@ -54,16 +54,18 @@ def forecast_dataset():
     return ds
 
 
-@pytest.fixture()
+@pytest.fixture
 def hindcast_dataset():
     time = xr.DataArray(
         np.array(original_times), dims="hindcast_reference_time", coords={"hindcast_reference_time": np.arange(138)}
     )
-    step = xr.DataArray(np.arange(2, 10, 2))
+    step = xr.DataArray(
+        np.array(original_times) + np.timedelta64(4, "[h]"), dims="step", coords={"step": np.arange(138)}
+    )
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
     longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
     data = xr.DataArray(
-        np.random.randn(138, 4, 4, 4),
+        np.random.randn(138, 4, 4, 138),
         dims=("hindcast_reference_time", "latitude", "longitude", "step"),
         coords=(time, latitude, longitude, step),
     )
@@ -73,7 +75,33 @@ def hindcast_dataset():
     return ds
 
 
-@pytest.fixture()
+@pytest.fixture
+def hindcast_dataset_at():
+    def hindcast_dataset_at(timestamp):
+        time = xr.DataArray(
+            np.array([timestamp]), dims="hindcast_reference_time", coords={"hindcast_reference_time": np.arange(1)}
+        )
+        step = xr.DataArray(
+            np.array([timestamp]) + np.timedelta64(4, "[h]"), dims="step", coords={"step": np.arange(1)}
+        )
+        latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+        longitude = xr.DataArray(
+            np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)}
+        )
+        data = xr.DataArray(
+            np.random.randn(1, 4, 4, 1),
+            dims=("hindcast_reference_time", "latitude", "longitude", "step"),
+            coords=(time, latitude, longitude, step),
+        )
+
+        ds = xr.Dataset({"data": data})
+        ds["data"] = ds["data"].astype("<f4")
+        return ds
+
+    return hindcast_dataset_at
+
+
+@pytest.fixture
 def fake_complex_update_dataset():
     time = xr.DataArray(np.array(complex_update_times), dims="time", coords={"time": np.arange(60)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
@@ -87,9 +115,13 @@ def fake_complex_update_dataset():
     return ds
 
 
-@pytest.fixture()
+@pytest.fixture
 def single_time_instant_dataset():
-    time = xr.DataArray(np.array(original_times[:1]), dims="time", coords={"time": np.arange(1)})
+    return _single_time_instant_dataset(original_times[:1])
+
+
+def _single_time_instant_dataset(times):
+    time = xr.DataArray(np.array(times), dims="time", coords={"time": np.arange(1)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
     longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
     data = xr.DataArray(
@@ -99,6 +131,14 @@ def single_time_instant_dataset():
     ds = xr.Dataset({"data": data})
     ds["data"] = ds["data"].astype("<f4")
     return ds
+
+
+@pytest.fixture
+def dataset_at():
+    def dataset_at(timestamp: np.datetime64) -> xr.Dataset:
+        return _single_time_instant_dataset([timestamp])
+
+    return dataset_at
 
 
 @pytest.fixture
