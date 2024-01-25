@@ -3,6 +3,7 @@ import warnings
 
 import deprecation
 import numpy as np
+import typing
 
 from gridded_etl_tools.utils.store import StoreInterface
 
@@ -219,19 +220,16 @@ class Attributes(ABC):
     Tags for dataset.
     """
 
-    forecast: bool = False
+    dataset_category: typing.Literal = "observation"
     """
-    ``True`` if the dataset provides forecast data.
-    """
+    The type of climate data provided in a given dataset. Used to control various processes.
+    Valid options include "observation", "forecast", "ensemble", and "hindcast".
 
-    ensemble: bool = False
-    """
-    ``True`` if the dataset provides ensemble data.
-    """
+    Defaults to "observation".
 
-    hindcast: bool = False
-    """
-    ``True`` if the dataset privides hindcast data.
+    Ensembles and hindcasts are necessarily forecasts and semantically should be understood
+    to provide (more elaborated) forecast data with 5 and 6 dimensions. Accordingly, "forecast"
+    should be understood to specify 4 dimensional forecast data w/out ensembles or hindcasts.
     """
 
     forecast_hours: list[int] = []

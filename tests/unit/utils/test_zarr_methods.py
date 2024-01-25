@@ -9,6 +9,7 @@ import numpy
 import pytest
 
 from gridded_etl_tools.utils import store
+from xarray.testing import assert_equal
 
 
 @pytest.fixture
@@ -519,6 +520,100 @@ class TestTransform:
         assert removed_files == expected
 
     @staticmethod
+    def test_parallel_subprocess_files_replacement_suffix(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):  # pragma NO COVER
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):  # pragma NO COVER
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+        os.environ = {}
+
+        N = 250
+        dm = manager_class()
+        dm.archive_original_files = mock.Mock()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        assert "CDO_FILE_SUFFIX" not in os.environ
+
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
+
+        expected = [
+            DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+        assert "CDO_FILE_SUFFIX" not in os.environ
+
+    @staticmethod
+    def test_parallel_subprocess_files_replacement_suffix_cdo(mocker, manager_class):
+        subprocesses = []
+
+        class DummyPopen:
+            def __init__(self, args, waited=False, append=True):
+                self.args = args
+                self.waited = waited
+                if append:
+                    subprocesses.append(self)
+
+            def wait(self):
+                self.waited = True
+
+            def __eq__(self, other):
+                return isinstance(other, DummyPopen) and other.__dict__ == self.__dict__
+
+            def __repr__(self):  # pragma NO COVER
+                return f"DummyPopen({self.args}, waited={self.waited})"
+
+        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+
+        removed_files = []
+
+        def remove(path):  # pragma NO COVER
+            removed_files.append(path)
+
+        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os.remove = remove
+        os.environ = {}
+
+        N = 250
+        dm = manager_class()
+        dm.archive_original_files = mock.Mock()
+        input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
+
+        assert "CDO_FILE_SUFFIX" not in os.environ
+
+        dm.parallel_subprocess_files(input_files, ["cdo", "--cat"], ".nc4")
+
+        expected = [
+            DummyPopen(["cdo", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
+            for n in range(N)
+        ]
+        assert subprocesses == expected
+        assert os.environ["CDO_FILE_SUFFIX"] == ".nc4"
+
+    @staticmethod
     def test_parallel_subprocess_files_keep_originals(mocker, manager_class):
         subprocesses = []
 
@@ -615,7 +710,10 @@ class TestTransform:
 
         dm.convert_to_lowest_common_time_denom(["a", "b", "c"])
         dm.parallel_subprocess_files.assert_called_once_with(
-            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", False
+            input_files=["a", "b", "c"],
+            command_text=["cdo", "-f", "nc4c", "splitsel,1"],
+            replacement_suffix=".nc4",
+            keep_originals=False,
         )
 
     @staticmethod
@@ -631,7 +729,10 @@ class TestTransform:
 
         dm.convert_to_lowest_common_time_denom(["a", "b", "c"], keep_originals=True)
         dm.parallel_subprocess_files.assert_called_once_with(
-            ["a", "b", "c"], ["cdo", "-f", "nc4", "splitsel,1"], "", True
+            input_files=["a", "b", "c"],
+            command_text=["cdo", "-f", "nc4c", "splitsel,1"],
+            replacement_suffix=".nc4",
+            keep_originals=True,
         )
 
     @staticmethod
@@ -647,7 +748,10 @@ class TestTransform:
 
         expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
         dm.parallel_subprocess_files.assert_called_once_with(
-            expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", False
+            input_files=expected_files,
+            command_text=["nccopy", "-k", "netCDF-4 classic model"],
+            replacement_suffix=".nc4",
+            keep_originals=False,
         )
 
     @staticmethod
@@ -669,7 +773,10 @@ class TestTransform:
 
         expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
         dm.parallel_subprocess_files.assert_called_once_with(
-            expected_files, ["nccopy", "-k", "netCDF-4 classic model"], ".nc4", True
+            input_files=expected_files,
+            command_text=["nccopy", "-k", "netCDF-4 classic model"],
+            replacement_suffix=".nc4",
+            keep_originals=True,
         )
 
     @staticmethod
@@ -1113,12 +1220,14 @@ class TestPublish:
     @staticmethod
     def test_move_post_parse_attrs_to_dict(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.update_attributes = dm.update_attributes + ["some irrelevant attribute"]
+        dm.update_attributes = dm.update_attributes + ["some relevant attribute"]
         fake_original_dataset.attrs = {
             "date range": ["2000010100", "2020123123"],
             "update_date_range": ["202012293", "2020123123"],
             "update_previous_end_date": "2020123023",
             "update_in_progress": False,
+            "some relevant attribute": True,
+            "some irrelevant attribute": False,
             "initial_parse": False,
         }
 
@@ -1128,19 +1237,23 @@ class TestPublish:
             "date range": ["2000010100", "2020123123"],
             "update_previous_end_date": "2020123023",
             "initial_parse": False,
+            "some relevant attribute": True,
         }
-        assert dataset is not fake_original_dataset
+        assert not assert_equal(dataset, fake_original_dataset)
         assert fake_original_dataset.attrs == {
             "date range": ["2000010100", "2020123123"],
             "update_date_range": ["202012293", "2020123123"],
             "update_previous_end_date": "2020123023",
             "update_in_progress": False,
             "initial_parse": False,
+            "some relevant attribute": True,
+            "some irrelevant attribute": False,
         }
         assert dataset.attrs == {
             "initial_parse": False,
             "update_date_range": ["202012293", "2020123123"],
             "update_in_progress": False,
+            "some irrelevant attribute": False,
         }
 
     @staticmethod
@@ -1194,17 +1307,19 @@ class TestPublish:
 
     @staticmethod
     def test_pre_initial_dataset(manager_class):
+        """
+        Test that a pre initial dataset is instantiated as anticipated
+        """
         dm = manager_class()
         dm.transformed_dataset = mock.Mock()
         dm.set_key_dims = mock.Mock()
         dm.set_zarr_metadata = mock.Mock()
 
         dataset1 = dm.transformed_dataset.return_value
-        dataset2 = dataset1.transpose.return_value
+        dataset2 = dm.set_zarr_metadata.return_value
         dataset3 = dataset2.chunk.return_value
-        dataset4 = dm.set_zarr_metadata.return_value
 
-        assert dm.pre_initial_dataset() is dataset4
+        assert dm.pre_initial_dataset() is dataset3
 
         dm.transformed_dataset.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
@@ -1305,9 +1420,7 @@ class TestPublish:
     @staticmethod
     def test_set_key_dims_hindcast(manager_class):
         dm = manager_class()
-        dm.hindcast = True
-        dm.ensemble = True
-        dm.forecast = True
+        dm.dataset_category = "hindcast"
 
         dm.set_key_dims()
         assert dm.standard_dims == [
@@ -1323,8 +1436,7 @@ class TestPublish:
     @staticmethod
     def test_set_key_dims_ensemble(manager_class):
         dm = manager_class()
-        dm.ensemble = True
-        dm.forecast = True
+        dm.dataset_category = "ensemble"
 
         dm.set_key_dims()
         assert dm.standard_dims == [
@@ -1339,7 +1451,7 @@ class TestPublish:
     @staticmethod
     def test_set_key_dims_forecast(manager_class):
         dm = manager_class()
-        dm.forecast = True
+        dm.dataset_category = "forecast"
 
         dm.set_key_dims()
         assert dm.standard_dims == [
@@ -1349,6 +1461,14 @@ class TestPublish:
             "longitude",
         ]
         assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_misspecified(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "nocast"
+
+        with pytest.raises(ValueError):
+            dm.set_key_dims()
 
     @staticmethod
     def test_write_initial_zarr_ipld(manager_class):
