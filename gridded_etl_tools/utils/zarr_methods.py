@@ -560,7 +560,7 @@ class Publish(Transform, Metadata):
         if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
             self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
-        self.info("Parse run successfully.")
+        self.info("Parse run successful")
 
     def publish_metadata(self):
         """

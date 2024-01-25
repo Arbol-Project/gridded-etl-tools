@@ -1302,6 +1302,9 @@ class TestPublish:
 
     @staticmethod
     def test_pre_initial_dataset(manager_class):
+        """
+        Test that a pre initial dataset is instantiated as anticipated
+        """
         dm = manager_class()
         dm.transformed_dataset = mock.Mock()
         dm.set_key_dims = mock.Mock()
