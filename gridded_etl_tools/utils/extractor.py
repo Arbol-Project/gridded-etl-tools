@@ -16,18 +16,73 @@ import ftplib
 import re
 import time
 import multiprocessing
+import logging
 
 
-class Extractor:
+log = logging.getLogger("extraction_logs")
+
+
+@staticmethod
+def pool(batch_processor: typing.Callable[..., bool], batch: typing.Sequence[typing.Sequence]) -> bool:
     """
-    Base class for common extraction functions. Associate this class with a `DatasetManager` object by passing the
-    object at initialization.
+    Launch a batch of requests simultaneously, wait for them all to complete, then return a boolean indicating
+    whether any of the requests were successful.
 
-    Extractor's functions are used to request source data, using multiprocessing when possible. `Extractor.pool` is
-    used to launch the requests using a thread pool.
+    The batch processor is any generic callable that accepts the arguments provided in each entry of the batch.
+    Each entry in the batch is a list of arguments to be forwarded to the batch processor. The batch is submitted
+    to a thread pool which will call the batch processor on every entry of the batch, launching all the calls in
+    parallel and waiting for them to complete.
 
-    If more specific types of extraction are available in a child class, consider using the child class instead. For
-    example, if extracting from FTP, use FTPExtractor.
+    If any of the calls returns `True`, this will return `True`, otherwise it will return `False`.
+
+    Parameters
+    ----------
+    batch_processor
+        Function which will be called repeatedly, being passed a new entry in the batch each time it's called
+    batch
+        A 2D list of lists (or any sequential type) containing arguments to be forwarded to the given batch
+        processor
+
+    Returns
+    -------
+    bool
+        `True` if any of the batch calls returns `True`, `False` otherwise
+    """
+    # Success remains Trueuntil the first unsuccessful request is completed
+    success = True
+
+    # Time the download
+    start_downloading = time.time()
+
+    # Thread count is one less than the amount of CPU available, unless there is only 1 CPU
+    thread_count = max(1, multiprocessing.cpu_count() - 1)
+
+    # run downloads
+    if len(batch) > 0:
+        log.info(f"Submitting request for {len(batch)} datasets in parallel using {thread_count} threads.")
+
+        # download in parallel
+        with multiprocessing.pool.ThreadPool(processes=thread_count) as pool:
+            for result in pool.starmap(batch_processor, batch):
+                if not result:
+                    success = False
+
+        log.info(f"Downloading took {(time.time() - start_downloading) / 60:.2f} minutes")
+    else:
+        log.info("No requests prepared to be submitted, please check batch_processor is functioning properly.")
+        success = False
+
+    # If every request returned False, log a message
+    if not success:
+        log.info("At least one request for data was unsuccessful.")
+
+    return success
+
+
+class S3Extractor:
+    """
+    Create an object that can be used to request remote kerchunking of S3 files in parallel. The kerchunked files will
+    be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
     """
 
     def __init__(self, dm: dataset_manager.DatasetManager):
@@ -40,67 +95,6 @@ class Extractor:
             Source data for this dataset manager will be extracted
         """
         self.dm = dm
-
-    def pool(self, batch_processor: typing.Callable[..., bool], batch: typing.Sequence[typing.Sequence]) -> bool:
-        """
-        Launch a batch of requests simultaneously, wait for them all to complete, then return a boolean indicating
-        whether any of the requests were successful.
-
-        The batch processor is any generic callable that accepts the arguments provided in each entry of the batch.
-        Each entry in the batch is a list of arguments to be forwarded to the batch processor. The batch is submitted
-        to a thread pool which will call the batch processor on every entry of the batch, launching all the calls in
-        parallel and waiting for them to complete.
-
-        If any of the calls returns `True`, this will return `True`, otherwise it will return `False`.
-
-        Parameters
-        ----------
-        batch_processor
-            Function which will be called repeatedly, being passed a new entry in the batch each time it's called
-        batch
-            A 2D list of lists (or any sequential type) containing arguments to be forwarded to the given batch
-            processor
-
-        Returns
-        -------
-        bool
-            `True` if any of the batch calls returns `True`, `False` otherwise
-        """
-        # Success remains false until the first successful request is completed
-        success = False
-
-        # Time the download
-        start_downloading = time.time()
-
-        # Thread count is one less than the amount of CPU available, unless there is only 1 CPU
-        thread_count = max(1, multiprocessing.cpu_count() - 1)
-
-        # run downloads
-        if len(batch) > 0:
-            self.dm.info(f"Submitting request for {len(batch)} datasets in parallel using {thread_count} threads.")
-
-            # download in parallel
-            with multiprocessing.pool.ThreadPool(processes=thread_count) as pool:
-                for result in pool.starmap(batch_processor, batch):
-                    if result:
-                        success = True
-
-            self.dm.info(f"Downloading took {(time.time() - start_downloading) / 60:.2f} minutes")
-        else:
-            self.dm.info("No requests prepared to be submitted, please check batch_processor is functioning properly.")
-
-        # If every request returned False, log a message
-        if not success:
-            self.dm.info("No requests for data were successful.")
-
-        return success
-
-
-class S3Extractor(Extractor):
-    """
-    Create an object that can be used to request remote kerchunking of S3 files in parallel. The kerchunked files will
-    be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
-    """
 
     def request(
         self,
@@ -146,7 +140,7 @@ class S3Extractor(Extractor):
         if informative_id is None:
             informative_id = remote_file_path
 
-        self.dm.info(f"Beginning to download {informative_id}")
+        log.info(f"Beginning to download {informative_id}")
 
         # Count failed requests and fail with an exception if allowed amount of tries is exceeded
         counter = 1
@@ -156,23 +150,23 @@ class S3Extractor(Extractor):
                 self.dm.kerchunkify(
                     file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path
                 )
-                self.dm.info(f"Finished downloading {informative_id}")
+                log.info(f"Finished downloading {informative_id}")
                 return True
             except Exception as e:
                 # Increase delay time after each failure
                 retry_delay = counter * 30
-                self.dm.info(
+                log.info(
                     f"Encountered exception {e} for {informative_id}, retrying after {retry_delay} seconds"
                     f" , attempt {counter}"
                 )
                 counter += 1
                 time.sleep(retry_delay)
         else:
-            self.dm.info(f"Couldn't find or download a remote file for {informative_id}")
+            log.info(f"Couldn't find or download a remote file for {informative_id}")
             raise FileNotFoundError(f"Too many ({counter}) failed download attempts from server")
 
 
-class FTPExtractor(Extractor):
+class FTPExtractor:
     """
     Create an object that provides an interface to a climate data source's FTP server. The object is able to open its
     connection within a context manager, navigate to specific working directory, match files located in subdirectories,
@@ -186,6 +180,17 @@ class FTPExtractor(Extractor):
 
     # Used to limit retrieval to a single thread at a time
     semaphore: multiprocessing.synchronize.Semaphore = multiprocessing.Semaphore()
+
+    def __init__(self, host: str):
+        """
+        When called like a function, set the host parameter. See `FTPExtractor.__enter__`.
+
+        Parameters
+        ----------
+        host
+            Address to connect to for source data
+        """
+        self.host = host
 
     def __enter__(self) -> FTPExtractor:
         """
@@ -208,13 +213,10 @@ class FTPExtractor(Extractor):
         ValueError
             If host parameter hasn't been set
         """
-        if not hasattr(self, "host"):
-            raise ValueError("FTPExtractor must have a host parameter to open connection")
-        else:
-            self.dm.info(f"Opening a connection to {self.host}")
-            self.ftp = ftplib.FTP(self.host)
-            self.ftp.login()
-            return self
+        log.info(f"Opening a connection to {self.host}")
+        self.ftp = ftplib.FTP(self.host)
+        self.ftp.login()
+        return self
 
     def __exit__(self, *exception):
         """
@@ -227,19 +229,7 @@ class FTPExtractor(Extractor):
             Exception information passed automatically by Python
         """
         self.ftp.close()
-        self.dm.info(f"Closed connection to {self.host}")
-
-    def __call__(self, host: str):
-        """
-        When called like a function, set the host parameter. See `FTPExtractor.__enter__`.
-
-        Parameters
-        ----------
-        host
-            Address to connect to for source data
-        """
-        self.host = host
-        return self
+        log.info(f"Closed connection to {self.host}")
 
     @property
     def cwd(self) -> pathlib.PurePosixPath:
@@ -319,15 +309,13 @@ class FTPExtractor(Extractor):
             output = destination
 
         # Open the output file and write the contents of the remote file to it using the FTP library
-        self.dm.info(f"Downloading remote file {source} to {output}")
+        log.info(f"Downloading remote file {source} to {output}")
         with open(output, "wb") as fp:
             try:
                 # Use a semaphore to limit the number of simultaneous downloads to 1 even in multithreaded
                 # environments. This is either a requirement of ftplib or a common requirement of FTP servers.
                 with self.semaphore:
-                    self.dm.info(
-                        "Using a single thread as a requirement of FTP even if multiple threads are available"
-                    )
+                    log.info("Using a single thread as a requirement of FTP even if multiple threads are available")
                     self.ftp.retrbinary(f"RETR {source}", fp.write)
             except ftplib.error_perm:
                 raise RuntimeError(f"Error retrieving {source} from {self.host} in {self.cwd}")

@@ -7,7 +7,7 @@ import datetime
 import pathlib
 import xarray as xr
 from gridded_etl_tools.dataset_manager import DatasetManager
-from gridded_etl_tools.utils.extractor import FTPExtractor
+from gridded_etl_tools.utils.extractor import FTPExtractor, pool
 
 
 class CHIRPS(DatasetManager):
@@ -206,8 +206,7 @@ class CHIRPS(DatasetManager):
             download_year_range = range(date_range[0].year, end_date.year + 1)
 
         # Connect to CHIRPS FTP and request files for all needed years
-        extractor = FTPExtractor(self)
-        with extractor(self.dataset_download_url) as ftp:
+        with FTPExtractor(self.dataset_download_url) as ftp:
             ftp.cwd = self.remote_path
             requests: list[pathlib.Path] = []
             # Loop through every year in the date range and queue requests
@@ -216,7 +215,7 @@ class CHIRPS(DatasetManager):
                 requests.extend(ftp.find(pattern))
             # Request downloads using a thread pool, although the downloads will happen synchronously because FTP
             # doesn't support multithreading.
-            ftp.pool(ftp.request, [[request, self.local_input_path()] for request in requests])
+            pool(ftp.request, [[request, self.local_input_path()] for request in requests])
 
         # Check if newest local file has newer data
         return self.check_if_new_data(end_date)
