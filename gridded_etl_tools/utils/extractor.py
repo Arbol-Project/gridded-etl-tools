@@ -22,7 +22,6 @@ import logging
 log = logging.getLogger("extraction_logs")
 
 
-@staticmethod
 def pool(batch_processor: typing.Callable[..., bool], batch: typing.Sequence[typing.Sequence]) -> bool:
     """
     Launch a batch of requests simultaneously, wait for them all to complete, then return a boolean indicating
@@ -183,7 +182,7 @@ class FTPExtractor:
 
     def __init__(self, host: str):
         """
-        When called like a function, set the host parameter. See `FTPExtractor.__enter__`.
+        Set the host parameter when initializing an FTPEXtractor object
 
         Parameters
         ----------
