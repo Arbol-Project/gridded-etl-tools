@@ -144,15 +144,16 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     # Parse a dataset manager initially, and then for an update
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
-    dm.original_files = list(dm.input_files())
+    random_coords = dm.get_random_coords(dm.get_prod_update_ds())
     # Local data
     dm.protocol = "file"
+    dm.input_files = Mock(return_value=nc4_input_files(dm))
     dm.original_files = nc4_input_files(dm)
-    assert dm.get_original_ds()
+    assert dm.get_original_ds(random_coords)
     # Remote data
     dm.protocol = "s3"
-    dm.original_files = json_input_files(dm)
-    orig_ds, _ = dm.get_original_ds()
+    dm.input_files = Mock(return_value=json_input_files(dm))
+    orig_ds, _ = dm.get_original_ds(random_coords)
     assert orig_ds
 
 
