@@ -31,18 +31,21 @@ def test_pre_parse_quality_check(mocker, manager_class: DatasetManager, fake_ori
     )
     extreme_vals_ds = copy.deepcopy(fake_original_dataset)
     extreme_vals_ds.data.values[:] = 1_000_000
+    extreme_vals_ds.data.encoding["units"] = "cubits"
+    dm.pre_chunk_dataset = extreme_vals_ds
     with pytest.raises(ValueError):
         dm.pre_parse_quality_check(extreme_vals_ds)
     # Test that a dataset with NaN values fails
     nan_vals_ds = copy.deepcopy(fake_original_dataset)
     nan_vals_ds.data.values[:] = np.nan
+    dm.pre_chunk_dataset = nan_vals_ds
     with pytest.raises(ValueError):
         dm.pre_parse_quality_check(nan_vals_ds)
     # Test that a parse fails on mismatched data var encoding
     mocker.patch("gridded_etl_tools.utils.attributes.Attributes.data_var_dtype", return_value="<f4")
-    # fake_original_dataset["data"] = fake_original_dataset["data"].astype('<f8')
     fake_original_dataset.data.encoding["dtype"] = "<f8"
-    # fake_original_dataset.data.encoding["units"] = 'cubits'
+    fake_original_dataset.data.encoding["units"] = "cubits"
+    dm.pre_chunk_dataset = fake_original_dataset
     with pytest.raises(TypeError):
         dm.pre_parse_quality_check(fake_original_dataset)
 

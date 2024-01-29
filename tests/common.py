@@ -241,26 +241,26 @@ def original_ds_normal(self, *args, **kwargs):
 
 
 def original_ds_bad_data(self, *args, **kwargs):
-    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
     orig_ds[self.data_var()][:] = 1234567
-    return orig_ds, orig_file_path
+    return orig_ds
 
 
 def original_ds_no_time(self, *args, **kwargs):
-    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
-    return orig_ds.squeeze().drop("time"), orig_file_path
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    return orig_ds.squeeze().drop("time")
 
 
 def original_ds_bad_time(self, *args, **kwargs):
-    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
     orig_ds = orig_ds.assign_coords({"time": np.atleast_1d(np.datetime64("1850-01-01"))})
-    return orig_ds, orig_file_path
+    return orig_ds
 
 
 def original_ds_single_time(self, *args, **kwargs):
-    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
     orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
-    return orig_ds, orig_file_path
+    return orig_ds
 
 
 original_input_files = DatasetManager.input_files

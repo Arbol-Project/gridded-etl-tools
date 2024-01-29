@@ -1208,8 +1208,8 @@ class Publish(Transform, Metadata):
         # Check that data is stored in a space efficient format
         if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(
-                f"Dtype for data variable {self.data_var()} is\
-                  {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+                f"Dtype for data variable {self.data_var()} is "
+                f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
@@ -1247,8 +1247,8 @@ class Publish(Transform, Metadata):
                     limit_vals = self.extreme_values_by_unit[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
                         raise ValueError(
-                            f"Value {random_val} falls outside acceptable range\
-                            {limit_vals} for data in units {unit}. Found at {random_coords}"
+                            f"Value {random_val} falls outside acceptable range "
+                            f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
             # Build a dictionary of checked values to compare against after parsing
             random_vals.update({i: {"coords": random_coords, "value": random_val}})
@@ -1280,18 +1280,18 @@ class Publish(Transform, Metadata):
         if any(append_times):
             if append_times[0] < original_dataset[self.time_dim][0]:
                 raise IndexError(
-                    f"Attempting to append data at {insert_times[0]}\
-                                before dataset start {original_dataset[self.time_dim][0]}.\
-                                This is not possible. If you need an earlier start date,\
-                                please reparse the dataset"
+                    f"Attempting to append data at {insert_times[0]} "
+                    f"before dataset start {original_dataset[self.time_dim][0]}. "
+                    "This is not possible. If you need an earlier start date, "
+                    "please reparse the dataset"
                 )
         if any(insert_times):
             if insert_times[0] < original_dataset[self.time_dim][0]:
                 raise IndexError(
-                    f"Attempting to insert data at {insert_times[0]}\
-                                before dataset start {original_dataset[self.time_dim][0]}.\
-                                This is not possible. If you need an earlier start date,\
-                                please reparse the dataset"
+                    f"Attempting to insert data at {insert_times[0]} "
+                    f"before dataset start {original_dataset[self.time_dim][0]}. "
+                    "This is not possible. If you need an earlier start date, "
+                    "please reparse the dataset"
                 )
         # Check that the first value of the append times and the last value of the original dataset are contiguous
         # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
@@ -1374,23 +1374,23 @@ class Publish(Transform, Metadata):
             while i <= checks:
                 random_coords = self.get_random_coords(prod_ds)
                 try:
-                    orig_ds, orig_file_path = self.get_original_ds(random_coords)
+                    orig_ds = self.get_original_ds(random_coords)
                 except FileNotFoundError:
                     break
-                i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
+                i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
                     self.info(
-                        f"Breaking from checking loop after\
-                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} \
-                              to prevent infinite checks"
+                        "Breaking from checking loop after "
+                        f"{datetime.timedelta(seconds=time.perf_counter() - start_checking)} "
+                        "to prevent infinite checks"
                     )
                     break
 
             self.info(
-                f"Values check successfully passed.\
-                      Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
+                "Values check successfully passed. "
+                f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
             )
 
         return True
@@ -1447,7 +1447,7 @@ class Publish(Transform, Metadata):
             raw_ds, orig_file_path = self.binary_search_for_file(target_datetime=random_coords[self.time_dim])
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
-        return orig_ds, orig_file_path
+        return orig_ds
 
     def binary_search_for_file(self, target_datetime: datetime.datetime, possible_files: list[str] = None):
         """
@@ -1485,9 +1485,7 @@ class Publish(Transform, Metadata):
             with self.raw_file_to_dataset(current_file_path) as ds:
                 if self.time_dim in ds:
                     # Extract time values and convert them to an array for len() and filtering, if of length 1
-                    time_values = ds[self.time_dim].values
-                    if isinstance(time_values, np.datetime64):
-                        time_values = np.array([time_values], dtype="datetime64[ns]")
+                    time_values = np.atleast_1d(ds[self.time_dim].values)
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -1506,7 +1504,10 @@ class Publish(Transform, Metadata):
                         "correctly prepared."
                     )
 
-        raise FileNotFoundError(f"Error encountered, values low: {low}, high: {high}, possible_files: {possible_files}")
+        raise FileNotFoundError(
+            "No file found during binary search. "
+            f"Last search values low: {low}, high: {high}, possible_files: {possible_files}."
+        )
 
     def raw_file_to_dataset(self, file_path: str):
         """
@@ -1523,9 +1524,9 @@ class Publish(Transform, Metadata):
         elif self.protocol == "s3":
             if not self.use_local_zarr_jsons:
                 raise ValueError(
-                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
-                                This prevents running needed checks for this dataset.\
-                                Please enable `use_local_zarr_jsons` to permit post-parse QC"
+                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs. "
+                    "This prevents running needed checks for this dataset. "
+                    "Please enable `use_local_zarr_jsons` to permit post-parse QC"
                 )
             # Note this will apply postprocess_zarr automtically
             return self.zarr_json_to_dataset(zarr_json_path=str(file_path))
@@ -1568,7 +1569,6 @@ class Publish(Transform, Metadata):
         random_coords: dict[Any],
         orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
-        orig_file_path: pathlib.Path,
         threshold: float = 10e-5,
     ):
         """
@@ -1607,11 +1607,13 @@ class Publish(Transform, Metadata):
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
-        # return infinity (indicating one value is infinite), or if only one value is NaN
+        # or if only one value is either Infinite or NaN
         self.info(f"{orig_val}, {prod_val}")
-        if (abs(orig_val - prod_val) > threshold and abs(orig_val - prod_val) != np.inf) or sum(
-            np.isnan([orig_val, prod_val])
-        ) == 1:
+        if (
+            abs(orig_val - prod_val) > threshold
+            or sum(np.isinf([orig_val, prod_val])) == 1
+            or sum(np.isnan([orig_val, prod_val])) == 1
+        ):
             raise ValueError(
                 f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
             )
