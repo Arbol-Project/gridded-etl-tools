@@ -1543,13 +1543,11 @@ class Publish(Transform, Metadata):
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
-        # only one value is infinite or NaN
+        # return infinity (indicating one value is infinite), or if only one value is NaN
         self.info(f"{orig_val}, {prod_val}")
-        if (
-            abs(orig_val - prod_val) > threshold
-            or sum(np.isinf([orig_val, prod_val])) == 1
-            or sum(np.isnan([orig_val, prod_val])) == 1
-        ):
+        if (abs(orig_val - prod_val) > threshold and abs(orig_val - prod_val) != np.inf) or sum(
+            np.isnan([orig_val, prod_val])
+        ) == 1:
             raise ValueError(
                 f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
             )

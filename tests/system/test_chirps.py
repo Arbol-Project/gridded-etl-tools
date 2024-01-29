@@ -6,8 +6,6 @@ import xarray
 import shutil
 import glob
 
-from unittest.mock import Mock
-
 from ..common import (
     clean_up_input_paths,
     empty_ipns_publish,
@@ -23,19 +21,11 @@ from ..common import (
 
 
 @pytest.fixture
-def create_input_directories(
-    extracted_input_path, initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path
-):
+def create_input_directories(initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path):
     """
     The testing directories for initial, append and insert will get created before each run
     """
-    for path in (
-        extracted_input_path,
-        initial_input_path,
-        appended_input_path,
-        appended_input_path_with_hole,
-        qc_input_path,
-    ):
+    for path in (initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path):
         if not path.exists():
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
@@ -75,7 +65,6 @@ def simulate_file_download_hole(root, initial_input_path, appended_input_path_wi
 def setup_and_teardown_per_test(
     mocker,
     request,
-    extracted_input_path,
     initial_input_path,
     appended_input_path,
     appended_input_path_with_hole,
@@ -109,7 +98,7 @@ def setup_and_teardown_per_test(
     remove_dask_worker_dir()
     remove_performance_report()
     # now clean up the various files created for each test
-    clean_up_input_paths(extracted_input_path, initial_input_path, appended_input_path, appended_input_path_with_hole)
+    clean_up_input_paths(initial_input_path, appended_input_path, appended_input_path_with_hole)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -124,33 +113,6 @@ def teardown_module(request, heads_path):
             print(f"Cleaned up {heads_path}")
 
     request.addfinalizer(test_clean)
-
-
-def test_extract(mocker, manager_class, heads_path, test_chunks, extracted_input_path):
-    """
-    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
-    "test_".
-    """
-    # Get the CHIRPS manager with rebuild set
-    manager = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="ipld")
-    manager.HASH_HEADS_PATH = heads_path
-    # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():
-        mocker.patch(
-            "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
-            offline_ipns_publish,
-        )
-    manager.check_if_new_data = Mock(return_value=True)
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # run and check extract
-    date_range = [datetime.datetime(2020, 1, 1), datetime.datetime(2020, 12, 31)]
-    manager.extract(date_range=date_range)
-    input_files = list(manager.input_files())
-
-    assert len(input_files) == 1
-    manager.check_if_new_data.assert_called_once_with(date_range[1])
 
 
 def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):

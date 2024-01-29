@@ -14,7 +14,6 @@ we can know at run time which key was used to encrypt the Zarr, as long as it is
 in he current run time registry, but attackers who have access to the Zarr but not the
 encryption key cannot decrypt the Zarr.
 """
-
 import functools
 import hashlib
 import io
