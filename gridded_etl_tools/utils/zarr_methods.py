@@ -1377,7 +1377,7 @@ class Publish(Transform, Metadata):
                     orig_ds = self.get_original_ds(random_coords)
                 except FileNotFoundError:
                     break
-                i += self.check_value(random_coords, orig_ds, prod_ds, threshold)
+                i += self.check_written_value(random_coords, orig_ds, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
@@ -1564,7 +1564,7 @@ class Publish(Transform, Metadata):
         # Apply standard postprocessing to get other data variables in order
         return self.rename_data_variable(orig_ds)
 
-    def check_value(
+    def check_written_value(
         self,
         random_coords: dict[Any],
         orig_ds: xr.Dataset,

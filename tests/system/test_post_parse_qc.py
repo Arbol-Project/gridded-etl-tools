@@ -201,7 +201,7 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     # pass if values match
     orig_ds = dm.get_original_ds(random_coords)
     random_coords["time"] = random.choice(orig_ds["time"].values)
-    assert dm.check_value(random_coords, orig_ds, prod_ds)
+    assert dm.check_written_value(random_coords, orig_ds, prod_ds)
 
     # raise ValueError if one dataset doesn't match the other
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
@@ -209,11 +209,11 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     random_coords["time"] = random.choice(orig_ds["time"].values)
     orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
     with pytest.raises(ValueError):
-        dm.check_value(random_coords, orig_ds, prod_ds)
+        dm.check_written_value(random_coords, orig_ds, prod_ds)
 
     # raise ValueError if one dataset is all NaNs
     orig_ds = dm.get_original_ds(random_coords)
     random_coords["time"] = random.choice(orig_ds["time"].values)
     orig_ds["precip"].values = np.full_like(orig_ds["precip"], np.nan)
     with pytest.raises(ValueError):
-        dm.check_value(random_coords, orig_ds, prod_ds)
+        dm.check_written_value(random_coords, orig_ds, prod_ds)
