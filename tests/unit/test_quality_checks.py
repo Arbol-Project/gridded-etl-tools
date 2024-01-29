@@ -17,6 +17,7 @@ def test_pre_parse_quality_check(mocker, manager_class: DatasetManager, fake_ori
     # prepare a dataset manager
     dm = get_manager(manager_class)
     fake_original_dataset.data.encoding["units"] = "cubits"
+    dm.pre_chunk_dataset = fake_original_dataset
     # Test that a dataset with out-of-order times fails
     out_of_order_ds = fake_original_dataset.copy()
     out_of_order_ds = out_of_order_ds.assign_coords({"time": np.roll(out_of_order_ds.time.values, 1)})

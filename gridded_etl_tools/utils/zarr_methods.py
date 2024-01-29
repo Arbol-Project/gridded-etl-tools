@@ -815,6 +815,9 @@ class Publish(Transform, Metadata):
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
 
+        import ipdb
+
+        ipdb.set_trace(context=4)
         dataset = xr.open_dataset(
             "reference://",
             engine="zarr",
