@@ -18,6 +18,7 @@ from ..common import (
     remove_performance_report,
     remove_zarr_json,
     original_ds_normal,
+    original_ds_single_time,
     original_ds_bad_data,
     original_ds_no_time,
     original_ds_bad_time,
@@ -134,6 +135,18 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
     dm.post_parse_quality_check(checks=5)
     assert "Skipping post-parse quality check" in caplog.text
+
+
+def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog, initial_input_path):
+    """
+    Test that the post-parse quality check method waves through good data
+    and fails as anticipated with bad data
+    """
+    # Prepare a dataset manager
+    dm = run_etl(manager_class, input_path=initial_input_path)
+    # Runs without issue for original datasets of length 1 in the time dimension
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_single_time)
+    assert dm.post_parse_quality_check(checks=5)
 
 
 def test_get_original_ds(mocker, manager_class, initial_input_path, appended_input_path):

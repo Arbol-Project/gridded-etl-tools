@@ -257,6 +257,12 @@ def original_ds_bad_time(self, *args, **kwargs):
     return orig_ds, orig_file_path
 
 
+def original_ds_single_time(self, *args, **kwargs):
+    orig_ds, orig_file_path = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
+    return orig_ds, orig_file_path
+
+
 original_input_files = DatasetManager.input_files
 
 
