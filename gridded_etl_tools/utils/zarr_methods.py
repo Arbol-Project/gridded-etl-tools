@@ -1506,7 +1506,7 @@ class Publish(Transform, Metadata):
                         "correctly prepared."
                     )
 
-        raise FileNotFoundError(f"File {current_file_path} not found")
+        raise FileNotFoundError(f"Error encountered, values low: {low}, high: {high}, possible_files: {possible_files}")
 
     def raw_file_to_dataset(self, file_path: str):
         """
