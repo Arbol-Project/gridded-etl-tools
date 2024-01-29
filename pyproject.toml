@@ -90,6 +90,6 @@ exclude = ["tests"]
 namespaces = false
 
 [tool.flake8]
-# flake8 and black disagree on E203 and W503
-ignore = ["E203", "W503"]
+# flake8 and black disagree on E203, E701, and W503
+ignore = ["E203","E701", "W503"]
 max-line-length = 119
