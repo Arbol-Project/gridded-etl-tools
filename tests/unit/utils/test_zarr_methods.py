@@ -1495,8 +1495,7 @@ class TestPublish:
 
     @staticmethod
     def test_write_initial_zarr_not_ipld(manager_class):
-        class DummyHash:
-            ...
+        class DummyHash: ...
 
         dm = manager_class()
         dm.pre_initial_dataset = mock.Mock()

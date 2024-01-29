@@ -9,8 +9,7 @@ class TestAttributes:
         class Base(manager_class):
             foo = attributes.abstract_class_property()
 
-        class Subclass(Base):
-            ...
+        class Subclass(Base): ...
 
         with pytest.raises(TypeError):
             Subclass.foo
@@ -20,8 +19,7 @@ class TestAttributes:
         class Base(manager_class):
             foo = attributes.abstract_class_property()
 
-        class Subclass(Base):
-            ...
+        class Subclass(Base): ...
 
         with pytest.raises(TypeError):
             Subclass()
@@ -57,8 +55,7 @@ class TestAttributes:
         class Base(manager_class):
             foo = attributes.abstract_class_property(fallback="bar")
 
-        class Subclass(Base):
-            ...
+        class Subclass(Base): ...
 
         with pytest.raises(TypeError):
             Subclass.foo
