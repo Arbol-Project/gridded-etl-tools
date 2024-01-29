@@ -2,6 +2,7 @@
 Template classes for creating a new gridded climate data ETL.
 All filled fields are examples that can be replaced; all unfilled fields must be filled by the user.
 """
+
 import datetime
 import pathlib
 
