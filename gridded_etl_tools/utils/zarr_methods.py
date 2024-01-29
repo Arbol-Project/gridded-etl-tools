@@ -1412,7 +1412,7 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def get_original_ds(self, random_coords: dict[Any] | None = None) -> tuple[xr.Dataset, pathlib.Path]:
+    def get_original_ds(self, random_coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
 

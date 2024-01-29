@@ -178,9 +178,11 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     dm.original_files = list(dm.input_files())
+    prod_ds = dm.store.dataset()
+    random_coords = dm.get_random_coords(prod_ds)
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
-    orig_ds, orig_file_path = dm.get_original_ds()
+    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
     orig_ds = dm.reformat_orig_ds(orig_ds, orig_file_path)
     assert "time" in orig_ds.dims
 
