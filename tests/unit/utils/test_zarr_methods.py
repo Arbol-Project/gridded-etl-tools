@@ -9,7 +9,6 @@ import numpy
 import pytest
 
 from gridded_etl_tools.utils import store
-from xarray.testing import assert_equal
 
 
 @pytest.fixture
@@ -1083,14 +1082,14 @@ class TestPublish:
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = (post_dataset, post_parse_attrs) = (mock.Mock(), mock.Mock())
+        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dataset = mock.Mock()
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        post_dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_has_calls(
@@ -1112,14 +1111,14 @@ class TestPublish:
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = (post_dataset, post_parse_attrs) = (mock.Mock(), mock.Mock())
+        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
 
         dataset = mock.Mock()
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        post_dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
@@ -1231,29 +1230,13 @@ class TestPublish:
             "initial_parse": False,
         }
 
-        dataset, update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
+        update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
         assert update_attrs == {
             "update_in_progress": False,
             "date range": ["2000010100", "2020123123"],
             "update_previous_end_date": "2020123023",
             "initial_parse": False,
             "some relevant attribute": True,
-        }
-        assert not assert_equal(dataset, fake_original_dataset)
-        assert fake_original_dataset.attrs == {
-            "date range": ["2000010100", "2020123123"],
-            "update_date_range": ["202012293", "2020123123"],
-            "update_previous_end_date": "2020123023",
-            "update_in_progress": False,
-            "initial_parse": False,
-            "some relevant attribute": True,
-            "some irrelevant attribute": False,
-        }
-        assert dataset.attrs == {
-            "initial_parse": False,
-            "update_date_range": ["202012293", "2020123123"],
-            "update_in_progress": False,
-            "some irrelevant attribute": False,
         }
 
     @staticmethod
