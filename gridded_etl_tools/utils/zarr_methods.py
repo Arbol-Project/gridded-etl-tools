@@ -647,17 +647,17 @@ class Publish(Transform, Metadata):
                 # a Zarr is opened during writing, there will be indicators that show the data is being edited.
                 self.info("Writing metadata before writing data to indicate write is in progress.")
                 if self.store.has_existing:
-                    self.store.write_metadata_only(
-                        update_attrs={
-                            "update_in_progress": True,
-                            "update_is_append_only": dataset.get("update_is_append_only"),
-                            "initial_parse": False,
-                        }
-                    )
+                    update_attrs = {
+                        "update_in_progress": True,
+                        "update_is_append_only": dataset.get("update_is_append_only"),
+                        "initial_parse": False,
+                    }
+                    self.store.write_metadata_only(update_attrs=update_attrs)
+                    dataset.attrs.update(update_attrs)
                 else:
                     dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
                 # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
-                dataset, post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
+                post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
@@ -670,11 +670,9 @@ class Publish(Transform, Metadata):
                 self.info("Writing metadata after writing data to indicate write is finished.")
                 self.store.write_metadata_only(update_attrs=post_parse_attrs)
 
-    def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> tuple[xr.Dataset, dict[str, Any]]:
+    def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
-        Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes
-        While building this dict, remove these attributes from the dataset to be written.
-
+        Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes.
         Parameters
         ----------
         dataset
@@ -682,8 +680,6 @@ class Publish(Transform, Metadata):
 
         Returns
         -------
-        dataset
-            The xr.Dataset about to be written, with `self.update_attributes` keys removed from attributes
         update_attrs
             A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
         """
@@ -694,9 +690,9 @@ class Publish(Transform, Metadata):
             if attr in dataset.attrs:
                 # Remove update attribute fields from the dataset so they aren't written with the dataset
                 # For example "date range" should only be updated after a successful parse
-                update_attrs[attr] = dataset.attrs.pop(attr, None)
+                update_attrs[attr] = dataset.attrs[attr]
 
-        return dataset, update_attrs
+        return update_attrs
 
     # SETUP
 
