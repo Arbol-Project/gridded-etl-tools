@@ -1373,10 +1373,7 @@ class Publish(Transform, Metadata):
             current_check = 0
             while current_check <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                try:
-                    orig_ds = self.get_original_ds(random_coords)
-                except FileNotFoundError:
-                    break
+                orig_ds = self.get_original_ds(random_coords)
                 current_check += self.check_written_value(random_coords, orig_ds, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
@@ -1389,7 +1386,7 @@ class Publish(Transform, Metadata):
                     break
 
             self.info(
-                "Values check successfully passed. "
+                "Written values check successfully passed. "
                 f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
             )
 
@@ -1425,8 +1422,6 @@ class Publish(Transform, Metadata):
         ----------
         orig_ds
             The original dataset, unformatted
-        orig_file_path
-            The pathlib.Path to the randomly selected original file
         """
         # Randomly select an original dataset
         if random_coords and "step" in random_coords:
@@ -1435,14 +1430,9 @@ class Publish(Transform, Metadata):
             step_filtered_original_files = [
                 fil for fil in list(self.input_files()) if f"F{step_hours:03}." in str(fil)
             ]
-            try:
-                raw_ds, orig_file_path = self.binary_search_for_file(
-                    target_datetime=random_coords[self.time_dim], possible_files=step_filtered_original_files
-                )
-            except IndexError:
-                # For some datasets a given day may not have all forecasts records available in prod,
-                # causing failures we need to escape w/in the post_parse_quality_check while loop
-                raise FileNotFoundError
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                target_datetime=random_coords[self.time_dim], possible_files=step_filtered_original_files
+            )
         else:
             raw_ds, orig_file_path = self.binary_search_for_file(target_datetime=random_coords[self.time_dim])
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
@@ -1464,6 +1454,13 @@ class Publish(Transform, Metadata):
             The desired datetime
         possible_files
             A list of raw input files to select from. Defaults to list(self.input_files()).
+
+        Returns
+        ----------
+        ds
+            The original dataset, unformatted
+        current_file_path
+            The pathlib.Path to the randomly selected original file
 
         Raises
         ------
