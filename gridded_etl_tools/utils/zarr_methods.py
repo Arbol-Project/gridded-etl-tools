@@ -1370,14 +1370,14 @@ class Publish(Transform, Metadata):
             self.set_key_dims()  # in case running w/out Transform/Parse
             prod_ds = self.get_prod_update_ds()
             # Run the data check N times, incrementing after every successfuly check
-            i = 0
-            while i <= checks:
+            current_check = 0
+            while current_check <= checks:
                 random_coords = self.get_random_coords(prod_ds)
                 try:
                     orig_ds = self.get_original_ds(random_coords)
                 except FileNotFoundError:
                     break
-                i += self.check_written_value(random_coords, orig_ds, prod_ds, threshold)
+                current_check += self.check_written_value(random_coords, orig_ds, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
@@ -1449,7 +1449,7 @@ class Publish(Transform, Metadata):
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds
 
-    def binary_search_for_file(self, target_datetime: datetime.datetime, possible_files: list[str] = None):
+    def binary_search_for_file(self, target_datetime: datetime.datetime, possible_files: list[str] | None = None):
         """
         Implement a binary search algorithm to find the file containing a desired datetime
         within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
