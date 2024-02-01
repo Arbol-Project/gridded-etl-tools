@@ -1435,6 +1435,11 @@ class Publish(Transform, Metadata):
         bool
             A boolean indicating that a check was successful (True) or the selected file doesn't correspond
             to the update time range (False). Failed checks will raise a ValueError instead.
+
+        Raises
+        ------
+        ValueError
+            Indicates a potentially problematic mismatch between source data values and values written to production
         """
         orig_ds = self.get_original_ds(random_coords)
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
