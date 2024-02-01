@@ -1413,7 +1413,7 @@ class Publish(Transform, Metadata):
         random_coords: dict[Any],
         prod_ds: xr.Dataset,
         threshold: float = 10e-5,
-    ):
+    ) -> bool:
         """
         Check random values in the original files against the written values
         in the updated dataset at the same location
@@ -1444,13 +1444,8 @@ class Publish(Transform, Metadata):
         orig_ds = self.get_original_ds(random_coords)
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}
-        # Open desired data values.
-        if "step" in orig_ds.dims:
-            # Forecast step timedeltas are hard to select from so we have to use the nearest method.
-            # We don't implement this elsewhere to minimize scope for error
-            orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
-        else:
-            orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        # # Open desired data values.
+        orig_val = orig_ds.sel(**selection_coords)[self.data_var()].values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -1486,22 +1481,24 @@ class Publish(Transform, Metadata):
             The original dataset, unformatted
         """
         # Randomly select an original dataset
+        raw_ds, orig_file_path = self.binary_search_for_file(random_coords = random_coords,
+                                                             time_dim = self.time_dim)
+        # If a forecast dataset then search again, this time for the correct step
         if "step" in random_coords:
-            # Forecasts create loads of files so we pre-filter to speed things up
-            step_hours = random_coords["step"].astype("timedelta64[h]").astype(int)
-            step_filtered_original_files = [
-                fil for fil in list(self.input_files()) if f"F{step_hours:03}." in str(fil)
+            frt_string = datetime.datetime.strftime(self.numpydate_to_py(raw_ds[self.time_dim].values[0]),
+                                                    "%Y-%m-%d") 
+            date_filtered_original_files = [
+                fil for fil in list(self.input_files()) if frt_string in str(fil)
             ]
-            raw_ds, orig_file_path = self.binary_search_for_file(
-                target_datetime=random_coords[self.time_dim], possible_files=step_filtered_original_files
+            raw_ds, orig_file_path = self.binary_search_for_file(random_coords = random_coords,
+                                                                 time_dim = "step",
+                                                                 possible_files=date_filtered_original_files
             )
-        else:
-            raw_ds, orig_file_path = self.binary_search_for_file(target_datetime=random_coords[self.time_dim])
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds
 
-    def binary_search_for_file(self, target_datetime: datetime.datetime, possible_files: list[str] | None = None):
+    def binary_search_for_file(self, random_coords: dict[Any], time_dim: str, possible_files: list[str] | None = None):
         """
         Implement a binary search algorithm to find the file containing a desired datetime
         within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
@@ -1512,8 +1509,10 @@ class Publish(Transform, Metadata):
 
         Parameters
         ----------
-        target_datetime
-            The desired datetime
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        time_dim
+            A str representing the time dimension to check against
         possible_files
             A list of raw input files to select from. Defaults to list(self.input_files()).
 
@@ -1533,6 +1532,7 @@ class Publish(Transform, Metadata):
         FileNotFoundError
             Indicates that the requested file could not be found
         """
+        target_datetime = random_coords[time_dim]
         if not possible_files:
             possible_files = list(self.input_files())
 
@@ -1542,9 +1542,9 @@ class Publish(Transform, Metadata):
             current_file_path = possible_files[mid]
 
             with self.raw_file_to_dataset(current_file_path) as ds:
-                if self.time_dim in ds:
+                if time_dim in ds:
                     # Extract time values and convert them to an array for len() and filtering, if of length 1
-                    time_values = np.atleast_1d(ds[self.time_dim].values)
+                    time_values = np.atleast_1d(ds[time_dim].values)
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -1558,7 +1558,7 @@ class Publish(Transform, Metadata):
                         low = mid + 1
                 else:
                     raise ValueError(
-                        f"Time dimension {self.time_dim} not found in {current_file_path}!"
+                        f"Time dimension {time_dim} not found in {current_file_path}!"
                         "Check that the time dimension was properly specified and the input files "
                         "correctly prepared."
                     )
