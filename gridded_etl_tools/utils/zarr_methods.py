@@ -1373,11 +1373,7 @@ class Publish(Transform, Metadata):
             current_check = 0
             while current_check <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                try:
-                    orig_ds = self.get_original_ds(random_coords)
-                except FileNotFoundError:
-                    break
-                current_check += self.check_written_value(random_coords, orig_ds, prod_ds, threshold)
+                current_check += self.check_written_value(random_coords, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
@@ -1389,7 +1385,7 @@ class Publish(Transform, Metadata):
                     break
 
             self.info(
-                "Values check successfully passed. "
+                "Written values check successfully passed. "
                 f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
             )
 
@@ -1412,6 +1408,64 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
+    def check_written_value(
+        self,
+        random_coords: dict[Any],
+        prod_ds: xr.Dataset,
+        threshold: float = 10e-5,
+    ) -> bool:
+        """
+        Check random values in the original files against the written values
+        in the updated dataset at the same location
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        prod_ds
+            The filtered production dataset
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
+        threshold
+            The tolerance for diversions between original and parsed values.
+            Absolute differences between them beyond this limit will raise a ValueError
+
+        Returns
+        -------
+        bool
+            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
+            to the update time range (False). Failed checks will raise a ValueError instead.
+
+        Raises
+        ------
+        ValueError
+            Indicates a potentially problematic mismatch between source data values and values written to production
+        """
+        orig_ds = self.get_original_ds(random_coords)
+        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
+        # # Open desired data values.
+        orig_val = orig_ds.sel(**selection_coords)[self.data_var()].values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        # Compare values from the original dataset to the prod dataset.
+        # Raise an error if the values differ more than the permitted threshold,
+        # or if only one value is either Infinite or NaN
+        self.info(f"{orig_val}, {prod_val}")
+        if (
+            # second condition handles cases where one value is infinite
+            (abs(orig_val - prod_val) > threshold and not abs(orig_val - prod_val) == np.inf)
+            or sum(np.isnan([orig_val, prod_val])) == 1
+            # second condition handles cases when extremely large values in origin files
+            # are (rightly) written as infinite in prod, breaking our math
+            or (sum(np.isinf([orig_val, prod_val])) == 1 and not np.sum(np.array([orig_val, prod_val]) > 1e100) == 2)
+        ):
+            raise ValueError(
+                "Mismatch in written values: "
+                f"orig_val {orig_val} and prod_val {prod_val}."
+                f"\nQuery parameters: {random_coords}"
+            )
+        return True
+
     def get_original_ds(self, random_coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
@@ -1425,31 +1479,21 @@ class Publish(Transform, Metadata):
         ----------
         orig_ds
             The original dataset, unformatted
-        orig_file_path
-            The pathlib.Path to the randomly selected original file
         """
         # Randomly select an original dataset
-        if random_coords and "step" in random_coords:
-            # Forecasts create loads of files so we pre-filter to speed things up
-            step_hours = random_coords["step"].astype("timedelta64[h]").astype(int)
-            step_filtered_original_files = [
-                fil for fil in list(self.input_files()) if f"F{step_hours:03}." in str(fil)
-            ]
-            try:
-                raw_ds, orig_file_path = self.binary_search_for_file(
-                    target_datetime=random_coords[self.time_dim], possible_files=step_filtered_original_files
-                )
-            except IndexError:
-                # For some datasets a given day may not have all forecasts records available in prod,
-                # causing failures we need to escape w/in the post_parse_quality_check while loop
-                raise FileNotFoundError
-        else:
-            raw_ds, orig_file_path = self.binary_search_for_file(target_datetime=random_coords[self.time_dim])
+        raw_ds, orig_file_path = self.binary_search_for_file(random_coords=random_coords, time_dim=self.time_dim)
+        # If a forecast dataset then search again, this time for the correct step
+        if "step" in random_coords:
+            frt_string = datetime.datetime.strftime(self.numpydate_to_py(raw_ds[self.time_dim].values[0]), "%Y-%m-%d")
+            date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                random_coords=random_coords, time_dim="step", possible_files=date_filtered_original_files
+            )
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds
 
-    def binary_search_for_file(self, target_datetime: datetime.datetime, possible_files: list[str] | None = None):
+    def binary_search_for_file(self, random_coords: dict[Any], time_dim: str, possible_files: list[str] | None = None):
         """
         Implement a binary search algorithm to find the file containing a desired datetime
         within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
@@ -1460,20 +1504,30 @@ class Publish(Transform, Metadata):
 
         Parameters
         ----------
-        target_datetime
-            The desired datetime
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        time_dim
+            A str representing the time dimension to check against
         possible_files
             A list of raw input files to select from. Defaults to list(self.input_files()).
 
+        Returns
+        ----------
+        ds
+            The original dataset, unformatted
+        current_file_path
+            The pathlib.Path to the randomly selected original file
+
         Raises
         ------
-        TypeError
+        ValueError
             Indicates that the requested time dimension is not present in the input file,
             either because the file was improperly prepared or the dimension name improperly specified
 
         FileNotFoundError
             Indicates that the requested file could not be found
         """
+        target_datetime = random_coords[time_dim]
         if not possible_files:
             possible_files = list(self.input_files())
 
@@ -1483,9 +1537,9 @@ class Publish(Transform, Metadata):
             current_file_path = possible_files[mid]
 
             with self.raw_file_to_dataset(current_file_path) as ds:
-                if self.time_dim in ds:
+                if time_dim in ds:
                     # Extract time values and convert them to an array for len() and filtering, if of length 1
-                    time_values = np.atleast_1d(ds[self.time_dim].values)
+                    time_values = np.atleast_1d(ds[time_dim].values)
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -1498,15 +1552,16 @@ class Publish(Transform, Metadata):
                     else:
                         low = mid + 1
                 else:
-                    raise TypeError(
-                        f"Time dimension {self.time_dim} not found in {current_file_path}!"
+                    raise ValueError(
+                        f"Time dimension {time_dim} not found in {current_file_path}!"
                         "Check that the time dimension was properly specified and the input files "
                         "correctly prepared."
                     )
 
         raise FileNotFoundError(
             "No file found during binary search. "
-            f"Last search values low: {low}, high: {high}, possible_files: {possible_files}."
+            f"Last search values target datetime: {target_datetime} "
+            f" low: {low}, high: {high}, possible_files: {possible_files}."
         )
 
     def raw_file_to_dataset(self, file_path: str):
@@ -1563,58 +1618,3 @@ class Publish(Transform, Metadata):
             orig_ds = self.postprocess_zarr(orig_ds)
         # Apply standard postprocessing to get other data variables in order
         return self.rename_data_variable(orig_ds)
-
-    def check_written_value(
-        self,
-        random_coords: dict[Any],
-        orig_ds: xr.Dataset,
-        prod_ds: xr.Dataset,
-        threshold: float = 10e-5,
-    ):
-        """
-        Check random values in the original files against the written values
-        in the updated dataset at the same location
-
-        Parameters
-        ----------
-        random_coords
-            A randomly selected set of individual coordinate values from the filtered production dataset
-        orig_ds
-            The original dataset, reformatted similarly to the production dataset
-        prod_ds
-            The filtered production dataset
-        orig_file_path
-            A pathlib.Path to the randomly selected original file
-        threshold
-            The tolerance for diversions between original and parsed values.
-            Absolute differences between them beyond this limit will raise a ValueError
-
-        Returns
-        -------
-        bool
-            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
-            to the update time range (False). Failed checks will raise a ValueError instead.
-        """
-        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
-        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
-        # Open desired data values.
-        if "step" in orig_ds.dims:
-            # Forecast step timedeltas are hard to select from so we have to use the nearest method.
-            # We don't implement this elsewhere to minimize scope for error
-            orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
-        else:
-            orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
-        # Compare values from the original dataset to the prod dataset.
-        # Raise an error if the values differ more than the permitted threshold,
-        # or if only one value is either Infinite or NaN
-        self.info(f"{orig_val}, {prod_val}")
-        if (
-            abs(orig_val - prod_val) > threshold
-            or sum(np.isinf([orig_val, prod_val])) == 1
-            or sum(np.isnan([orig_val, prod_val])) == 1
-        ):
-            raise ValueError(
-                f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
-            )
-        return True
