@@ -263,6 +263,20 @@ def original_ds_single_time(self, *args, **kwargs):
     return orig_ds
 
 
+def original_ds_random(self, *args, **kwargs):
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
+    orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
+    return orig_ds
+
+
+def original_ds_null(self, *args, **kwargs):
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
+    orig_ds["precip"].values = np.full_like(orig_ds["precip"], np.nan)
+    return orig_ds
+
+
 original_input_files = DatasetManager.input_files
 
 
