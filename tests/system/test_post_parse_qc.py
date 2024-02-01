@@ -1,8 +1,6 @@
 import os
 import pytest
 import shutil
-import random
-import numpy as np
 
 from unittest.mock import Mock
 from ..common import (
