@@ -1481,18 +1481,13 @@ class Publish(Transform, Metadata):
             The original dataset, unformatted
         """
         # Randomly select an original dataset
-        raw_ds, orig_file_path = self.binary_search_for_file(random_coords = random_coords,
-                                                             time_dim = self.time_dim)
+        raw_ds, orig_file_path = self.binary_search_for_file(random_coords=random_coords, time_dim=self.time_dim)
         # If a forecast dataset then search again, this time for the correct step
         if "step" in random_coords:
-            frt_string = datetime.datetime.strftime(self.numpydate_to_py(raw_ds[self.time_dim].values[0]),
-                                                    "%Y-%m-%d") 
-            date_filtered_original_files = [
-                fil for fil in list(self.input_files()) if frt_string in str(fil)
-            ]
-            raw_ds, orig_file_path = self.binary_search_for_file(random_coords = random_coords,
-                                                                 time_dim = "step",
-                                                                 possible_files=date_filtered_original_files
+            frt_string = datetime.datetime.strftime(self.numpydate_to_py(raw_ds[self.time_dim].values[0]), "%Y-%m-%d")
+            date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                random_coords=random_coords, time_dim="step", possible_files=date_filtered_original_files
             )
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
