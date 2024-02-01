@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
 import datetime
@@ -43,7 +43,7 @@ class StoreInterface(ABC):
         self.dm = dm
 
     @abstractmethod
-    def mapper(self, **kwargs: dict) -> collections.abc.MutableMapping:
+    def mapper(self) -> collections.abc.MutableMapping:
         """
         Parameters
         ----------
@@ -55,7 +55,6 @@ class StoreInterface(ABC):
         collections.abc.MutableMapping
             A key/value mapping of files to contents
         """
-        pass
 
     @property
     @abstractmethod
@@ -66,7 +65,6 @@ class StoreInterface(ABC):
         bool
             Return `True` if there is existing data for this dataset on the store.
         """
-        pass
 
     @abstractmethod
     def metadata_exists(self, title: str, stac_type: str) -> bool:
@@ -153,7 +151,7 @@ class StoreInterface(ABC):
             A URL string starting with "s3://" followed by the path to the Zarr.
         """
 
-    def dataset(self, **kwargs: dict) -> xr.Dataset | None:
+    def dataset(self) -> xr.Dataset | None:
         """
         Parameters
         ----------
@@ -167,7 +165,7 @@ class StoreInterface(ABC):
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
         if self.has_existing:
-            return xr.open_zarr(self.mapper(**kwargs))
+            return xr.open_zarr(self.mapper())
         else:
             return None
 
@@ -193,7 +191,6 @@ class StoreInterface(ABC):
         NotImplementedError
             If the store is IPLD
         """
-        pass
 
 
 class S3(StoreInterface):
@@ -266,9 +263,12 @@ class S3(StoreInterface):
             return f"s3://{self.bucket}/datasets/{self.dm.key()}.zarr"
 
     def __str__(self) -> str:
+        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
+        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
+        # instance.
         return self.path
 
-    def mapper(self, refresh: bool = False, **kwargs: dict) -> fsspec.mapping.FSMap:
+    def mapper(self, refresh: bool = False) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once,
         when this function is first called.
@@ -319,14 +319,15 @@ class S3(StoreInterface):
             (empty string for Catalog, 'collections' for Collection or 'datasets' for Item)
         """
         metadata_path = self.get_metadata_path(title, stac_type)
-        if self.fs().exists(metadata_path):
+        fs = self.fs()
+        if fs.exists(metadata_path):
             # Generate history file
-            old_mod_time = self.fs().ls(metadata_path, detail=True)[0]["LastModified"]
+            old_mod_time = fs.ls(metadata_path, detail=True)[0]["LastModified"]
             history_file_name = f"{title}-{old_mod_time.isoformat(sep='T')}.json"
             history_path = f"s3://{self.bucket}/history/{title}/{history_file_name}"
-            self.fs().copy(metadata_path, history_path)
+            fs.copy(metadata_path, history_path)
 
-        self.fs().write_text(metadata_path, json.dumps(stac_content))
+        fs.write_text(metadata_path, json.dumps(stac_content))
 
     def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
         """
@@ -392,9 +393,11 @@ class S3(StoreInterface):
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         # Edit both .zmetadata and .zattrs
+        fs = self.fs()
+
         for z_path in (".zmetadata", ".zattrs"):
             # Read current metadata from Zarr
-            with self.fs().open(f"{self.path}/{z_path}") as z_contents:
+            with fs.open(f"{self.path}/{z_path}") as z_contents:
                 current_attributes = json.load(z_contents)
 
             # Update given attributes at the appropriate location depending on which z file
@@ -404,7 +407,7 @@ class S3(StoreInterface):
                 current_attributes.update(update_attrs)
 
             # Write back to Zarr
-            with self.fs().open(f"{self.path}/{z_path}", "w") as z_contents:
+            with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
                 json.dump(current_attributes, z_contents)
 
 
@@ -418,7 +421,7 @@ class IPLD(StoreInterface):
     used to write new data to IPFS and generate a new recursive hash.
     """
 
-    def mapper(self, set_root: bool = True, refresh: bool = False, **kwargs: dict) -> ipldstore.IPLDStore:
+    def mapper(self, set_root: bool = True, refresh: bool = False) -> ipldstore.IPLDStore:
         """
         Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the
         associated dataset's `requested_ipfs_chunker` property has been set.
@@ -459,6 +462,9 @@ class IPLD(StoreInterface):
         str
             The path as "/ipfs/[hash]". If the hash has not been determined, return "/ipfs/"
         """
+        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
+        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
+        # instance.
         if not self.dm.latest_hash():
             return "/ipfs/"
         else:
@@ -515,6 +521,18 @@ class Local(StoreInterface):
     to the relevant DatasetManager
     """
 
+    def __init__(self, dm: dataset_manager.DatasetManager, folder: pathlib.Path | str = "."):
+        """
+        Parameters
+        ----------
+        dm : dataset_manager.DatasetManager
+            The dataset to be read or written.
+        folder: pathlib.Path | str
+            The folder to write metadata into. Defaults to the current working directory.
+        """
+        self.dm = dm
+        self.folder = folder
+
     def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
         """
         Get an `fsspec.implementations.local.LocalFileSystem` object. By default, the filesystem is only created once,
@@ -535,7 +553,7 @@ class Local(StoreInterface):
             self._fs = fsspec.filesystem("file")
         return self._fs
 
-    def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
+    def mapper(self, refresh=False) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing a local filesystem key/value store.
         By default, the mapper will be created only once, when this function is first
@@ -558,6 +576,9 @@ class Local(StoreInterface):
         return self._mapper
 
     def __str__(self) -> str:
+        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
+        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
+        # instance.
         return str(self.path)
 
     @property
@@ -602,7 +623,9 @@ class Local(StoreInterface):
         if metadata_path.exists():
             # Generate history file
             old_mod_time = datetime.datetime.fromtimestamp(metadata_path.stat().st_mtime)
-            history_path = pathlib.Path() / "history" / title / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
+            history_path = (
+                pathlib.Path(self.folder) / "history" / title / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
+            )
             history_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy(metadata_path, history_path)
 
@@ -669,7 +692,7 @@ class Local(StoreInterface):
         str
             The s3 path for this entity
         """
-        return str((pathlib.Path() / "metadata" / stac_type / f"{title}.json").resolve())
+        return str((pathlib.Path(self.folder) / "metadata" / stac_type / f"{title}.json").resolve())
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         # Edit both .zmetadata and .zattrs
