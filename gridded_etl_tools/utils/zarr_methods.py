@@ -1455,11 +1455,14 @@ class Publish(Transform, Metadata):
             # second condition handles cases where one value is infinite
             (abs(orig_val - prod_val) > threshold and not abs(orig_val - prod_val) == np.inf)
             or sum(np.isnan([orig_val, prod_val])) == 1
-            # second condition handles cases when extremely large values in origin files are (rightly) written as infinite in prod
+            # second condition handles cases when extremely large values in origin files
+            # are (rightly) written as infinite in prod, breaking our math
             or (sum(np.isinf([orig_val, prod_val])) == 1 and not np.sum(np.array([orig_val, prod_val]) > 1e100) == 2)
         ):
             raise ValueError(
-                f"Mismatch in written values: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
+                "Mismatch in written values: "
+                f"orig_val {orig_val} and prod_val {prod_val}."
+                f"\nQuery parameters: {random_coords}"
             )
         return True
 
