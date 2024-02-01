@@ -1445,7 +1445,7 @@ class Publish(Transform, Metadata):
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}
         # # Open desired data values.
-        orig_val = orig_ds.sel(**selection_coords)[self.data_var()].values
+        orig_val = orig_ds.sel(**selection_coords, method='nearest', tolerance=0.000001)[self.data_var()].values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -1484,7 +1484,7 @@ class Publish(Transform, Metadata):
         raw_ds, orig_file_path = self.binary_search_for_file(random_coords=random_coords, time_dim=self.time_dim)
         # If a forecast dataset then search again, this time for the correct step
         if "step" in random_coords:
-            frt_string = datetime.datetime.strftime(self.numpydate_to_py(raw_ds[self.time_dim].values[0]), "%Y-%m-%d")
+            frt_string = self.numpydate_to_py(raw_ds[self.time_dim].values[0]).date().isoformat()
             date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
             raw_ds, orig_file_path = self.binary_search_for_file(
                 random_coords=random_coords, time_dim="step", possible_files=date_filtered_original_files
