@@ -128,7 +128,7 @@ class TestS3:
 
         fs = store.fs.return_value
 
-        assert store.mapper() is mapper
+        assert store.mapper(arbitrary="keyword") is mapper
         assert store.mapper() is mapper  # second call uses cached object
 
         store.fs.assert_called_once_with()
@@ -420,7 +420,7 @@ class TestLocal:
         fs = store.fs.return_value
         mapper = fs.get_mapper.return_value
 
-        assert store.mapper() is mapper
+        assert store.mapper(arbitrary="keyword") is mapper
         assert store.mapper() is mapper  # Second call returns cached copy
 
         store.fs.assert_called_once_with()

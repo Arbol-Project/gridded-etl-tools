@@ -43,12 +43,12 @@ class StoreInterface(ABC):
         self.dm = dm
 
     @abstractmethod
-    def mapper(self) -> collections.abc.MutableMapping:
+    def mapper(self, **kwargs) -> collections.abc.MutableMapping:
         """
         Parameters
         ----------
         **kwargs : dict
-            Implementation specific keywords
+            Implementation specific keywords. TODO: standardize interface across implementations
 
         Returns
         -------
@@ -268,7 +268,7 @@ class S3(StoreInterface):
         # instance.
         return self.path
 
-    def mapper(self, refresh: bool = False) -> fsspec.mapping.FSMap:
+    def mapper(self, refresh: bool = False, **kwargs) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once,
         when this function is first called.
@@ -553,7 +553,7 @@ class Local(StoreInterface):
             self._fs = fsspec.filesystem("file")
         return self._fs
 
-    def mapper(self, refresh=False) -> fsspec.mapping.FSMap:
+    def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
         """
         Get a `MutableMapping` representing a local filesystem key/value store.
         By default, the mapper will be created only once, when this function is first
