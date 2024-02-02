@@ -1445,7 +1445,7 @@ class Publish(Transform, Metadata):
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}
         # # Open desired data values.
-        orig_val = orig_ds.sel(**selection_coords, method='nearest', tolerance=0.000001)[self.data_var()].values
+        orig_val = orig_ds.sel(**selection_coords, method="nearest", tolerance=0.000001)[self.data_var()].values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -1484,7 +1484,7 @@ class Publish(Transform, Metadata):
         raw_ds, orig_file_path = self.binary_search_for_file(random_coords=random_coords, time_dim=self.time_dim)
         # If a forecast dataset then search again, this time for the correct step
         if "step" in random_coords:
-            frt_string = self.numpydate_to_py(raw_ds[self.time_dim].values[0]).date().isoformat()
+            frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
             date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
             raw_ds, orig_file_path = self.binary_search_for_file(
                 random_coords=random_coords, time_dim="step", possible_files=date_filtered_original_files
@@ -1603,15 +1603,16 @@ class Publish(Transform, Metadata):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-        if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
-            orig_ds = orig_ds.expand_dims(self.time_dim)
-        # ... or create it from the file name if missing entirely in the raw file
-        elif self.time_dim not in orig_ds:
-            orig_ds = orig_ds.assign_coords(
-                {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
-            )
-            orig_ds = orig_ds.expand_dims(self.time_dim)
+        for time_dim in [self.time_dim, "step"]:
+            # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
+            if time_dim in orig_ds and time_dim not in orig_ds.dims:
+                orig_ds = orig_ds.expand_dims(time_dim)
+            # ... or create it from the file name if missing entirely in the raw file
+            elif time_dim not in orig_ds:
+                orig_ds = orig_ds.assign_coords(
+                    {time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
+                )
+                orig_ds = orig_ds.expand_dims(time_dim)
         # Setting metadata will clean up data variables and a few other things.
         # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
         if self.protocol == "file":
