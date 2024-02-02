@@ -1603,14 +1603,18 @@ class Publish(Transform, Metadata):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        for time_dim in [self.time_dim, "step"]:
+        for time_dim in [time_dim for time_dim in [self.time_dim, "step"] if time_dim in self.standard_dims]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
             if time_dim in orig_ds and time_dim not in orig_ds.dims:
                 orig_ds = orig_ds.expand_dims(time_dim)
             # ... or create it from the file name if missing entirely in the raw file
             elif time_dim not in orig_ds:
                 orig_ds = orig_ds.assign_coords(
-                    {time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
+                    {
+                        time_dim: datetime.datetime.strptime(
+                            re.search(r"([0-9]{4}-[0-9]{2}-[0-9]{2})", str(orig_file_path))[0], "%Y-%m-%d"
+                        )
+                    }
                 )
                 orig_ds = orig_ds.expand_dims(time_dim)
         # Setting metadata will clean up data variables and a few other things.
