@@ -622,7 +622,11 @@ class Local(StoreInterface):
         metadata_path = pathlib.Path(self.get_metadata_path(title, stac_type))
         if metadata_path.exists():
             # Generate history file
-            old_mod_time = datetime.datetime.fromtimestamp(metadata_path.stat().st_mtime)
+            old_mod_time = (
+                datetime.datetime.fromtimestamp(metadata_path.stat().st_mtime)
+                .astimezone(datetime.timezone.utc)
+                .replace(tzinfo=None)
+            )
             history_path = (
                 pathlib.Path(self.folder) / "history" / title / f"{title}-{old_mod_time.isoformat(sep='T')}.json"
             )

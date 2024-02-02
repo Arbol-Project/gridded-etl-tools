@@ -508,7 +508,7 @@ class TestLocal:
         with open(metadata_path) as f:
             assert json.load(f) == {"meta": "data"}
 
-        with open(tmpdir / "history" / "Jacky" / "Jacky-2023-08-21T13:30:17.json") as f:
+        with open(tmpdir / "history" / "Jacky" / "Jacky-2023-08-21T17:30:17.json") as f:
             assert json.load(f) == {"prev": "data"}
 
         store.get_metadata_path.assert_called_once_with("Jacky", "song")
