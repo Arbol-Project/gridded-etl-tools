@@ -9,7 +9,6 @@ import dask
 import pathlib
 import glob
 import os
-import random
 import s3fs
 import zarr
 
@@ -1205,8 +1204,8 @@ class Publish(Transform, Metadata):
         # Check that data is stored in a space efficient format
         if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(
-                f"Dtype for data variable {self.data_var()} is\
-                  {dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+                f"Dtype for data variable {self.data_var()} is "
+                f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
@@ -1233,7 +1232,7 @@ class Publish(Transform, Metadata):
             dataset = dataset.assign_coords(**orig_coords)
         for i in range(checks):
             random_coords = self.get_random_coords(dataset)
-            random_val = dataset[self.data_var()].sel(**random_coords).values
+            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
@@ -1244,8 +1243,8 @@ class Publish(Transform, Metadata):
                     limit_vals = self.extreme_values_by_unit[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
                         raise ValueError(
-                            f"Value {random_val} falls outside acceptable range\
-                            {limit_vals} for data in units {unit}. Found at {random_coords}"
+                            f"Value {random_val} falls outside acceptable range "
+                            f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
             # Build a dictionary of checked values to compare against after parsing
             random_vals.update({i: {"coords": random_coords, "value": random_val}})
@@ -1277,18 +1276,18 @@ class Publish(Transform, Metadata):
         if any(append_times):
             if append_times[0] < original_dataset[self.time_dim][0]:
                 raise IndexError(
-                    f"Attempting to append data at {insert_times[0]}\
-                                before dataset start {original_dataset[self.time_dim][0]}.\
-                                This is not possible. If you need an earlier start date,\
-                                please reparse the dataset"
+                    f"Attempting to append data at {insert_times[0]} "
+                    f"before dataset start {original_dataset[self.time_dim][0]}. "
+                    "This is not possible. If you need an earlier start date, "
+                    "please reparse the dataset"
                 )
         if any(insert_times):
             if insert_times[0] < original_dataset[self.time_dim][0]:
                 raise IndexError(
-                    f"Attempting to insert data at {insert_times[0]}\
-                                before dataset start {original_dataset[self.time_dim][0]}.\
-                                This is not possible. If you need an earlier start date,\
-                                please reparse the dataset"
+                    f"Attempting to insert data at {insert_times[0]} "
+                    f"before dataset start {original_dataset[self.time_dim][0]}. "
+                    "This is not possible. If you need an earlier start date, "
+                    "please reparse the dataset"
                 )
         # Check that the first value of the append times and the last value of the original dataset are contiguous
         # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
@@ -1366,29 +1365,24 @@ class Publish(Transform, Metadata):
             # Instantiate needed objects
             self.set_key_dims()  # in case running w/out Transform/Parse
             prod_ds = self.get_prod_update_ds()
-            self.original_files = list(self.input_files())
             # Run the data check N times, incrementing after every successfuly check
-            i = 0
-            while i <= checks:
+            current_check = 0
+            while current_check <= checks:
                 random_coords = self.get_random_coords(prod_ds)
-                try:
-                    orig_ds, orig_file_path = self.get_original_ds(random_coords)
-                except FileNotFoundError:
-                    break
-                i += self.check_value(random_coords, orig_ds, prod_ds, orig_file_path, threshold)
+                current_check += self.check_written_value(random_coords, prod_ds, threshold)
                 # Theoretically this could loop endlessly if all input files don't match the prod dataset
                 # in the time dimension. While improbable, let's build an automated exit just in case
                 if time.perf_counter() - start_checking > 1200:
                     self.info(
-                        f"Breaking from checking loop after\
-                              {datetime.timedelta(seconds=time.perf_counter() - start_checking)} \
-                              to prevent infinite checks"
+                        "Breaking from checking loop after "
+                        f"{datetime.timedelta(seconds=time.perf_counter() - start_checking)} "
+                        "to prevent infinite checks"
                     )
                     break
 
             self.info(
-                f"Values check successfully passed.\
-                      Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
+                "Written values check successfully passed. "
+                f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}"
             )
 
         return True
@@ -1410,7 +1404,65 @@ class Publish(Transform, Metadata):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def get_original_ds(self, random_coords: dict[Any] | None = None) -> tuple[xr.Dataset, pathlib.Path]:
+    def check_written_value(
+        self,
+        random_coords: dict[Any],
+        prod_ds: xr.Dataset,
+        threshold: float = 10e-5,
+    ) -> bool:
+        """
+        Check random values in the original files against the written values
+        in the updated dataset at the same location
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        prod_ds
+            The filtered production dataset
+        orig_file_path
+            A pathlib.Path to the randomly selected original file
+        threshold
+            The tolerance for diversions between original and parsed values.
+            Absolute differences between them beyond this limit will raise a ValueError
+
+        Returns
+        -------
+        bool
+            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
+            to the update time range (False). Failed checks will raise a ValueError instead.
+
+        Raises
+        ------
+        ValueError
+            Indicates a potentially problematic mismatch between source data values and values written to production
+        """
+        orig_ds = self.get_original_ds(random_coords)
+        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
+        # # Open desired data values.
+        orig_val = orig_ds.sel(**selection_coords, method="nearest", tolerance=0.000001)[self.data_var()].values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        # Compare values from the original dataset to the prod dataset.
+        # Raise an error if the values differ more than the permitted threshold,
+        # or if only one value is either Infinite or NaN
+        self.info(f"{orig_val}, {prod_val}")
+        if (
+            # second condition handles cases where one value is infinite
+            (abs(orig_val - prod_val) > threshold and not abs(orig_val - prod_val) == np.inf)
+            or sum(np.isnan([orig_val, prod_val])) == 1
+            # second condition handles cases when extremely large values in origin files
+            # are (rightly) written as infinite in prod, breaking our math
+            or (sum(np.isinf([orig_val, prod_val])) == 1 and not np.sum(np.array([orig_val, prod_val]) > 1e100) == 2)
+        ):
+            raise ValueError(
+                "Mismatch in written values: "
+                f"orig_val {orig_val} and prod_val {prod_val}."
+                f"\nQuery parameters: {random_coords}"
+            )
+        return True
+
+    def get_original_ds(self, random_coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Get the original dataset and format it equivalently to the production dataset
 
@@ -1423,37 +1475,112 @@ class Publish(Transform, Metadata):
         ----------
         orig_ds
             The original dataset, unformatted
-        orig_file_path
-            The pathlib.Path to the randomly selected original file
         """
         # Randomly select an original dataset
-        if random_coords and "step" in random_coords:
-            # Forecasts create loads of files so we pre-filter to speed things up
-            step_hours = random_coords["step"].astype("timedelta64[h]").astype(int)
-            step_filtered_original_files = [fil for fil in self.original_files if f"F{step_hours:03}." in str(fil)]
-            try:
-                orig_file_path = random.choice(step_filtered_original_files)
-            except IndexError:
-                # For some datasets a given day may not have all forecasts records available in prod,
-                # causing failures we need to escape
-                raise FileNotFoundError
-        else:
-            orig_file_path = random.choice(self.original_files)
+        raw_ds, orig_file_path = self.binary_search_for_file(random_coords=random_coords, time_dim=self.time_dim)
+        # If a forecast dataset then search again, this time for the correct step
+        if "step" in random_coords:
+            frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
+            date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                random_coords=random_coords, time_dim="step", possible_files=date_filtered_original_files
+            )
+        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
+        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
+        return orig_ds
+
+    def binary_search_for_file(self, random_coords: dict[Any], time_dim: str, possible_files: list[str] | None = None):
+        """
+        Implement a binary search algorithm to find the file containing a desired datetime
+        within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
+        in half until the desired search target (a file with the correct datetime) is found.
+
+        This function assumes each input file represents a single datetime -- the lowest common denominator
+        of time values in the production dataset.
+
+        Parameters
+        ----------
+        random_coords
+            A randomly selected set of individual coordinate values from the filtered production dataset
+        time_dim
+            A str representing the time dimension to check against
+        possible_files
+            A list of raw input files to select from. Defaults to list(self.input_files()).
+
+        Returns
+        ----------
+        ds
+            The original dataset, unformatted
+        current_file_path
+            The pathlib.Path to the randomly selected original file
+
+        Raises
+        ------
+        ValueError
+            Indicates that the requested time dimension is not present in the input file,
+            either because the file was improperly prepared or the dimension name improperly specified
+
+        FileNotFoundError
+            Indicates that the requested file could not be found
+        """
+        target_datetime = random_coords[time_dim]
+        if not possible_files:
+            possible_files = list(self.input_files())
+
+        low, high = 0, len(possible_files) - 1
+        while low <= high:
+            mid = (low + high) // 2
+            current_file_path = possible_files[mid]
+
+            with self.raw_file_to_dataset(current_file_path) as ds:
+                if time_dim in ds:
+                    # Extract time values and convert them to an array for len() and filtering, if of length 1
+                    time_values = np.atleast_1d(ds[time_dim].values)
+                    # Return the file name if the target_datetime is equal to the time value in the file,
+                    # otherwise cut the search space in half based on whether the file's datetime is later (greater)
+                    # or earlier (lesser) than the target datetime
+                    if target_datetime == time_values:
+                        return ds, current_file_path
+                    # Found datetime is later than the target, look only in earlier files going foward
+                    elif target_datetime < time_values[len(time_values) // 2]:
+                        high = mid - 1
+                    # Found datetime is earlier than the target, look only in later files going foward
+                    else:
+                        low = mid + 1
+                else:
+                    raise ValueError(
+                        f"Time dimension {time_dim} not found in {current_file_path}!"
+                        "Check that the time dimension was properly specified and the input files "
+                        "correctly prepared."
+                    )
+
+        raise FileNotFoundError(
+            "No file found during binary search. "
+            f"Last search values target datetime: {target_datetime} "
+            f" low: {low}, high: {high}, possible_files: {possible_files}."
+        )
+
+    def raw_file_to_dataset(self, file_path: str):
+        """
+        Open a raw file as an Xarray Dataset based on the anticipated input file type
+
+        Parameters
+        ----------
+        file_path
+            A file path
+        """
         if self.protocol == "file":
-            raw_ds = xr.open_dataset(orig_file_path)
+            return xr.open_dataset(file_path)
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
             if not self.use_local_zarr_jsons:
                 raise ValueError(
-                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs.\
-                                This prevents running needed checks for this dataset.\
-                                Please enable `use_local_zarr_jsons` to permit post-parse QC"
+                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs. "
+                    "This prevents running needed checks for this dataset. "
+                    "Please enable `use_local_zarr_jsons` to permit post-parse QC"
                 )
             # Note this will apply postprocess_zarr automtically
-            raw_ds = self.zarr_json_to_dataset(zarr_json_path=str(orig_file_path))
-        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
-        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
-        return orig_ds, orig_file_path
+            return self.zarr_json_to_dataset(zarr_json_path=str(file_path))
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
@@ -1472,81 +1599,23 @@ class Publish(Transform, Metadata):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-        if self.time_dim in orig_ds and self.time_dim not in orig_ds.dims:
-            orig_ds = orig_ds.expand_dims(self.time_dim)
-        # ... or create it from the file name if missing entirely in the raw file
-        elif self.time_dim not in orig_ds:
-            orig_ds = orig_ds.assign_coords(
-                {self.time_dim: datetime.datetime.strptime(re.search(r"([0-9]{8})", str(orig_file_path))[0], "%Y%m%d")}
-            )
-            orig_ds = orig_ds.expand_dims(self.time_dim)
+        for time_dim in [time_dim for time_dim in [self.time_dim, "step"] if time_dim in self.standard_dims]:
+            # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
+            if time_dim in orig_ds and time_dim not in orig_ds.dims:
+                orig_ds = orig_ds.expand_dims(time_dim)
+            # ... or create it from the file name if missing entirely in the raw file
+            elif time_dim not in orig_ds:
+                orig_ds = orig_ds.assign_coords(
+                    {
+                        time_dim: datetime.datetime.strptime(
+                            re.search(r"([0-9]{4}-[0-9]{2}-[0-9]{2})", str(orig_file_path))[0], "%Y-%m-%d"
+                        )
+                    }
+                )
+                orig_ds = orig_ds.expand_dims(time_dim)
         # Setting metadata will clean up data variables and a few other things.
         # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
         if self.protocol == "file":
             orig_ds = self.postprocess_zarr(orig_ds)
         # Apply standard postprocessing to get other data variables in order
         return self.rename_data_variable(orig_ds)
-
-    def check_value(
-        self,
-        random_coords: dict[Any],
-        orig_ds: xr.Dataset,
-        prod_ds: xr.Dataset,
-        orig_file_path: pathlib.Path,
-        threshold: float = 10e-5,
-    ):
-        """
-        Check random values in the original files against the written values
-        in the updated dataset at the same location
-
-        Parameters
-        ----------
-        random_coords
-            A randomly selected set of individual coordinate values from the filtered production dataset
-        orig_ds
-            The original dataset, reformatted similarly to the production dataset
-        prod_ds
-            The filtered production dataset
-        orig_file_path
-            A pathlib.Path to the randomly selected original file
-        threshold
-            The tolerance for diversions between original and parsed values.
-            Absolute differences between them beyond this limit will raise a ValueError
-
-        Returns
-        -------
-        bool
-            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
-            to the update time range (False). Failed checks will raise a ValueError instead.
-        """
-        # Confirm the original dataset has a timestamp w/in the update range
-        # Some datasets download all values for the latest year, meaning lots of files won't match the update range
-        # We return False to skip those and remove them from our list
-        if not random_coords[self.time_dim] == orig_ds[self.time_dim].values:
-            if orig_ds[self.time_dim].values not in prod_ds[self.time_dim]:
-                self.original_files.remove(orig_file_path)
-            return False
-        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
-        selection_coords = {key: random_coords[key] for key in orig_ds.dims}
-        # Open desired data values.
-        if "step" in orig_ds.dims:
-            # Forecast step timedeltas are hard to select from so we have to use the nearest method.
-            # We don't implement this elsewhere to minimize scope for error
-            orig_val = orig_ds.sel(**selection_coords, method="nearest")[self.data_var()].values
-        else:
-            orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
-        # Compare values from the original dataset to the prod dataset.
-        # Raise an error if the values differ more than the permitted threshold,
-        # only one value is infinite or NaN
-        self.info(f"{orig_val}, {prod_val}")
-        if (
-            abs(orig_val - prod_val) > threshold
-            or sum(np.isinf([orig_val, prod_val])) == 1
-            or sum(np.isnan([orig_val, prod_val])) == 1
-        ):
-            raise ValueError(
-                f"Mismatch: orig_val {orig_val} and prod_val {prod_val}.\nQuery parameters: {random_coords}"
-            )
-        return True

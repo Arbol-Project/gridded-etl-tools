@@ -1,8 +1,6 @@
 import os
 import pytest
 import shutil
-import random
-import numpy as np
 
 from unittest.mock import Mock
 from ..common import (
@@ -18,9 +16,11 @@ from ..common import (
     remove_performance_report,
     remove_zarr_json,
     original_ds_normal,
+    original_ds_single_time,
     original_ds_bad_data,
     original_ds_no_time,
-    original_ds_bad_time,
+    original_ds_random,
+    original_ds_null,
     nc4_input_files,
     json_input_files,
 )
@@ -136,6 +136,18 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     assert "Skipping post-parse quality check" in caplog.text
 
 
+def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog, initial_input_path):
+    """
+    Test that the post-parse quality check method waves through good data
+    and fails as anticipated with bad data
+    """
+    # Prepare a dataset manager
+    dm = run_etl(manager_class, input_path=initial_input_path)
+    # Runs without issue for original datasets of length 1 in the time dimension
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_single_time)
+    assert dm.post_parse_quality_check(checks=5)
+
+
 def test_get_original_ds(mocker, manager_class, initial_input_path, appended_input_path):
     """
     Test that the get_original_ds function correctly loads in datasets as anticipated for
@@ -144,16 +156,16 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     # Parse a dataset manager initially, and then for an update
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
-    dm.original_files = list(dm.input_files())
+    random_coords = dm.get_random_coords(dm.get_prod_update_ds())
     # Local data
     dm.protocol = "file"
+    dm.input_files = Mock(return_value=nc4_input_files(dm))
     dm.original_files = nc4_input_files(dm)
-    assert dm.get_original_ds()
+    assert dm.get_original_ds(random_coords)
     # Remote data
     dm.protocol = "s3"
-    dm.original_files = json_input_files(dm)
-    orig_ds, _ = dm.get_original_ds()
-    assert orig_ds
+    dm.input_files = Mock(return_value=json_input_files(dm))
+    assert dm.get_original_ds(random_coords)
 
 
 def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_path):
@@ -164,10 +176,12 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     dm.original_files = list(dm.input_files())
+    prod_ds = dm.store.dataset()
+    random_coords = dm.get_random_coords(prod_ds)
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
-    orig_ds, orig_file_path = dm.get_original_ds()
-    orig_ds = dm.reformat_orig_ds(orig_ds, orig_file_path)
+    raw_ds, orig_file_path = dm.binary_search_for_file(random_coords=random_coords, time_dim=dm.time_dim)
+    orig_ds = dm.reformat_orig_ds(raw_ds, orig_file_path)
     assert "time" in orig_ds.dims
 
 
@@ -180,30 +194,18 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
     dm.original_files = list(dm.input_files())
-    prod_ds = dm.store.dataset()
+    prod_ds = dm.get_prod_update_ds()
     random_coords = dm.get_random_coords(prod_ds)
 
     # pass if values match
-    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
-    random_coords["time"] = random.choice(orig_ds["time"].values)
-    assert dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+    assert dm.check_written_value(random_coords, prod_ds)
 
     # raise ValueError if one dataset doesn't match the other
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
-    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
-    random_coords["time"] = random.choice(orig_ds["time"].values)
-    orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_random)
     with pytest.raises(ValueError):
-        dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+        dm.check_written_value(random_coords, prod_ds)
 
     # raise ValueError if one dataset is all NaNs
-    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
-    random_coords["time"] = random.choice(orig_ds["time"].values)
-    orig_ds["precip"].values = np.full_like(orig_ds["precip"], np.nan)
+    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_null)
     with pytest.raises(ValueError):
-        dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
-
-    # Exit if time in original file doesn't match time in prod dataset
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_time)
-    orig_ds, orig_file_path = dm.get_original_ds(random_coords)
-    assert not dm.check_value(random_coords, orig_ds, prod_ds, orig_file_path)
+        dm.check_written_value(random_coords, prod_ds)
