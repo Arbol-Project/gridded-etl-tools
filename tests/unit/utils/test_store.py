@@ -11,7 +11,10 @@ from gridded_etl_tools.utils import store as store_module
 
 class DummyStoreImpl(store_module.StoreInterface):
     has_existing = True
-    _mapper = mock.Mock()
+
+    def __init__(self, dm):
+        super().__init__(dm)
+        self._mapper = mock.Mock()
 
     def get_metadata_path(self, title: str, stac_type: str):  # pragma NO COVER
         raise NotImplementedError
@@ -28,8 +31,8 @@ class DummyStoreImpl(store_module.StoreInterface):
     def write_metadata_only(self, attributes: dict):  # pragma NO COVER
         raise NotImplementedError
 
-    def mapper(self):
-        return self._mapper
+    def mapper(self, **kwargs):
+        return self._mapper(**kwargs)
 
 
 class TestStoreInterface:
@@ -46,9 +49,10 @@ class TestStoreInterface:
         dataset = xr.open_zarr.return_value
 
         store = DummyStoreImpl(None)
-        assert store.dataset() is dataset
+        assert store.dataset(arbitrary="keyword") is dataset
 
-        xr.open_zarr.assert_called_once_with(store._mapper)
+        xr.open_zarr.assert_called_once_with(store._mapper.return_value)
+        store._mapper.assert_called_once_with(arbitrary="keyword")
 
     @staticmethod
     def test_dataset_not_existing(mocker):
@@ -59,6 +63,7 @@ class TestStoreInterface:
         assert store.dataset() is None
 
         xr.open_zarr.assert_not_called()
+        store._mapper.assert_not_called()
 
 
 class TestS3:

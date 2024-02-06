@@ -151,7 +151,7 @@ class StoreInterface(ABC):
             A URL string starting with "s3://" followed by the path to the Zarr.
         """
 
-    def dataset(self) -> xr.Dataset | None:
+    def dataset(self, **kwargs) -> xr.Dataset | None:
         """
         Parameters
         ----------
@@ -165,7 +165,7 @@ class StoreInterface(ABC):
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
         if self.has_existing:
-            return xr.open_zarr(self.mapper())
+            return xr.open_zarr(self.mapper(**kwargs))
         else:
             return None
 
@@ -437,8 +437,6 @@ class IPLD(StoreInterface):
         refresh : bool
             Force getting a new mapper by checking the latest IPNS hash. Without this set, the mapper will only be set
             the first time this function is called.
-        **kwargs
-            Arbitrary keyword args supported for compatibility with S3 and Local.
 
         Returns
         -------
