@@ -157,13 +157,12 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
     random_coords = dm.get_random_coords(dm.get_prod_update_ds())
-    # Local data
+    # NetCDF data
     dm.protocol = "file"
     dm.input_files = Mock(return_value=nc4_input_files(dm))
     dm.original_files = nc4_input_files(dm)
     assert dm.get_original_ds(random_coords)
-    # Remote data
-    dm.protocol = "s3"
+    # JSON data
     dm.input_files = Mock(return_value=json_input_files(dm))
     assert dm.get_original_ds(random_coords)
 
