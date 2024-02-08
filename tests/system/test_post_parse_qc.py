@@ -48,8 +48,8 @@ def simulate_file_download(root, initial_input_path, appended_input_path, qc_inp
     # for chirps_init_fil in root.glob("*initial*"):
     #     shutil.copy(chirps_init_fil, initial_input_path)
     shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
-    shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
-    shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
+    shutil.copy(root / "chirps_append_subset0.nc", appended_input_path)
+    shutil.copy(root / "chirps_append_subset1.nc", appended_input_path)
     shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
     print("Simulated downloading input files")
 
@@ -157,12 +157,13 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
     random_coords = dm.get_random_coords(dm.get_prod_update_ds())
-    # NetCDF data
+    # Local
     dm.protocol = "file"
     dm.input_files = Mock(return_value=nc4_input_files(dm))
     dm.original_files = nc4_input_files(dm)
     assert dm.get_original_ds(random_coords)
-    # JSON data
+    # Remote data
+    dm.protocol = "s3"
     dm.input_files = Mock(return_value=json_input_files(dm))
     assert dm.get_original_ds(random_coords)
 

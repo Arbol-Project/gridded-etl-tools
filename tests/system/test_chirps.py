@@ -52,8 +52,8 @@ def simulate_file_download(root, initial_input_path, appended_input_path, qc_inp
     # for chirps_init_fil in root.glob("*initial*"):
     #     shutil.copy(chirps_init_fil, initial_input_path)
     shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
-    shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
-    shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
+    shutil.copy(root / "chirps_append_subset0.nc", appended_input_path)
+    shutil.copy(root / "chirps_append_subset1.nc", appended_input_path)
     shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
     print("Simulated downloading input files")
 
@@ -265,7 +265,7 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
         .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
         .values
     )
-    original_dataset = xarray.open_dataset(root / "chirps_append_subset_0.nc", engine="netcdf4")
+    original_dataset = xarray.open_dataset(root / "chirps_append_subset0.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
