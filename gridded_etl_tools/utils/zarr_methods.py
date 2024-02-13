@@ -1552,7 +1552,7 @@ class Publish(Transform, Metadata):
             with self.raw_file_to_dataset(current_file_path) as ds:
                 if time_dim in ds:
                     # Extract time values and convert them to an array for len() and filtering, if of length 1
-                    time_values = np.atleast_1d(ds[time_dim].values)
+                    time_values = ds[time_dim].values
 
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
