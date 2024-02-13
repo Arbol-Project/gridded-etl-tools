@@ -1441,7 +1441,7 @@ class Publish(Transform, Metadata):
         # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
         selection_coords = {key: random_coords[key] for key in orig_ds.dims}
         # # Open desired data values.
-        orig_val = orig_ds.sel(**selection_coords, method="nearest", tolerance=0.000001)[self.data_var()].values
+        orig_val = orig_ds.sel(**selection_coords, method="nearest", tolerance=0.0001)[self.data_var()].values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
