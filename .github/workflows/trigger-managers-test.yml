@@ -11,7 +11,7 @@
 name: Trigger to run gridded-etl-managers test suite
 on:
     push:
-      branches: [main]
+      branches: [fake]
     workflow_dispatch:
 
 jobs:
