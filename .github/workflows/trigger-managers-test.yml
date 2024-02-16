@@ -1,0 +1,31 @@
+# When a branch is pushed to main, trigger the tests in the gridded ETL managers repository at
+#
+#     https://github.com/Arbol-Project/gridded-etl-managers
+#
+# by dispatching a repository_dispatch event to that repository's own trigger at
+# 
+#     https://github.com/Arbol-Project/gridded-etl-managers/.github/workflows/merge-protection.yml
+#
+# See https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event
+
+name: Trigger to run gridded-etl-managers test suite
+on:
+    push:
+      branches: [main]
+    workflow_dispatch:
+
+jobs:
+  dispatch:
+    name: Dispatch workflow in gridded-etl-managers
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ['Arbol-Project/gridded-etl-managers']
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch to workflows
+        run: |
+          curl -X POST https://api.github.com/repos/${{ matrix.repo }}/dispatches \
+          -H "Accept: application/vnd.github.everest-preview+json" \
+          -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
+          --data '{"event_type": "tools-update", "client_payload": { "repository": "'"$GITHUB_REPOSITORY"'" }'
