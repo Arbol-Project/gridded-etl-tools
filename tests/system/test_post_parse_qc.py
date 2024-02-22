@@ -163,7 +163,6 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     dm.original_files = nc4_input_files(dm)
     assert dm.get_original_ds(random_coords)
     # Remote data
-    dm.protocol = "s3"
     dm.input_files = Mock(return_value=json_input_files(dm))
     assert dm.get_original_ds(random_coords)
 
