@@ -243,10 +243,7 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            if profile:
-                self._fs = s3fs.S3FileSystem(profile=profile)
-            else:
-                self._fs = s3fs.S3FileSystem()
+            self._fs = s3fs.S3FileSystem(profile=profile)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
                 "https://s3fs.readthedocs.io/en/latest/#credentials"
