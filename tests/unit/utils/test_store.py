@@ -93,7 +93,7 @@ class TestS3:
         assert store.fs() is fs
         assert store.fs() is fs  # second call returns cached value
 
-        s3fs.S3FileSystem.assert_called_once_with()
+        s3fs.S3FileSystem.assert_called_once_with(profile=None)
 
     @staticmethod
     def test_fs_refresh(mocker):
@@ -104,7 +104,7 @@ class TestS3:
 
         assert store.fs(refresh=True) is fs
 
-        s3fs.S3FileSystem.assert_called_once_with()
+        s3fs.S3FileSystem.assert_called_once_with(profile=None)
 
     @staticmethod
     def test_fs_refresh_profile(mocker):
@@ -113,9 +113,9 @@ class TestS3:
         store._fs = object()
         fs = s3fs.S3FileSystem.return_value
 
-        assert store.fs(refresh=True, profile='slim') is fs
+        assert store.fs(refresh=True, profile="slim") is fs
 
-        s3fs.S3FileSystem.assert_called_once_with(profile='slim')
+        s3fs.S3FileSystem.assert_called_once_with(profile="slim")
 
     @staticmethod
     def test_path():
