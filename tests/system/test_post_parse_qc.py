@@ -25,7 +25,6 @@ from ..common import (
     json_input_files,
 )
 
-
 @pytest.fixture
 def create_input_directories(initial_input_path, qc_input_path, appended_input_path):
     """
