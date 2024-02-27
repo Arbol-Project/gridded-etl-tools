@@ -22,6 +22,7 @@ def run_etl(
     manager_class: DatasetManager,
     input_path: pathlib.Path,
     store: str = "local",
+    s3_bucket_name: str = "zarr-dev",
     allow_overwrite: bool | None = None,
     **kwargs,
 ):
@@ -40,6 +41,8 @@ def run_etl(
         Should pertain to initial, insert, or append data.
     store
         The manager store to use. 'Local' in most implementations
+    s3_bucket_name
+        The bucket to pull/push from. Defaults to 'zarr-dev'
     allow_overwrite
         Optionally assign the allow_overwrite flag of the dataset manager.
         If this is left as None, the dataset manager's default value will be used.
@@ -50,7 +53,14 @@ def run_etl(
         Instance of the given manager class after running transform and parse
     """
     # Get the manager being requested by class_name
-    manager = get_manager(manager_class, input_path=input_path, store=store, allow_overwrite=allow_overwrite, **kwargs)
+    manager = get_manager(
+        manager_class,
+        input_path=input_path,
+        store=store,
+        s3_bucket_name=s3_bucket_name,
+        allow_overwrite=allow_overwrite,
+        **kwargs,
+    )
     # Parse
     manager.transform()
     manager.parse()
@@ -62,6 +72,7 @@ def get_manager(
     manager_class: DatasetManager,
     input_path: str = None,
     store: str = "local",
+    s3_bucket_name: str = "zarr-dev",
     time_chunk: int = 50,
     allow_overwrite: bool | None = None,
     **kwargs,
@@ -79,6 +90,8 @@ def get_manager(
         Defaults to None, in case you just want a manager for unit testing.
     store
         The manager store to use. 'Local' in most implementations
+    s3_bucket_name
+        The bucket to pull/push from. Defaults to 'zarr-dev'
     time_chunk
         Size of the Zarr and Dask time chunks to use instead of the dataset manager's default values.
         Defaults to a low value for the small files used in testing.
@@ -99,7 +112,7 @@ def get_manager(
     if allow_overwrite is not None:
         manager = manager_class(
             custom_input_path=input_path,
-            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            s3_bucket_name=s3_bucket_name,  # This will be ignored by stores other than S3
             store=store,
             allow_overwrite=allow_overwrite,
             **kwargs,
@@ -107,7 +120,7 @@ def get_manager(
     else:
         manager = manager_class(
             custom_input_path=input_path,
-            s3_bucket_name="zarr-dev",  # This will be ignored by stores other than S3
+            s3_bucket_name=s3_bucket_name,  # This will be ignored by stores other than S3
             store=store,
             **kwargs,
         )
@@ -286,5 +299,9 @@ def nc4_input_files(self):
 
 
 def json_input_files(self):
-    jsons = [str(fil) for fil in list(original_input_files(self)) if fil.suffix == ".json"]
+    jsons = [
+        "s3://arbol-testing/gridded/chirps/json/" + fil.name
+        for fil in list(original_input_files(self))
+        if fil.suffix == ".json"
+    ]
     return jsons
