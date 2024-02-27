@@ -221,7 +221,7 @@ class S3(StoreInterface):
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
 
-    def fs(self, refresh: bool = False, profile: str = None) -> s3fs.S3FileSystem:
+    def fs(self, refresh: bool = False, profile: str | None = None) -> s3fs.S3FileSystem:
         """
         Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
         performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.

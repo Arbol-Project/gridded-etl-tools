@@ -107,6 +107,17 @@ class TestS3:
         s3fs.S3FileSystem.assert_called_once_with()
 
     @staticmethod
+    def test_fs_refresh_profile(mocker):
+        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket")
+        store._fs = object()
+        fs = s3fs.S3FileSystem.return_value
+
+        assert store.fs(refresh=True, profile='slim') is fs
+
+        s3fs.S3FileSystem.assert_called_once_with(profile='slim')
+
+    @staticmethod
     def test_path():
         dm = mock.Mock(key=mock.Mock(return_value="hello_mother"), custom_output_path=None)
         store = store_module.S3(dm, "mop_bucket")
