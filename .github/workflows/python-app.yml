@@ -54,5 +54,8 @@ jobs:
         pip install nox
 
     - name: Run nox
+      env:
+        AWS_ACCESS_KEY_ID: ${{secrets.TESTING_AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: ${{secrets.TESTING_AWS_SECRET_ACCESS_KEY}}
       run: |
         nox

@@ -811,11 +811,11 @@ class Publish(Transform, Metadata):
         if not zarr_json_path:
             zarr_json_path = str(self.zarr_json_path())
 
-        dataset = xr.open_dataset(
-            "reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
+        input_kwargs = {
+            "filename_or_obj": "reference://",
+            "engine": "zarr",
+            "chunks": {},
+            "backend_kwargs": {
                 "storage_options": {
                     "fo": zarr_json_path,
                     "remote_protocol": self.protocol,
@@ -824,8 +824,10 @@ class Publish(Transform, Metadata):
                 },
                 "consolidated": False,
             },
-            decode_times=decode_times,
-        )
+            "decode_times": decode_times,
+        }
+        dataset = xr.open_dataset(**input_kwargs)
+
         # Apply any further postprocessing on the way out
         return self.postprocess_zarr(dataset)
 
