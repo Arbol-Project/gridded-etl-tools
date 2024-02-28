@@ -221,7 +221,7 @@ class S3(StoreInterface):
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
 
-    def fs(self, refresh: bool = False) -> s3fs.S3FileSystem:
+    def fs(self, refresh: bool = False, profile: str | None = None) -> s3fs.S3FileSystem:
         """
         Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
         performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
@@ -233,6 +233,9 @@ class S3(StoreInterface):
         ----------
         refresh : bool
             If set to `True`, a new `s3fs.S3FileSystem` will be created even if this object has one already
+        profile : str
+            Manually specify the name of the AWS profile to be used when creating an S3FileSystem.
+            Overrides the default profile grabbed silently by aiobotocore.
 
         Returns
         -------
@@ -240,7 +243,7 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = s3fs.S3FileSystem()
+            self._fs = s3fs.S3FileSystem(profile=profile)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
                 "https://s3fs.readthedocs.io/en/latest/#credentials"

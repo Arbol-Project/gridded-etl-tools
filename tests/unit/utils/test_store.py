@@ -93,7 +93,7 @@ class TestS3:
         assert store.fs() is fs
         assert store.fs() is fs  # second call returns cached value
 
-        s3fs.S3FileSystem.assert_called_once_with()
+        s3fs.S3FileSystem.assert_called_once_with(profile=None)
 
     @staticmethod
     def test_fs_refresh(mocker):
@@ -104,7 +104,18 @@ class TestS3:
 
         assert store.fs(refresh=True) is fs
 
-        s3fs.S3FileSystem.assert_called_once_with()
+        s3fs.S3FileSystem.assert_called_once_with(profile=None)
+
+    @staticmethod
+    def test_fs_refresh_profile(mocker):
+        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket")
+        store._fs = object()
+        fs = s3fs.S3FileSystem.return_value
+
+        assert store.fs(refresh=True, profile="slim") is fs
+
+        s3fs.S3FileSystem.assert_called_once_with(profile="slim")
 
     @staticmethod
     def test_path():
