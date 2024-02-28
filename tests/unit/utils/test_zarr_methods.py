@@ -1343,7 +1343,7 @@ class TestPublish:
         assert dm.zarr_json_to_dataset() is dm.postprocess_zarr.return_value
         dm.zarr_json_path.assert_called_once_with()
         xr.open_dataset.assert_called_once_with(
-            "reference://",
+            filename_or_obj="reference://",
             engine="zarr",
             chunks={},
             backend_kwargs={
@@ -1370,7 +1370,7 @@ class TestPublish:
         assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dm.postprocess_zarr.return_value
         dm.zarr_json_path.assert_not_called()
         xr.open_dataset.assert_called_once_with(
-            "reference://",
+            filename_or_obj="reference://",
             engine="zarr",
             chunks={},
             backend_kwargs={
