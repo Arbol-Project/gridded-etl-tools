@@ -148,7 +148,23 @@ def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog,
     assert dm.post_parse_quality_check(checks=5)
 
 
-def test_get_original_ds(mocker, manager_class, initial_input_path, appended_input_path):
+def test_get_original_ds_local(mocker, manager_class, initial_input_path, appended_input_path):
+    """
+    Test that the get_original_ds function correctly loads in datasets as anticipated for
+    local and remote files alike
+    """
+    # Parse a dataset manager initially, and then for an update
+    dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
+    dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
+    random_coords = dm.get_random_coords(dm.get_prod_update_ds())
+    # Local data
+    dm.protocol = "file"
+    dm.input_files = Mock(return_value=nc4_input_files(dm))
+    dm.original_files = nc4_input_files(dm)
+    assert dm.get_original_ds(random_coords)
+
+
+def test_get_original_ds_s3(mocker, manager_class, initial_input_path, appended_input_path):
     """
     Test that the get_original_ds function correctly loads in datasets as anticipated for
     local and remote files alike
@@ -157,11 +173,6 @@ def test_get_original_ds(mocker, manager_class, initial_input_path, appended_inp
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=True)
     random_coords = dm.get_random_coords(dm.get_prod_update_ds())
-    # Local data
-    dm.protocol = "file"
-    dm.input_files = Mock(return_value=nc4_input_files(dm))
-    dm.original_files = nc4_input_files(dm)
-    assert dm.get_original_ds(random_coords)
     # Remote data
     dm.protocol = "s3"
     dm.input_files = Mock(return_value=json_input_files(dm))
