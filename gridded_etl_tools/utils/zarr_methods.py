@@ -1521,7 +1521,7 @@ class Publish(Transform, Metadata):
         coords
             The coordinates to use to search for the file. Only the time dimension is used.
         time_dim
-            The name ofthe time dimension to check against
+            The name of the time dimension to check against
         possible_files
             A list of raw input files to select from. Defaults to list(self.input_files()).
 
