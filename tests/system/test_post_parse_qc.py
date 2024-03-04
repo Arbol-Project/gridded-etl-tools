@@ -124,7 +124,7 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     dm = run_etl(manager_class, input_path=initial_input_path)
     # Approves aligned values
     dm.post_parse_quality_check(checks=5)
-    assert dm.post_parse_quality_check(checks=5)
+    dm.post_parse_quality_check(checks=5)
     # Rejects misaligned values
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_data)
     with pytest.raises(ValueError):
@@ -145,7 +145,7 @@ def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog,
     dm = run_etl(manager_class, input_path=initial_input_path)
     # Runs without issue for original datasets of length 1 in the time dimension
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_single_time)
-    assert dm.post_parse_quality_check(checks=5)
+    dm.post_parse_quality_check(checks=5)
 
 
 def test_get_original_ds_local(mocker, manager_class, initial_input_path, appended_input_path):
@@ -191,7 +191,7 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     random_coords = dm.get_random_coords(prod_ds)
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
-    raw_ds, orig_file_path = dm.binary_search_for_file(random_coords=random_coords, time_dim=dm.time_dim)
+    raw_ds, orig_file_path = dm.binary_search_for_file(random_coords["time"], time_dim=dm.time_dim)
     orig_ds = dm.reformat_orig_ds(raw_ds, orig_file_path)
     assert "time" in orig_ds.dims
 
@@ -209,7 +209,7 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     random_coords = dm.get_random_coords(prod_ds)
 
     # pass if values match
-    assert dm.check_written_value(random_coords, prod_ds)
+    dm.check_written_value(random_coords, prod_ds)
 
     # raise ValueError if one dataset doesn't match the other
     mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_random)
