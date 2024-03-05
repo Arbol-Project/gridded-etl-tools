@@ -2053,7 +2053,8 @@ class TestPublish:
     @staticmethod
     def test_post_parse_quality_check(manager_class, mocker):
         shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))
+        # Something about setting this return value is confusing coverage
+        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
 
         dm = manager_class()
         dm.get_prod_update_ds = mock.Mock()
@@ -2073,28 +2074,25 @@ class TestPublish:
     @staticmethod
     def test_post_parse_quality_check_skip_it(manager_class, mocker):
         shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))
+        # Something about setting this return value is confusing coverage
+        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
 
         dm = manager_class()
         dm.get_prod_update_ds = mock.Mock()
         dm.skip_post_parse_qc = True
-        prod_ds = dm.get_prod_update_ds.return_value
-
-        def check_written_value(coords, dataset, threshold):
-            assert dataset is prod_ds
-            assert threshold == 10e-5
-
-        dm.check_written_value = check_written_value
+        dm.check_written_value = mock.Mock()
 
         dm.post_parse_quality_check()
 
         shuffled_coords.assert_not_called()
         dm.get_prod_update_ds.assert_not_called()
+        dm.check_written_value.assert_not_called()
 
     @staticmethod
     def test_post_parse_quality_check_timeout(manager_class, mocker):
         shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))
+        # Something about setting this return value is confusing coverage
+        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
         time = mocker.patch("gridded_etl_tools.utils.zarr_methods.time")
         time.perf_counter = mock.Mock(side_effect=[0, 1, 2, 5000, 5001])
 
@@ -2301,17 +2299,15 @@ class TestPublish:
             index = int(path[10:])
             return orig_datasets[index]
 
-        def reformat_orig_ds(ds, path):
-            ds.attrs["reformat_args"] = (ds, path)
-            return ds
-
         dm = manager_class()
         dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
+        dm.reformat_orig_ds = mock.Mock()
         dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
 
         with pytest.raises(ValueError):
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0]})
+
+        dm.reformat_orig_ds.assert_not_called()
 
     @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker):
@@ -2433,7 +2429,7 @@ def test_shuffled_coords():
     shuffled = list(zarr_methods.shuffled_coords(dataset))
 
     # infinitesimally small chance they match, so keep going until they don't, to make sure shuffling is going on
-    while unshuffled == shuffled:
+    while unshuffled == shuffled:  # pragma NO COVER
         shuffled = list(zarr_methods.shuffled_coords(dataset))
 
     # order should be different but set of values should be the same

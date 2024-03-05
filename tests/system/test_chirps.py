@@ -119,9 +119,8 @@ def teardown_module(request, heads_path):
     """
 
     def test_clean():
-        if heads_path.exists():
-            os.remove(heads_path)
-            print(f"Cleaned up {heads_path}")
+        os.remove(heads_path)
+        print(f"Cleaned up {heads_path}")
 
     request.addfinalizer(test_clean)
 
@@ -135,7 +134,7 @@ def test_extract(mocker, manager_class, heads_path, test_chunks, extracted_input
     manager = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="ipld")
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():
+    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch(
             "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
             offline_ipns_publish,
@@ -161,7 +160,7 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, dry_run=True, store="ipld")
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():
+    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish", offline_ipns_publish)
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
@@ -184,7 +183,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, store="ipld")
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():
+    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch(
             "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
             offline_ipns_publish,
