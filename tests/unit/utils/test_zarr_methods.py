@@ -2314,6 +2314,40 @@ class TestPublish:
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0]})
 
     @staticmethod
+    def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
+        timestamps = numpy.arange(
+            numpy.datetime64("2021-10-16T00:00:00.000000000"),
+            numpy.datetime64("2021-10-26T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        orig_datasets = [dataset_at(timestamp).squeeze() for timestamp in timestamps]
+
+        def raw_file_to_dataset(path):
+            assert path.startswith("test_path_")
+            index = int(path[10:])
+            return orig_datasets[index]
+
+        def reformat_orig_ds(ds, path):
+            ds.attrs["reformat_args"] = (ds, path)
+            return ds
+
+        dm = manager_class()
+        dm.raw_file_to_dataset = raw_file_to_dataset
+        dm.reformat_orig_ds = reformat_orig_ds
+        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
+
+        for i in range(10):
+            dataset = dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[i]})
+            assert dataset is orig_datasets[i]
+            assert dataset.attrs["reformat_args"] == (dataset, f"test_path_{i:02d}")
+
+        with pytest.raises(FileNotFoundError):
+            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0] - numpy.timedelta64(1, "[D]")})
+
+        with pytest.raises(FileNotFoundError):
+            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
+
+    @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
         dm = manager_class()
