@@ -2314,6 +2314,34 @@ class TestPublish:
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0]})
 
     @staticmethod
+    def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
+        timestamp = numpy.datetime64("2021-10-16T00:00:00.000000000")
+        orig_dataset = dataset_at(timestamp).squeeze()
+
+        def raw_file_to_dataset(path):
+            assert path == "test_path"
+            return orig_dataset
+
+        def reformat_orig_ds(ds, path):
+            ds.attrs["reformat_args"] = (ds, path)
+            return ds
+
+        dm = manager_class()
+        dm.raw_file_to_dataset = raw_file_to_dataset
+        dm.reformat_orig_ds = reformat_orig_ds
+        dm.input_files = mock.Mock(return_value=["test_path"])
+
+        dataset = dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamp})
+        assert dataset is orig_dataset
+        assert dataset.attrs["reformat_args"] == (dataset, "test_path")
+
+        with pytest.raises(FileNotFoundError):
+            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamp - numpy.timedelta64(1, "[D]")})
+
+        with pytest.raises(FileNotFoundError):
+            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamp + numpy.timedelta64(1, "[D]")})
+
+    @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
         dm = manager_class()
