@@ -467,13 +467,12 @@ class TestLocal:
         dm = mock.Mock(
             output_path=mock.Mock(return_value=pathlib.PosixPath("hi/mom")),
             custom_output_path=None,
+            dataset_name="Jeremy",
         )
-        dm.name = mock.Mock(return_value="Jeremy")
         store = store_module.Local(dm)
         assert store.path == pathlib.PosixPath("hi/mom/Jeremy.zarr")
 
         dm.output_path.assert_called_once_with()
-        dm.name.assert_called_once_with()
 
     @staticmethod
     def test_path_custom():

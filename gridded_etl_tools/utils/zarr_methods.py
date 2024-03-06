@@ -1234,7 +1234,7 @@ class Publish(Transform, Metadata):
         if len(dataset.coords) == 1:
             orig_coords = {
                 coord: self.pre_chunk_dataset.coords[coord].values
-                for coord in self.pre_chunk_dataset.drop(self.time_dim).coords
+                for coord in self.pre_chunk_dataset.drop_vars(self.time_dim).coords
             }
             dataset = dataset.assign_coords(**orig_coords)
         for random_coords in itertools.islice(shuffled_coords(dataset), checks):
@@ -1245,8 +1245,8 @@ class Publish(Transform, Metadata):
             # Check extreme values if they are defined
             if not np.isnan(random_val):
                 unit = dataset[self.data_var()].encoding["units"]
-                if unit in self.extreme_values_by_unit.keys():
-                    limit_vals = self.extreme_values_by_unit[unit]
+                if unit in self.EXTREME_VALUES_BY_UNIT.keys():
+                    limit_vals = self.EXTREME_VALUES_BY_UNIT[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
                         raise ValueError(
                             f"Value {random_val} falls outside acceptable range "

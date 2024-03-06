@@ -1,3 +1,4 @@
+import logging
 import os
 import pytest
 import shutil
@@ -120,6 +121,7 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     Test that the post-parse quality check method waves through good data
     and fails as anticipated with bad data
     """
+    caplog.set_level(logging.INFO)
     # Prepare a dataset manager
     dm = run_etl(manager_class, input_path=initial_input_path)
     # Approves aligned values
