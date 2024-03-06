@@ -80,10 +80,7 @@ class CHIRPS(DatasetManager):
 
         return static_metadata
 
-    @classmethod
-    def host_organization(cls) -> str:
-        return "My Organization"
-
+    organization = "My Organization"
     dataset_name = "chirps"
 
     def relative_path(self) -> str:
