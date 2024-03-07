@@ -352,6 +352,7 @@ class CHIRPSFinal25(CHIRPSFinal):
             requested_ipfs_chunker="size-6400",
         )
         kwargs.update(chunks)
+        kwargs["console_log"] = False
         super().__init__(*args, **kwargs)
 
     dataset_name = f"{CHIRPSFinal.dataset_name}_25"
