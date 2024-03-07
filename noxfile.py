@@ -32,7 +32,7 @@ def unit(session):
 @nox.session(py=DEFAULT_INTERPRETER)
 def cover(session):
     session.install("coverage")
-    session.run("coverage", "report", "--fail-under=74", "--show-missing")
+    session.run("coverage", "report", "--fail-under=100", "--show-missing")
     session.run("coverage", "erase")
 
 
@@ -62,6 +62,7 @@ def system(session):
         "--cov-config",
         HERE / ".coveragerc",
         "--cov-report=term-missing",
+        "--cov-fail-under=100",
         "tests/system",
     )
 

@@ -109,9 +109,8 @@ def teardown_module(request, heads_path):
     """
 
     def test_clean():
-        if heads_path.exists():
-            os.remove(heads_path)
-            print(f"Cleaned up {heads_path}")
+        os.remove(heads_path)
+        print(f"Cleaned up {heads_path}")
 
     request.addfinalizer(test_clean)
 

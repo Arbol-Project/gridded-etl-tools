@@ -25,10 +25,10 @@ def create_input_directories(initial_input_path, appended_input_path):
     The testing directories for initial, append and insert will get created before each run
     """
     for path in (initial_input_path, appended_input_path):
-        if not path.exists():
+        if not path.exists():  # pragma NO COVER
             os.makedirs(path, 0o755, True)
             print(f"Created {path} for testing")
-        else:
+        else:  # pragma NO COVER
             print(f"Found existing {path}")
 
 
@@ -91,9 +91,8 @@ def teardown_module(request, heads_path):
     """
 
     def test_clean():
-        if heads_path.exists():
-            os.remove(heads_path)
-            print(f"Cleaned up {heads_path}")
+        os.remove(heads_path)
+        print(f"Cleaned up {heads_path}")
 
     request.addfinalizer(test_clean)
 
@@ -113,7 +112,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     )
     manager.HASH_HEADS_PATH = heads_path
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():
+    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch(
             "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
             offline_ipns_publish,

@@ -148,7 +148,7 @@ class TestFTPExtractor:
 
         with pytest.raises(TypeError):
             with FTPExtractor():
-                pass
+                pass  # pragma NO COVER
 
         assert ftp_client.contexts == 0
         ftp_client.login.assert_not_called()

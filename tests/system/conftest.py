@@ -53,16 +53,6 @@ def qc_input_path(root):
     return root / pathlib.Path("chirps_qc_input")
 
 
-@pytest.fixture(scope="session")
-def remote_netcdf_input_path(root):
-    return "s3://arbol-testing/gridded/chirps/netcdf"
-
-
-@pytest.fixture(scope="session")
-def remote_json_input_path(root):
-    return "s3://arbol-testing/gridded/chirps/json"
-
-
 @pytest.fixture
 def manager_class():
     """
