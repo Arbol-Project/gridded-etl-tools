@@ -33,13 +33,10 @@ keywords = ["Climate", "Zarr", "ETL", "IPFS"]
 requires-python = ">=3.10"
 dependencies = [
     "cfgrib",
-    "dag-cbor==0.2.2",
     "dask[array,diagnostics,distributed]==2023.3.2",
     "deprecation",
     "fsspec",
-    "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
     "kerchunk",
-    "multiformats",
     "natsort",
     "numpy",
     "p_tqdm",
@@ -69,6 +66,11 @@ dev = [
     "flake8",
     "flake8-pyproject",
     "nox",
+]
+ipfs = [
+    "dag-cbor==0.2.2",
+    "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
+    "multiformats"
 ]
 
 [tool.setuptools_scm]
