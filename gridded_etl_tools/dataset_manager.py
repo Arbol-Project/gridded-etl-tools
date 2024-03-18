@@ -323,7 +323,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Method to align Zarr metadata with requirements of Zarr exports and STAC metadata format
         Happens after `populate_metadata` and immediately before data publication.
         """
-        return super().set_zarr_metadata(dataset)
+        super().set_zarr_metadata(dataset)
 
     @classmethod
     def get_subclasses(cls) -> typing.Iterator:

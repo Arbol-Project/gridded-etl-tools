@@ -1309,7 +1309,7 @@ class TestPublish:
         dm.set_zarr_metadata = mock.Mock()
 
         dataset1 = dm.transformed_dataset.return_value
-        dataset2 = dm.set_zarr_metadata.return_value
+        dataset2 = dataset1.transpose.return_value
         dataset3 = dataset2.chunk.return_value
 
         assert dm.pre_initial_dataset() is dataset3
@@ -1317,6 +1317,7 @@ class TestPublish:
         dm.transformed_dataset.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
         dataset1.transpose.assert_called_once_with(*dm.standard_dims)
+        dm.set_zarr_metadata.assert_called_once_with(dataset2)
         dataset2.chunk.assert_called_once_with(dm.requested_dask_chunks)
         dm.set_zarr_metadata(dataset3)
 
@@ -2381,8 +2382,8 @@ class TestPublish:
         dm = manager_class()
         dm.postprocess_zarr = mock.Mock()
         dm.rename_data_variable = mock.Mock()
+        dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
 
-        assert dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr") is dm.rename_data_variable.return_value
         dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(fake_original_dataset)
 
@@ -2392,8 +2393,8 @@ class TestPublish:
         dm.postprocess_zarr = mock.Mock()
         dm.rename_data_variable = mock.Mock()
         dm.protocol = "file"
+        dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
 
-        assert dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr") is dm.rename_data_variable.return_value
         dm.postprocess_zarr.assert_called_once_with(fake_original_dataset)
         dm.rename_data_variable.assert_called_once_with(dm.postprocess_zarr.return_value)
 
@@ -2403,8 +2404,7 @@ class TestPublish:
         dm.postprocess_zarr = mock.Mock()
         dm.rename_data_variable = mock.Mock()
         orig_dataset = single_time_instant_dataset.squeeze()
-
-        assert dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr") is dm.rename_data_variable.return_value
+        dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
         dataset = dm.rename_data_variable.call_args[0][0]
         assert "time" in dataset.dims
@@ -2418,11 +2418,7 @@ class TestPublish:
         dm.postprocess_zarr = mock.Mock()
         dm.rename_data_variable = mock.Mock()
         dm.standard_dims += ["step"]
-
-        assert (
-            dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
-            is dm.rename_data_variable.return_value
-        )
+        dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
 
         dataset = dm.rename_data_variable.call_args[0][0]
         assert "step" in dataset

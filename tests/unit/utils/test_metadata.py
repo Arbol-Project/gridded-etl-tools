@@ -99,7 +99,7 @@ class TestMetadata:
         dataset["data"].encoding = {}
         md = manager_class()
         md.store = store.IPLD(md)
-        dataset = md.remove_unwanted_fields(dataset)
+        md.remove_unwanted_fields(dataset)
         assert isinstance(dataset["data"].encoding["compressor"], numcodecs.Blosc)
 
     @staticmethod
@@ -108,7 +108,7 @@ class TestMetadata:
         dataset["data"].encoding = {}
         md = manager_class(use_compression=False)
         md.store = store.IPLD(md)
-        dataset = md.remove_unwanted_fields(dataset)
+        md.remove_unwanted_fields(dataset)
         assert dataset["data"].encoding["compressor"] is None
 
     @staticmethod
@@ -1125,24 +1125,17 @@ class TestMetadata:
         md = manager_class()
 
         md.rename_data_variable = mock.Mock()
-        renamed = md.rename_data_variable.return_value
-
         md.remove_unwanted_fields = mock.Mock()
-        removed = md.remove_unwanted_fields.return_value
-
         md.encode_vars = mock.Mock()
-        encoded = md.encode_vars.return_value
-
         md.merge_in_outside_metadata = mock.Mock()
-        merged = md.merge_in_outside_metadata.return_value
-        merged.attrs = {}
 
-        assert md.set_zarr_metadata(dataset) is merged
+        dataset.attrs = {}
+        md.set_zarr_metadata(dataset)
 
         md.rename_data_variable.assert_called_once_with(dataset)
-        md.remove_unwanted_fields.assert_called_once_with(renamed)
-        md.encode_vars.assert_called_once_with(removed)
-        md.merge_in_outside_metadata.assert_called_once_with(encoded)
+        md.remove_unwanted_fields.assert_called_once_with(dataset)
+        md.encode_vars.assert_called_once_with(dataset)
+        md.merge_in_outside_metadata.assert_called_once_with(dataset)
 
     @staticmethod
     def test_set_zarr_metadata_suppress_bad_attributes(manager_class):
@@ -1150,32 +1143,25 @@ class TestMetadata:
         md = manager_class()
 
         md.rename_data_variable = mock.Mock()
-        renamed = md.rename_data_variable.return_value
-
         md.remove_unwanted_fields = mock.Mock()
-        removed = md.remove_unwanted_fields.return_value
-
         md.encode_vars = mock.Mock()
-        encoded = md.encode_vars.return_value
-
         md.merge_in_outside_metadata = mock.Mock()
-        merged = md.merge_in_outside_metadata.return_value
-        merged.attrs = {"foo": "bar", "baz": None, "goo": {"gar": "gaz"}}
 
-        assert md.set_zarr_metadata(dataset) is merged
-        assert merged.attrs == {"foo": "bar", "baz": "", "goo": '{"gar": "gaz"}'}
+        dataset.attrs = {"foo": "bar", "baz": None, "goo": {"gar": "gaz"}}
+        md.set_zarr_metadata(dataset)
+
+        assert dataset.attrs == {"foo": "bar", "baz": "", "goo": '{"gar": "gaz"}'}
         md.rename_data_variable.assert_called_once_with(dataset)
-        md.remove_unwanted_fields.assert_called_once_with(renamed)
-        md.encode_vars.assert_called_once_with(removed)
-        md.merge_in_outside_metadata.assert_called_once_with(encoded)
+        md.remove_unwanted_fields.assert_called_once_with(dataset)
+        md.encode_vars.assert_called_once_with(dataset)
+        md.merge_in_outside_metadata.assert_called_once_with(dataset)
 
     @staticmethod
     def test_rename_data_variable(manager_class):
         dataset = mock.Mock(data_vars=["one", "two", "three"])
-        renamed = dataset.rename_vars.return_value
 
         md = manager_class()
-        assert md.rename_data_variable(dataset) is renamed
+        md.rename_data_variable(dataset)
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
@@ -1185,7 +1171,7 @@ class TestMetadata:
         dataset.rename_vars.side_effect = ValueError
 
         md = manager_class()
-        assert md.rename_data_variable(dataset) is dataset
+        md.rename_data_variable(dataset)
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
@@ -1197,7 +1183,7 @@ class TestMetadata:
         assert dataset.time.encoding == {}
 
         md = manager_class()
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
         assert dataset["data"].encoding == {
@@ -1223,7 +1209,7 @@ class TestMetadata:
 
         md = manager_class()
         md.time_dim = "forecast_reference_time"
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
         assert dataset["data"].encoding == {
@@ -1250,7 +1236,7 @@ class TestMetadata:
 
         md = manager_class()
         md.time_dim = "hindcast_reference_time"
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset) is dataset
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
         assert dataset["data"].encoding == {
@@ -1277,7 +1263,7 @@ class TestMetadata:
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 1
@@ -1292,7 +1278,7 @@ class TestMetadata:
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 2
@@ -1307,7 +1293,7 @@ class TestMetadata:
         dataset.time.encoding = {"units": "picoseconds since the big bang"}
 
         md = manager_class()
-        assert md.encode_vars(dataset) is dataset
+        md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
         assert dataset["data"].encoding == {
@@ -1336,7 +1322,8 @@ class TestMetadata:
         md.populate_metadata()
         md.store = mock.Mock(spec=store.StoreInterface)
         md.store.dataset.return_value.attrs = {"date range": ("2000010100", "2021091600")}
-        assert md.merge_in_outside_metadata(dataset) is dataset
+        md.merge_in_outside_metadata(dataset)
+
         assert dataset.attrs == {
             "foo": "bar",
             "bar": "baz",
@@ -1359,7 +1346,8 @@ class TestMetadata:
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        assert md.merge_in_outside_metadata(dataset) is dataset
+        md.merge_in_outside_metadata(dataset)
+
         assert dataset.attrs == {
             "foo": "bar",
             "bar": "baz",
@@ -1384,8 +1372,8 @@ class TestMetadata:
         md.populate_metadata()
         md.store = mock.Mock(spec=store.IPLD)
         md.load_stac_metadata = mock.Mock(return_value={"properties": {"date range": ("2000010100", "2021091600")}})
+        md.merge_in_outside_metadata(dataset)
 
-        assert md.merge_in_outside_metadata(dataset) is dataset
         assert dataset.attrs == {
             "foo": "bar",
             "bar": "baz",
@@ -1409,8 +1397,8 @@ class TestMetadata:
         md.load_stac_metadata = mock.Mock(
             return_value={"properties": {"date range": ("2000010100", "2021091600"), "created": "1999-01-01T0Z"}}
         )
+        md.merge_in_outside_metadata(dataset)
 
-        assert md.merge_in_outside_metadata(dataset) is dataset
         assert dataset.attrs == {
             "foo": "bar",
             "bar": "baz",
@@ -1436,8 +1424,8 @@ class TestMetadata:
         md.populate_metadata()
         md.store = mock.Mock(spec=store.IPLD)
         md.load_stac_metadata = mock.Mock(side_effect=Timeout)
+        md.merge_in_outside_metadata(dataset)
 
-        assert md.merge_in_outside_metadata(dataset) is dataset
         assert dataset.attrs == {
             "foo": "bar",
             "bar": "baz",

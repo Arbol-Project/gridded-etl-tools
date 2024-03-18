@@ -576,16 +576,16 @@ class Metadata(Convenience, IPFS):
 
         """
         # Rename data variable to desired name, if necessary.
-        dataset = self.rename_data_variable(dataset)
+        self.rename_data_variable(dataset)
 
         # Set all fields to uncompressed and remove filters leftover from input files
-        dataset = self.remove_unwanted_fields(dataset)
+        self.remove_unwanted_fields(dataset)
 
         # Encode data types and missing value indicators for the data variable
-        dataset = self.encode_vars(dataset)
+        self.encode_vars(dataset)
 
         # Merge in relevant static / STAC metadata and create additional attributes
-        dataset = self.merge_in_outside_metadata(dataset)
+        self.merge_in_outside_metadata(dataset)
 
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         for attr in dataset.attrs.keys():
@@ -593,8 +593,6 @@ class Metadata(Convenience, IPFS):
                 dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
             elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
-
-        return dataset
 
     def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -620,8 +618,6 @@ class Metadata(Convenience, IPFS):
         except ValueError:
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             pass
-
-        return dataset
 
     def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -708,7 +704,6 @@ class Metadata(Convenience, IPFS):
             if not filters:
                 encoding["filters"] = filters = []
             filters.append(EncryptionFilter(self.encryption_key))
-        return dataset
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -787,8 +782,6 @@ class Metadata(Convenience, IPFS):
         dataset.attrs["update_is_append_only"] = True
         self.info("If updating, indicating the dataset is only appending data")
 
-        return dataset
-
     def remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Remove filters, compression, and other unwanted encoding/metadata inheritances from input files
@@ -814,8 +807,6 @@ class Metadata(Convenience, IPFS):
             dataset[coord].encoding["compressor"] = compressor
         dataset[self.data_var()].encoding.pop("filters", None)
         dataset[self.data_var()].encoding["compressor"] = compressor
-
-        return dataset
 
 
 def first(i: typing.Iterable):
