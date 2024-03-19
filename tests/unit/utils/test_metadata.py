@@ -1125,43 +1125,38 @@ class TestMetadata:
         md = manager_class()
 
         md.rename_data_variable = mock.Mock()
+        renamed = md.rename_data_variable.return_value
+
         md.remove_unwanted_fields = mock.Mock()
         md.encode_vars = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
+        md.suppress_invalid_attributes = mock.Mock()
 
         dataset.attrs = {}
-        md.set_zarr_metadata(dataset)
+        assert md.set_zarr_metadata(dataset) is renamed
 
         md.rename_data_variable.assert_called_once_with(dataset)
-        md.remove_unwanted_fields.assert_called_once_with(dataset)
-        md.encode_vars.assert_called_once_with(dataset)
-        md.merge_in_outside_metadata.assert_called_once_with(dataset)
+        md.remove_unwanted_fields.assert_called_once_with(renamed)
+        md.encode_vars.assert_called_once_with(renamed)
+        md.suppress_invalid_attributes.assert_called_once_with(renamed)
 
     @staticmethod
-    def test_set_zarr_metadata_suppress_bad_attributes(manager_class):
+    def test_suppress_invalid_attributes(manager_class):
         dataset = mock.Mock()
         md = manager_class()
 
-        md.rename_data_variable = mock.Mock()
-        md.remove_unwanted_fields = mock.Mock()
-        md.encode_vars = mock.Mock()
-        md.merge_in_outside_metadata = mock.Mock()
-
         dataset.attrs = {"foo": "bar", "baz": None, "goo": {"gar": "gaz"}}
-        md.set_zarr_metadata(dataset)
+        md.suppress_invalid_attributes(dataset)
 
         assert dataset.attrs == {"foo": "bar", "baz": "", "goo": '{"gar": "gaz"}'}
-        md.rename_data_variable.assert_called_once_with(dataset)
-        md.remove_unwanted_fields.assert_called_once_with(dataset)
-        md.encode_vars.assert_called_once_with(dataset)
-        md.merge_in_outside_metadata.assert_called_once_with(dataset)
 
     @staticmethod
     def test_rename_data_variable(manager_class):
         dataset = mock.Mock(data_vars=["one", "two", "three"])
+        renamed = dataset.rename_vars.return_value
 
         md = manager_class()
-        md.rename_data_variable(dataset)
+        assert md.rename_data_variable(dataset) is renamed
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
@@ -1171,7 +1166,7 @@ class TestMetadata:
         dataset.rename_vars.side_effect = ValueError
 
         md = manager_class()
-        md.rename_data_variable(dataset)
+        assert md.rename_data_variable(dataset) is dataset
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 

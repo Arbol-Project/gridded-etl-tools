@@ -749,7 +749,7 @@ class Publish(Transform, Metadata):
         dataset = dataset.transpose(*self.standard_dims)
 
         # Add metadata to dataset
-        self.set_zarr_metadata(dataset)
+        dataset = self.set_zarr_metadata(dataset)
 
         # Re-chunk
         self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
@@ -1102,7 +1102,7 @@ class Publish(Transform, Metadata):
             update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
 
         # Add metadata to dataset
-        self.set_zarr_metadata(update_dataset)
+        update_dataset = self.set_zarr_metadata(update_dataset)
         # Rechunk, storing a non-rechunked version for pre-parse quality checks
         self.pre_chunk_dataset = update_dataset.copy()
         update_dataset = update_dataset.chunk(new_chunks)

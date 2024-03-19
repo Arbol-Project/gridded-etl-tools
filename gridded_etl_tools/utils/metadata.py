@@ -553,7 +553,8 @@ class Metadata(Convenience, IPFS):
     # NON-STAC METADATA
 
     def populate_metadata(self):
-        """Override point for managers to populate metadata.
+        """
+        Override point for managers to populate metadata.
 
         The default implementation simply uses ``self.static_metadata``.
         """
@@ -562,7 +563,7 @@ class Metadata(Convenience, IPFS):
     def set_zarr_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Function to append to or update key metadata information to the attributes and encoding of the output Zarr.
-        Additionally filters out unwanted keys and fields.
+        Additionally filters out or invalid keys and fields.
 
         Parameters
         ----------
@@ -576,7 +577,7 @@ class Metadata(Convenience, IPFS):
 
         """
         # Rename data variable to desired name, if necessary.
-        self.rename_data_variable(dataset)
+        dataset = self.rename_data_variable(dataset)
 
         # Set all fields to uncompressed and remove filters leftover from input files
         self.remove_unwanted_fields(dataset)
@@ -588,11 +589,9 @@ class Metadata(Convenience, IPFS):
         self.merge_in_outside_metadata(dataset)
 
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
-        for attr in dataset.attrs.keys():
-            if type(dataset.attrs[attr]) is dict:
-                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
-            elif dataset.attrs[attr] is None:
-                dataset.attrs[attr] = ""
+        self.suppress_invalid_attributes(dataset)
+
+        return dataset
 
     def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -614,10 +613,10 @@ class Metadata(Convenience, IPFS):
         """
         data_var = first(dataset.data_vars)
         try:
-            dataset = dataset.rename_vars({data_var: self.data_var()})
+            return dataset.rename_vars({data_var: self.data_var()})
         except ValueError:
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
-            pass
+            return dataset
 
     def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -628,20 +627,7 @@ class Metadata(Convenience, IPFS):
         ----------
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
-
-        Returns
-        -------
-        dataset : xarray.Dataset
-            The dataset being published, after metadata update
-
         """
-        # TODO: This function modifies the passed in Dataset and then returns it. This is problematic since a user
-        # seeing a function that takes a T as an argument and then returns a T would be reasonable to assume that the
-        # passed in argument is not mutated and that the return value is a new instance of T. Generally speaking, it
-        # should be clear from the function signature whether a function has side effects (arguments or some other
-        # state is mutated) or if the function is a "pure" function, meaning there are no side effects, the arguments
-        # are not mutated, and the arguments are only used to compute a return value.
-
         # Encode fields for the data variable in the main encoding dict and the data var's own encoding dict (for
         # thoroughness)
         dataset.encoding = {
@@ -713,15 +699,7 @@ class Metadata(Convenience, IPFS):
         ----------
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
-
-        Returns
-        -------
-        dataset : xarray.Dataset
-            The dataset being published, after metadata update
-
         """
-        # TODO: See note for encode_vars, re: mutating and returning the same arg.
-
         # Load static metadata into the dataset's attributes
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
@@ -790,12 +768,6 @@ class Metadata(Convenience, IPFS):
         ----------
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
-
-        Returns
-        -------
-        dataset : xarray.Dataset
-            The dataset being published, after metadata update
-
         """
         compressor = numcodecs.Blosc() if self.use_compression else None
 
@@ -807,6 +779,21 @@ class Metadata(Convenience, IPFS):
             dataset[coord].encoding["compressor"] = compressor
         dataset[self.data_var()].encoding.pop("filters", None)
         dataset[self.data_var()].encoding["compressor"] = compressor
+
+    def suppress_invalid_attributes(self, dataset: xr.Dataset):
+        """
+        Remove or reconfigure attribute types unsupported in Xarray Dataset attributes
+
+        Parameters
+        ----------
+        dataset : xarray.Dataset
+            The dataset being published, pre-metadata update
+        """
+        for attr in dataset.attrs.keys():
+            if type(dataset.attrs[attr]) is dict:
+                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
+            elif dataset.attrs[attr] is None:
+                dataset.attrs[attr] = ""
 
 
 def first(i: typing.Iterable):
