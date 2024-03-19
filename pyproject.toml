@@ -34,7 +34,7 @@ requires-python = ">=3.10"
 dependencies = [
     "cfgrib",
     "dag-cbor==0.2.2",
-    "dask[array,diagnostics,distributed]==2023.3.2",
+    "dask[array,diagnostics,distributed]",
     "deprecation",
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
