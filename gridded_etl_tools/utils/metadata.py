@@ -563,7 +563,7 @@ class Metadata(Convenience, IPFS):
     def set_zarr_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Function to append to or update key metadata information to the attributes and encoding of the output Zarr.
-        Additionally filters out or invalid keys and fields.
+        Additionally filters out unwanted or invalid keys and fields.
 
         Parameters
         ----------
