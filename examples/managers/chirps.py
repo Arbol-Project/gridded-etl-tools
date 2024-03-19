@@ -260,7 +260,7 @@ class CHIRPS(DatasetManager):
         dataset: xarray.Dataset dataset
             The dataset prepared for parsing, after removing unwanted fields specific to the dataset
         """
-        dataset = super().remove_unwanted_fields(dataset)
+        super().remove_unwanted_fields(dataset)
         for variable in dataset.variables:
             dataset[variable].encoding["_FillValue"] = self.missing_value
         # Remove extraneous data from the data variable's attributes
@@ -291,8 +291,6 @@ class CHIRPS(DatasetManager):
             dataset.attrs.pop(key, None)
             dataset[self.data_var()].attrs.pop(key, None)
             dataset[self.data_var()].encoding.pop(key, None)
-
-        return dataset
 
 
 class CHIRPSFinal(CHIRPS):

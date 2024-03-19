@@ -1476,7 +1476,7 @@ class Publish(Transform, Metadata):
             f"\nQuery parameters: {check_coords}"
         )
 
-    def get_original_ds(self, coords: dict[Any]) -> tuple[xr.Dataset, pathlib.Path]:
+    def get_original_ds(self, coords: dict[Any]) -> xr.Dataset:
         """
         Retrieve the original dataset that corresponds to the given coordinates.
 
@@ -1507,7 +1507,7 @@ class Publish(Transform, Metadata):
 
     def binary_search_for_file(
         self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str] | None = None
-    ):
+    ) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Implement a binary search algorithm to find the file containing a desired datetime
         within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
@@ -1580,7 +1580,7 @@ class Publish(Transform, Metadata):
             f" low: {low}, high: {high}, possible_files: {possible_files}."
         )
 
-    def raw_file_to_dataset(self, file_path: str):
+    def raw_file_to_dataset(self, file_path: str) -> xr.Dataset:
         """
         Open a raw file as an Xarray Dataset based on the anticipated input file type
 
@@ -1646,7 +1646,8 @@ class Publish(Transform, Metadata):
             orig_ds = self.postprocess_zarr(orig_ds)
 
         # Apply standard postprocessing to get other data variables in order
-        return self.rename_data_variable(orig_ds)
+        self.rename_data_variable(orig_ds)
+        return orig_ds
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:

@@ -10,6 +10,7 @@ import logging
 import multiprocessing
 import multiprocessing.pool
 import sys
+import xarray as xr
 
 import psutil
 
@@ -317,7 +318,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         super().populate_metadata()
 
-    def set_zarr_metadata(self, dataset):  # pragma NO COVER
+    def set_zarr_metadata(self, dataset) -> xr.Dataset:  # pragma NO COVER
         """
         Placeholder indicating necessity of possibly editing Zarr metadata within an ETL manager script
         Method to align Zarr metadata with requirements of Zarr exports and STAC metadata format
