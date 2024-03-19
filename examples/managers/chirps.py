@@ -203,16 +203,14 @@ class CHIRPS(DatasetManager):
             download_year_range = range(date_range[0].year, end_date.year + 1)
 
         # Connect to CHIRPS FTP and request files for all needed years
-        with extractor.FTPExtractor(self.dataset_download_url) as ftp:
+        with extractor.FTPExtractor(self, self.dataset_download_url) as ftp:
             ftp.cwd = self.remote_path
             requests: list[pathlib.Path] = []
             # Loop through every year in the date range and queue requests
             for year in download_year_range:
                 pattern = rf"chirps-.+{year}.+\.nc"
                 requests.extend(ftp.find(pattern))
-            # Request downloads using a thread pool, although the downloads will happen synchronously because FTP
-            # doesn't support multithreading.
-            extractor.pool(ftp.request, [[request, self.local_input_path()] for request in requests])
+            ftp.pool([[request, self.local_input_path()] for request in requests])
 
         # Check if newest local file has newer data
         return self.check_if_new_data(end_date)
