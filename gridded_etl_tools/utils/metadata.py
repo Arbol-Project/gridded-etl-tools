@@ -574,7 +574,6 @@ class Metadata(Convenience, IPFS):
         -------
         dataset : xarray.Dataset
             The dataset being published, after metadata update
-
         """
         # Rename data variable to desired name, if necessary.
         dataset = self.rename_data_variable(dataset)
