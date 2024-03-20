@@ -1443,7 +1443,7 @@ class Publish(Transform, Metadata):
         selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds.sel(**selection_coords, method="nearest", tolerance=0.0001)[self.data_var()].values
+        orig_val = orig_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
         prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
 
         # Compare values from the original dataset to the prod dataset.
@@ -1646,8 +1646,7 @@ class Publish(Transform, Metadata):
             orig_ds = self.postprocess_zarr(orig_ds)
 
         # Apply standard postprocessing to get other data variables in order
-        self.rename_data_variable(orig_ds)
-        return orig_ds
+        return self.rename_data_variable(orig_ds)
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:
