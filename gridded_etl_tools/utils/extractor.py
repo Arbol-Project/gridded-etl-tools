@@ -40,12 +40,21 @@ class Extractor(ABC):
         Returns:
             bool: True if all of the jobs succeeded, False otherwise.
         """
-        nest_asyncio.apply()
-        coros = [asyncio.to_thread(self.request, *job_arg) for job_arg in batch]
-        results = asyncio.run(self.async_gather_with_semaphore(coros))
-        return all(results)
 
-    async def async_gather_with_semaphore(self, coros: list[typing.Coroutine]) -> list[bool]:
+        # Necessary to run asyncio in nested contexts, such as prefect or a Jupyter notebook
+        nest_asyncio.apply()
+
+        coros = [asyncio.to_thread(self.request, *job_arg) for job_arg in batch]
+        results = asyncio.run(self.gather_with_semaphore(coros))
+        all_successful = all(results)
+        if all_successful:
+            log.info("All requests succeeded.")
+            return True
+        else:
+            log.info("One or more requests returned no data or failed.")
+            return False
+
+    async def gather_with_semaphore(self, coros: list[typing.Coroutine]) -> list[bool]:
         """
         Asynchronously executes a list of coroutines with a semaphore.
 
@@ -64,7 +73,10 @@ class Extractor(ABC):
 
     @abstractmethod
     def request(self, *args, **kwargs) -> bool:
-        pass
+        """
+        Abstract method to be implemented by subclasses. This method should perform an extraction operation
+        and return True if data is retrieved, False otherwise
+        """
 
 
 class S3Extractor(Extractor):
