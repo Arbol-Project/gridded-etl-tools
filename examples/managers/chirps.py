@@ -210,7 +210,7 @@ class CHIRPS(DatasetManager):
             for year in download_year_range:
                 pattern = rf"chirps-.+{year}.+\.nc"
                 requests.extend(ftp.find(pattern))
-            ftp.pool([[request, self.local_input_path()] for request in requests])
+            ftp.pool([{"source": request, "destination": self.local_input_path()} for request in requests])
 
         # Check if newest local file has newer data
         return self.check_if_new_data(end_date)

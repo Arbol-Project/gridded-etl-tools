@@ -28,7 +28,7 @@ class TestExtractor:
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         extractor.request = Mock(return_value=True)
-        result = extractor.pool(batch=[[1, 2], [3, 4], [5, 6]])
+        result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
         assert result is True
 
@@ -36,7 +36,7 @@ class TestExtractor:
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         extractor.request = Mock(return_value=False)
-        result = extractor.pool(batch=[[1, 2], [3, 4], [5, 6]])
+        result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
         assert result is False
 
