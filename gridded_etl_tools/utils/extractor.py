@@ -44,7 +44,7 @@ class Extractor(ABC):
         # Necessary to run asyncio in nested contexts, such as prefect or a Jupyter notebook
         nest_asyncio.apply()
 
-        coros = [asyncio.to_thread(self.request, **{"self": self, **job_args}) for job_args in batch]
+        coros = [asyncio.to_thread(self.request, **job_args) for job_args in batch]
         results = asyncio.run(self.gather_with_semaphore(coros))
         all_successful = all(results)
         if all_successful:
