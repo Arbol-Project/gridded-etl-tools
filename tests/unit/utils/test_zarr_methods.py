@@ -1680,8 +1680,8 @@ class TestPublish:
         )
         dm.to_zarr.assert_has_calls(
             [
-                mock.call(slice1.drop.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
+                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
             ]
         )
 
@@ -1728,8 +1728,8 @@ class TestPublish:
         )
         dm.to_zarr.assert_has_calls(
             [
-                mock.call(slice1.drop.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
+                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
             ]
         )
 
