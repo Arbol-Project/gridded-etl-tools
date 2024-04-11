@@ -1103,8 +1103,20 @@ class Publish(Transform, Metadata):
 
         # Add metadata to dataset
         update_dataset = self.set_zarr_metadata(update_dataset)
+
         # Rechunk, storing a non-rechunked version for pre-parse quality checks
         self.pre_chunk_dataset = update_dataset.copy()
+
+        # Since we're appending along the time axis, it may be that the original chunk size in the time dimension is
+        # small because it's just been set to the number of time points in the original dataset. When appending we want
+        # the chunk size to expand with the dataset up to the requested dask chunk size along the time dimension. This
+        # prevents us from having dask chunks that are smaller than our zarr chunks, which will cause xarray to raise
+        # an exception.
+        dataset_len = len(update_dataset[self.time_dim])
+        new_chunks = new_chunks.copy()  # don't mutate argument
+        new_chunks[self.time_dim] = min(dataset_len, self.requested_dask_chunks[self.time_dim])
+
+        # Now, rechunk
         update_dataset = update_dataset.chunk(new_chunks)
 
         self.info(f"Update dataset\n{update_dataset}")
