@@ -986,7 +986,6 @@ class Publish(Transform, Metadata):
         # First check that the data is not obviously wrong
         self.update_quality_check(original_dataset, insert_times, append_times)
         # Then write out updates to existing data using the 'region=' command...
-        original_chunks = {dim: val_tuple[0] for dim, val_tuple in original_dataset.chunks.items()}
         if len(insert_times) > 0:
             if not self.overwrite_allowed:
                 self.warn(
@@ -994,12 +993,12 @@ class Publish(Transform, Metadata):
                     "flag has not been set and store is not IPLD"
                 )
             else:
-                self.insert_into_dataset(original_dataset, update_dataset, insert_times, original_chunks)
+                self.insert_into_dataset(original_dataset, update_dataset, insert_times)
         else:
             self.info("No modified records to insert into original zarr")
         # ...then write new data (appends) using the 'append_dim=' command
         if len(append_times) > 0:
-            self.append_to_dataset(update_dataset, append_times, original_chunks)
+            self.append_to_dataset(update_dataset, append_times)
         else:
             self.info("No new records to append to original zarr")
 
@@ -1008,7 +1007,6 @@ class Publish(Transform, Metadata):
         original_dataset: xr.Dataset,
         update_dataset: xr.Dataset,
         insert_times: list,
-        original_chunks: list,
     ):
         """
         Insert new records to an existing dataset along its time dimension using the `append_dim=` flag.
@@ -1021,12 +1019,10 @@ class Publish(Transform, Metadata):
             A dataset containing all updated (insert) and new (append) records
         insert_times : list
             Datetimes corresponding to existing records to be replaced in the original dataset
-        originaL_chunks : dict
-            A Dict containing the dimension:size parameters for the original dataset
         """
         mapper = self.store.mapper()
 
-        insert_dataset = self.prep_update_dataset(update_dataset, insert_times, original_chunks)
+        insert_dataset = self.prep_update_dataset(update_dataset, insert_times)
         date_ranges, regions = self.calculate_update_time_ranges(original_dataset, insert_dataset)
         for dates, region in zip(date_ranges, regions):
             insert_slice = insert_dataset.sel(**{self.time_dim: slice(*dates)})
@@ -1047,7 +1043,7 @@ class Publish(Transform, Metadata):
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
-    def append_to_dataset(self, update_dataset: xr.Dataset, append_times: list, original_chunks: dict):
+    def append_to_dataset(self, update_dataset: xr.Dataset, append_times: list):
         """
         Append new records to an existing dataset along its time dimension using the `append_dim=` flag.
 
@@ -1057,10 +1053,8 @@ class Publish(Transform, Metadata):
             A dataset containing all updated (insert) and new (append) records
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
-        originaL_chunks : dict
-            The dimension:size parameters for the original dataset
         """
-        append_dataset = self.prep_update_dataset(update_dataset, append_times, original_chunks)
+        append_dataset = self.prep_update_dataset(update_dataset, append_times)
         mapper = self.store.mapper()
 
         # Write the Zarr
@@ -1075,7 +1069,7 @@ class Publish(Transform, Metadata):
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
-    def prep_update_dataset(self, update_dataset: xr.Dataset, time_filter_vals: list, new_chunks: dict) -> xr.Dataset:
+    def prep_update_dataset(self, update_dataset: xr.Dataset, time_filter_vals: list) -> xr.Dataset:
         """
         Select out and format time ranges you wish to insert or append into the original dataset based on specified
         time range(s) and chunks
@@ -1086,8 +1080,6 @@ class Publish(Transform, Metadata):
             A dataset containing all updated (insert) and new (append) records
         time_filter_vals : list
             Datetimes corresponding to all new records to insert or append
-        new_chunks : dict
-            A Dict containing the dimension:size parameters for the original dataset
 
         Returns
         -------
