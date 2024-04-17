@@ -40,6 +40,10 @@ First install the library from the github repository using `pip`. We recommend d
 
     pip install git+https://github.com/Arbol-Project/gridded-etl-tools
 
+The default installation comes without IPFS installed as it's not necessary for the default use case (storage on S3). If you need IPFS then specify the IPFS optional dependencies when installing like so
+
+    pip install "gridded_etl_tools[ipfs] @ git+ssh://git@github.com/Arbol-Project/gridded-etl-tools.git@main"
+
 Next install IPFS, as per [the docs](docs/IPFS_Node_Management.md).
 
 Once the library and an IPFS node are installed, instantiate an IPFS daemon. Open a terminal and run
