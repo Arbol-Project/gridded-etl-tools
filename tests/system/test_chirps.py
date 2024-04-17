@@ -24,7 +24,12 @@ from ..common import (
 
 @pytest.fixture
 def create_input_directories(
-    extracted_input_path, initial_input_path, appended_input_path, appended_input_path_with_hole, qc_input_path
+    extracted_input_path,
+    initial_input_path,
+    initial_smaller_input_path,
+    appended_input_path,
+    appended_input_path_with_hole,
+    qc_input_path,
 ):
     """
     The testing directories for initial, append and insert will get created before each run
@@ -32,6 +37,7 @@ def create_input_directories(
     for path in (
         extracted_input_path,
         initial_input_path,
+        initial_smaller_input_path,
         appended_input_path,
         appended_input_path_with_hole,
         qc_input_path,
@@ -44,7 +50,7 @@ def create_input_directories(
 
 
 @pytest.fixture
-def simulate_file_download(root, initial_input_path, appended_input_path, qc_input_path):
+def simulate_file_download(root, initial_input_path, initial_smaller_input_path, appended_input_path, qc_input_path):
     """
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
@@ -52,6 +58,7 @@ def simulate_file_download(root, initial_input_path, appended_input_path, qc_inp
     # for chirps_init_fil in root.glob("*initial*"):
     #     shutil.copy(chirps_init_fil, initial_input_path)
     shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
+    shutil.copy(root / "chirps_initial_dataset_smaller.nc", initial_smaller_input_path)
     shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
     shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
     shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
@@ -77,6 +84,7 @@ def setup_and_teardown_per_test(
     request,
     extracted_input_path,
     initial_input_path,
+    initial_smaller_input_path,
     appended_input_path,
     appended_input_path_with_hole,
     create_heads_file_for_testing,
@@ -109,7 +117,13 @@ def setup_and_teardown_per_test(
     remove_dask_worker_dir()
     remove_performance_report()
     # now clean up the various files created for each test
-    clean_up_input_paths(extracted_input_path, initial_input_path, appended_input_path, appended_input_path_with_hole)
+    clean_up_input_paths(
+        extracted_input_path,
+        initial_input_path,
+        initial_smaller_input_path,
+        appended_input_path,
+        appended_input_path_with_hole,
+    )
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -307,3 +321,37 @@ def test_metadata(manager_class, heads_path):
     manager.HASH_HEADS_PATH = heads_path
     manager.publish_metadata()
     assert manager.load_stac_metadata() != {}
+
+
+def test_misaligned_zarr_dask_chunks_regression(
+    mocker, manager_class, heads_path, test_chunks, initial_smaller_input_path, appended_input_path, root
+):
+    """
+    Test an update of chirps data by adding new data to the end of existing data.
+    """
+    # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
+    manager = manager_class(custom_input_path=initial_smaller_input_path, store="ipld")
+    # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
+    manager.HASH_HEADS_PATH = heads_path
+    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
+        mocker.patch(
+            "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
+            offline_ipns_publish,
+        )
+
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    manager.transform()
+    manager.parse()
+    manager.publish_metadata()
+
+    # Test an append on this curtailed dataset
+    manager = manager_class(custom_input_path=appended_input_path, store="ipld")
+    manager.HASH_HEADS_PATH = heads_path
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform()
+    manager.parse()
+    manager.publish_metadata()
