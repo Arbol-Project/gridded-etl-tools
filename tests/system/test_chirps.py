@@ -19,6 +19,7 @@ from ..common import (
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
+    run_etl,
 )
 
 
@@ -324,34 +325,26 @@ def test_metadata(manager_class, heads_path):
 
 
 def test_misaligned_zarr_dask_chunks_regression(
-    mocker, manager_class, heads_path, test_chunks, initial_smaller_input_path, appended_input_path, root
+    mocker, manager_class, initial_smaller_input_path, appended_input_path
 ):
     """
-    Test an update of chirps data by adding new data to the end of existing data.
+    Regression test that will fail if Zarr chunks span multiple Dask chunks. This can happen if the initial
+    dataset is smaller than both the append dataset and the requested Dask chunks. It will trigger
+    an Xarray exception.
+
+    If the append dataset is rechunked to the maximum chunk size in `prep_update_dataset` then this problem
+    is addressed. If the test fails then the most likely suspect is a problem with rechunking here.
     """
     # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
     manager = manager_class(custom_input_path=initial_smaller_input_path, store="ipld")
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    manager.HASH_HEADS_PATH = heads_path
     if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch(
             "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
             offline_ipns_publish,
         )
-
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
     manager.transform()
     manager.parse()
     manager.publish_metadata()
-
     # Test an append on this curtailed dataset
-    manager = manager_class(custom_input_path=appended_input_path, store="ipld")
-    manager.HASH_HEADS_PATH = heads_path
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # run ETL
-    manager.transform()
-    manager.parse()
-    manager.publish_metadata()
+    run_etl(manager_class, input_path=appended_input_path, store="ipld")

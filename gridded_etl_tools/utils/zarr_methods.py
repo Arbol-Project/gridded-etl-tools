@@ -1097,7 +1097,7 @@ class Publish(Transform, Metadata):
         update_dataset = self.set_zarr_metadata(update_dataset)
         # Rechunk, storing a non-rechunked version for pre-parse quality checks
         self.pre_chunk_dataset = update_dataset.copy()
-        update_dataset = update_dataset.chunk(self.requested_dask_chunks)
+        # update_dataset = update_dataset.chunk(self.requested_dask_chunks)
 
         self.info(f"Update dataset\n{update_dataset}")
         return update_dataset
