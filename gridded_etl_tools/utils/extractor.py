@@ -10,75 +10,76 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
+from abc import ABC, abstractmethod
+import asyncio
+import nest_asyncio
 import pathlib
 import typing
 import ftplib
 import re
 import time
-import multiprocessing
 import logging
 
 
 log = logging.getLogger("extraction_logs")
 
 
-def pool(batch_processor: typing.Callable[..., bool], batch: typing.Sequence[typing.Sequence]) -> bool:
-    """
-    Launch a batch of requests simultaneously, wait for them all to complete, then return a boolean indicating
-    whether any of the requests were successful.
+class Extractor(ABC):
 
-    The batch processor is any generic callable that accepts the arguments provided in each entry of the batch.
-    Each entry in the batch is a list of arguments to be forwarded to the batch processor. The batch is submitted
-    to a thread pool which will call the batch processor on every entry of the batch, launching all the calls in
-    parallel and waiting for them to complete.
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
+        self.dm = dm
+        self.semaphore = asyncio.Semaphore(concurrency_limit)
 
-    If any of the calls returns `True`, this will return `True`, otherwise it will return `False`.
+    def pool(self, batch: typing.Sequence[typing.Sequence]) -> bool:
+        """
+        Executes a batch of jobs concurrently using asyncio.
 
-    Parameters
-    ----------
-    batch_processor
-        Function which will be called repeatedly, being passed a new entry in the batch each time it's called
-    batch
-        A 2D list of lists (or any sequential type) containing arguments to be forwarded to the given batch
-        processor
+        Args:
+            batch (typing.Sequence[typing.Sequence]): A sequence of job arguments.
 
-    Returns
-    -------
-    bool
-        `True` if any of the batch calls returns `True`, `False` otherwise
-    """
-    # Success remains Trueuntil the first unsuccessful request is completed
-    success = True
+        Returns:
+            bool: True if all of the jobs succeeded, False otherwise.
+        """
 
-    # Time the download
-    start_downloading = time.time()
+        # Necessary to run asyncio in nested contexts, such as prefect or a Jupyter notebook
+        nest_asyncio.apply()
 
-    # Thread count is one less than the amount of CPU available, unless there is only 1 CPU
-    thread_count = max(1, multiprocessing.cpu_count() - 1)
+        coros = [asyncio.to_thread(self.request, **job_args) for job_args in batch]
+        results = asyncio.run(self.gather_with_semaphore(coros))
+        all_successful = all(results)
+        if all_successful:
+            log.info("All requests succeeded.")
+            return True
+        else:
+            log.info("One or more requests returned no data or failed.")
+            return False
 
-    # run downloads
-    if len(batch) > 0:
-        log.info(f"Submitting request for {len(batch)} datasets in parallel using {thread_count} threads.")
+    async def gather_with_semaphore(self, coros: list[typing.Coroutine]) -> list[bool]:
+        """
+        Asynchronously executes a list of coroutines with a semaphore.
 
-        # download in parallel
-        with multiprocessing.pool.ThreadPool(processes=thread_count) as pool:
-            for result in pool.starmap(batch_processor, batch):
-                if not result:
-                    success = False
+        Args:
+            coros (list[typing.Coroutine]): A list of coroutines to execute.
 
-        log.info(f"Downloading took {(time.time() - start_downloading) / 60:.2f} minutes")
-    else:
-        log.info("No requests prepared to be submitted, please check batch_processor is functioning properly.")
-        success = False
+        Returns:
+            list[bool]: A list of the results of the coroutines
+        """
 
-    # If every request returned False, log a message
-    if not success:
-        log.info("At least one request for data was unsuccessful.")
+        async def sem_coro(coro):
+            async with self.semaphore:
+                return await coro
 
-    return success
+        return await asyncio.gather(*(sem_coro(c) for c in coros))
+
+    @abstractmethod
+    def request(self, *args, **kwargs) -> bool:
+        """
+        Abstract method to be implemented by subclasses. This method should perform an extraction operation
+        and return True if data is retrieved, False otherwise
+        """
 
 
-class S3Extractor:
+class S3Extractor(Extractor):
     """
     Create an object that can be used to request remote kerchunking of S3 files in parallel. The kerchunked files will
     be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
@@ -93,7 +94,7 @@ class S3Extractor:
         dm
             Source data for this dataset manager will be extracted
         """
-        self.dm = dm
+        super().__init__(dm)
 
     def request(
         self,
@@ -165,7 +166,7 @@ class S3Extractor:
             raise FileNotFoundError(f"Too many ({counter}) failed download attempts from server")
 
 
-class FTPExtractor:
+class FTPExtractor(Extractor):
     """
     Create an object that provides an interface to a climate data source's FTP server. The object is able to open its
     connection within a context manager, navigate to specific working directory, match files located in subdirectories,
@@ -177,10 +178,7 @@ class FTPExtractor:
     ftp: ftplib.FTP
     host: str
 
-    # Used to limit retrieval to a single thread at a time
-    semaphore: multiprocessing.synchronize.Semaphore = multiprocessing.Semaphore()
-
-    def __init__(self, host: str):
+    def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1):
         """
         Set the host parameter when initializing an FTPEXtractor object
 
@@ -189,6 +187,7 @@ class FTPExtractor:
         host
             Address to connect to for source data
         """
+        super().__init__(dm, concurrency_limit=concurrency_limit)
         self.host = host
 
     def __enter__(self) -> FTPExtractor:
@@ -311,11 +310,11 @@ class FTPExtractor:
         log.info(f"Downloading remote file {source} to {output}")
         with open(output, "wb") as fp:
             try:
-                # Use a semaphore to limit the number of simultaneous downloads to 1 even in multithreaded
-                # environments. This is either a requirement of ftplib or a common requirement of FTP servers.
-                with self.semaphore:
-                    log.info("Using a single thread as a requirement of FTP even if multiple threads are available")
-                    self.ftp.retrbinary(f"RETR {source}", fp.write)
+                # need separate FTP for each download to take advantage of concurrency
+                with ftplib.FTP(self.host) as download_ftp:
+                    download_ftp.login()
+                    download_ftp.cwd(str(self.cwd))
+                    download_ftp.retrbinary(f"RETR {source}", fp.write)
             except ftplib.error_perm:
                 raise RuntimeError(f"Error retrieving {source} from {self.host} in {self.cwd}")
 
