@@ -247,8 +247,8 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     manager = manager_class(custom_input_path=appended_input_path, store="ipld")
     manager.HASH_HEADS_PATH = heads_path
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = {"time": 25, "latitude": 40, "longitude": 40}
-    manager.requested_zarr_chunks = {"time": 25, "latitude": 40, "longitude": 40}
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
     # run ETL
     manager.transform()
     manager.parse()
