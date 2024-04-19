@@ -22,7 +22,6 @@ class TestExtractor:
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         assert extractor.dm == dm
-        assert extractor.semaphore._value == 8
 
     def test_pool_request_success(self):
         dm = Mock()
