@@ -39,6 +39,14 @@ def initial_input_path(root):
 
 
 @pytest.fixture
+def initial_smaller_input_path(root):
+    """
+    Paths where test_initial input will be generated
+    """
+    return root / pathlib.Path("chirps_initial_smaller_input")
+
+
+@pytest.fixture
 def appended_input_path(root):
     return root / pathlib.Path("chirps_appended_input")
 

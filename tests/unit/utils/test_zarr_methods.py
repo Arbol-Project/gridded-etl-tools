@@ -1586,7 +1586,6 @@ class TestPublish:
 
     @staticmethod
     def test_update_parse_operations(manager_class, fake_original_dataset):
-        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
         update_dataset = object()
         insert_times = []
         append_times = [object()]
@@ -1600,11 +1599,10 @@ class TestPublish:
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_not_called()
-        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times, original_chunks)
+        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times)
 
     @staticmethod
     def test_update_parse_operations_insert_but_overwrite_not_allowed(manager_class, fake_original_dataset):
-        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
         update_dataset = object()
         insert_times = [object()]
         append_times = [object()]
@@ -1618,11 +1616,10 @@ class TestPublish:
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_not_called()
-        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times, original_chunks)
+        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times)
 
     @staticmethod
     def test_update_parse_operations_insert(manager_class, fake_original_dataset):
-        original_chunks = {dim: val_tuple[0] for dim, val_tuple in fake_original_dataset.chunks.items()}
         update_dataset = object()
         insert_times = [object()]
         append_times = []
@@ -1636,9 +1633,7 @@ class TestPublish:
         dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
-        dm.insert_into_dataset.assert_called_once_with(
-            fake_original_dataset, update_dataset, insert_times, original_chunks
-        )
+        dm.insert_into_dataset.assert_called_once_with(fake_original_dataset, update_dataset, insert_times)
         dm.append_to_dataset.assert_not_called()
 
     @staticmethod
@@ -1653,7 +1648,6 @@ class TestPublish:
         original_dataset = object()
         update_dataset = object()
         insert_times = object()
-        original_chunks = object()
 
         slice1 = mock.Mock()
         slice2 = mock.Mock()
@@ -1669,10 +1663,10 @@ class TestPublish:
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = 42
 
-        dm.insert_into_dataset(original_dataset, update_dataset, insert_times, original_chunks)
+        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
 
         dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
         dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
 
         insert_dataset.sel.assert_has_calls(
@@ -1701,7 +1695,6 @@ class TestPublish:
         original_dataset = object()
         update_dataset = object()
         insert_times = object()
-        original_chunks = object()
 
         slice1 = mock.Mock()
         slice2 = mock.Mock()
@@ -1717,10 +1710,10 @@ class TestPublish:
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = 42
 
-        dm.insert_into_dataset(original_dataset, update_dataset, insert_times, original_chunks)
+        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
 
         dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
         dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
 
         insert_dataset.sel.assert_has_calls(
@@ -1747,7 +1740,6 @@ class TestPublish:
 
         update_dataset = object()
         insert_times = object()
-        original_chunks = object()
 
         append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
@@ -1755,10 +1747,10 @@ class TestPublish:
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = 42
 
-        dm.append_to_dataset(update_dataset, insert_times, original_chunks)
+        dm.append_to_dataset(update_dataset, insert_times)
 
         dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
 
         dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
 
@@ -1777,7 +1769,6 @@ class TestPublish:
 
         update_dataset = object()
         insert_times = object()
-        original_chunks = object()
 
         append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
@@ -1785,10 +1776,10 @@ class TestPublish:
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = 42
 
-        dm.append_to_dataset(update_dataset, insert_times, original_chunks)
+        dm.append_to_dataset(update_dataset, insert_times)
 
         dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times, original_chunks)
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
 
         dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
 
@@ -1800,7 +1791,6 @@ class TestPublish:
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
-        chunks = {"time": 5}
         time_values = numpy.arange(
             numpy.datetime64("2022-02-01T00:00:00.000000000"),
             numpy.datetime64("2022-03-09T00:00:00.000000000"),
@@ -1808,10 +1798,11 @@ class TestPublish:
         )
         dm = manager_class()
         dm.set_zarr_metadata = lambda x: x
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert len(dataset.time) > len(time_values)
 
-        dataset = dm.prep_update_dataset(dataset, time_values, chunks)
+        dataset = dm.prep_update_dataset(dataset, time_values)
 
         assert numpy.array_equal(dataset.time, time_values)
         dataset.chunks["time"][0] == 5
@@ -1825,7 +1816,6 @@ class TestPublish:
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
         dataset = dataset.sel(time=[numpy.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
-        chunks = {"time": 5}
         time_values = numpy.arange(
             numpy.datetime64("2022-02-01T00:00:00.000000000"),
             numpy.datetime64("2022-03-09T00:00:00.000000000"),
@@ -1833,15 +1823,44 @@ class TestPublish:
         )
         dm = manager_class()
         dm.set_zarr_metadata = lambda x: x
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert "time" not in dataset.dims
 
-        dataset = dm.prep_update_dataset(dataset, time_values, chunks)
+        dataset = dm.prep_update_dataset(dataset, time_values)
 
         assert numpy.array_equal(dataset.time, time_values[:1])
         dataset.chunks["time"][0] == 5
         dataset.chunks["latitude"][0] == 4
         dataset.chunks["longitude"][0] == 4
+        assert dataset.data.dims == ("time", "latitude", "longitude")
+
+    @staticmethod
+    def test_prep_update_dataset_dask_chunks_not_full_size(manager_class, fake_complex_update_dataset):
+        """
+        Regression test to ensure that prep_update_datset always chunks the dataset to have full size
+        full Dask chunks, preventing mismatches between Zarr and Dask chunks that cause Xarray errors
+        """
+        # Give the transpose call in prep_update_dataset something to do
+        dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
+        assert dataset.data.dims == ("longitude", "latitude", "time")
+        dataset = dataset.chunk({"time": 3, "latitude": 1, "longitude": 1})
+        time_values = numpy.arange(
+            numpy.datetime64("2022-02-01T00:00:00.000000000"),
+            numpy.datetime64("2022-03-09T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        dm = manager_class()
+        dm.set_zarr_metadata = lambda x: x
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
+
+        assert len(dataset.time) > len(time_values)
+        dataset = dm.prep_update_dataset(dataset, time_values)
+
+        assert numpy.array_equal(dataset.time, time_values)
+        assert dataset.chunks["time"][0] == 5
+        assert dataset.chunks["latitude"][0] == 4
+        assert dataset.chunks["longitude"][0] == 4
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
