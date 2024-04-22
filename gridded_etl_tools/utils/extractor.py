@@ -11,8 +11,8 @@ if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
 from abc import ABC, abstractmethod
-import asyncio
-import nest_asyncio
+
+from multiprocess.pool import ThreadPool
 import pathlib
 import typing
 import ftplib
@@ -28,9 +28,9 @@ class Extractor(ABC):
 
     def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
         self.dm = dm
-        self.semaphore = asyncio.Semaphore(concurrency_limit)
+        self._concurrency_limit = concurrency_limit
 
-    def pool(self, batch: typing.Sequence[typing.Sequence]) -> bool:
+    def pool(self, batch: typing.Sequence[typing.Dict]) -> bool:
         """
         Executes a batch of jobs concurrently using asyncio.
 
@@ -41,12 +41,10 @@ class Extractor(ABC):
             bool: True if all of the jobs succeeded, False otherwise.
         """
 
-        # Necessary to run asyncio in nested contexts, such as prefect or a Jupyter notebook
-        nest_asyncio.apply()
+        with ThreadPool(self._concurrency_limit) as pool:
+            results = pool.map(self._request_helper, batch)
+            all_successful = all(results)
 
-        coros = [asyncio.to_thread(self.request, **job_args) for job_args in batch]
-        results = asyncio.run(self.gather_with_semaphore(coros))
-        all_successful = all(results)
         if all_successful:
             log.info("All requests succeeded.")
             return True
@@ -54,22 +52,17 @@ class Extractor(ABC):
             log.info("One or more requests returned no data or failed.")
             return False
 
-    async def gather_with_semaphore(self, coros: list[typing.Coroutine]) -> list[bool]:
+    def _request_helper(self, dict_arg: dict) -> bool:
         """
-        Asynchronously executes a list of coroutines with a semaphore.
+        Helper function to unpack the arguments for the request method.
 
         Args:
-            coros (list[typing.Coroutine]): A list of coroutines to execute.
+            dict_arg (dict): A dictionary of arguments to be passed to the request method.
 
         Returns:
-            list[bool]: A list of the results of the coroutines
+            bool: True if the request was successful, False otherwise.
         """
-
-        async def sem_coro(coro):
-            async with self.semaphore:
-                return await coro
-
-        return await asyncio.gather(*(sem_coro(c) for c in coros))
+        return self.request(**dict_arg)
 
     @abstractmethod
     def request(self, *args, **kwargs) -> bool:
