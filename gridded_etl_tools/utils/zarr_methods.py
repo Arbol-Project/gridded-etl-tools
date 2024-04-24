@@ -642,7 +642,6 @@ class Publish(Transform, Metadata):
         if self.dry_run:
             self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
             self.info(f"Dataset final state pre-parse:\n{dataset}")
-            import ipdb; ipdb.set_trace()
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
             if not isinstance(self.store, IPLD):
