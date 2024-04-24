@@ -170,7 +170,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         # Assign the allow overwrite flag. The value should always be either `True` or `False`.
         # Always allow overwrites if IPLD for backwards compatibility
-        self.overwrite_allowed = allow_overwrite or isinstance(self.store, IPLD)
+        self.allow_overwrite = allow_overwrite or isinstance(self.store, IPLD)
 
         # Print log statements to console by default
         if console_log:

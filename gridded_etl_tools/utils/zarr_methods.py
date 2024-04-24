@@ -528,7 +528,7 @@ class Publish(Transform, Metadata):
 
         If the store is IPLD or S3, an existing Zarr will be searched for to be opened and appended to by default. This
         can be overridden to force writing the entire input data to a new Zarr by setting
-        `Convenience.rebuild_requested` to `True`. If existing data is found, `DatasetManager.overwrite_allowed` must
+        `Convenience.rebuild_requested` to `True`. If existing data is found, `DatasetManager.allow_overwrite` must
         also be `True`.
 
         This is the core function for transforming and writing data (to disk, S3, or IPLD) and should be standard for
@@ -571,7 +571,7 @@ class Publish(Transform, Metadata):
                     if self.store.has_existing and not self.rebuild_requested:
                         self.info(f"Updating existing data at {self.store}")
                         self.update_zarr()
-                    elif not self.store.has_existing or (self.rebuild_requested and self.overwrite_allowed):
+                    elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
                         if not self.store.has_existing:
                             self.info(f"No existing data found. Creating new Zarr at {self.store}.")
                         else:
@@ -642,6 +642,7 @@ class Publish(Transform, Metadata):
         if self.dry_run:
             self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
             self.info(f"Dataset final state pre-parse:\n{dataset}")
+            import ipdb; ipdb.set_trace()
         else:
             # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
             if not isinstance(self.store, IPLD):
@@ -987,7 +988,7 @@ class Publish(Transform, Metadata):
         self.update_quality_check(original_dataset, insert_times, append_times)
         # Then write out updates to existing data using the 'region=' command...
         if len(insert_times) > 0:
-            if not self.overwrite_allowed:
+            if not self.allow_overwrite:
                 self.warn(
                     "Not inserting records despite historical data detected. 'allow_overwrite'"
                     "flag has not been set and store is not IPLD"

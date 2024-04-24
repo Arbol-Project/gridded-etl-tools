@@ -1625,7 +1625,7 @@ class TestPublish:
         append_times = []
 
         dm = manager_class()
-        dm.overwrite_allowed = True
+        dm.allow_overwrite = True
         dm.update_quality_check = mock.Mock()
         dm.insert_into_dataset = mock.Mock()
         dm.append_to_dataset = mock.Mock()

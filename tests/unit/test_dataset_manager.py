@@ -66,7 +66,7 @@ class TestDatasetManager:
         assert dm.latest_hash() == "omghash!"
         dm.log_to_console.assert_not_called()
         dataset_manager.logging.getLogger.return_value.setLevel.assert_called_once_with(logging.WARN)
-        assert dm.overwrite_allowed is True
+        assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
         assert dm.dask_num_threads == 4
         assert dm.use_local_zarr_jsons is True
