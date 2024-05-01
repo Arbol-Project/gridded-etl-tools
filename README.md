@@ -1,5 +1,5 @@
 gridded_etl_tools
-==============
+=================
 
 gridded_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium, most notably [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
 
