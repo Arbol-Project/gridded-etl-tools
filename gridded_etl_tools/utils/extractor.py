@@ -72,6 +72,31 @@ class Extractor(ABC):
         """
 
 
+class HTTPExtractor(Extractor):
+
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 1):
+        """
+        Set the host parameter when initializing an HTTPExtractor object
+
+        Parameters
+        ----------
+        host
+            Address to connect to for source data
+        """
+        super().__init__(dm, concurrency_limit=concurrency_limit)
+
+    def request(self, file_name: str, out_file_name: str) -> bool:
+        """
+        Request a file from an HTTP Server and save it to disk
+        """
+        dl_path = self.dm.dataset_download_url + file_name
+        self.dm.info("Downloading... " + dl_path)
+        fil_in_mem = self.dm.session.get(dl_path)
+        with open(self.dm.local_input_path() / out_file_name, "wb") as outfile:
+            outfile.write(fil_in_mem.content)
+        return True
+
+
 class S3Extractor(Extractor):
     """
     Create an object that can be used to request remote kerchunking of S3 files in parallel. The kerchunked files will
