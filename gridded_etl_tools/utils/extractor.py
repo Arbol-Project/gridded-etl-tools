@@ -74,9 +74,11 @@ class Extractor(ABC):
 
 class HTTPExtractor(Extractor):
 
-    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 1):
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
         """
         Set the host parameter when initializing an HTTPExtractor object
+        Initializes a session within the dataset manager if it hasn't yet been initialized,
+        so that the `request` method works as intended
 
         Parameters
         ----------
@@ -84,15 +86,17 @@ class HTTPExtractor(Extractor):
             Address to connect to for source data
         """
         super().__init__(dm, concurrency_limit=concurrency_limit)
+        if not hasattr(dm, "session"):
+            dm.get_session()
 
-    def request(self, file_name: str, out_file_name: str) -> bool:
+    def request(self, remote_file_path: str, local_file_path: str) -> bool:
         """
         Request a file from an HTTP Server and save it to disk
+        Requires an active session within the dataset manager
         """
-        dl_path = self.dm.dataset_download_url + file_name
-        self.dm.info("Downloading... " + dl_path)
-        fil_in_mem = self.dm.session.get(dl_path)
-        with open(self.dm.local_input_path() / out_file_name, "wb") as outfile:
+        self.dm.info(f"Downloading {local_file_path}")
+        fil_in_mem = self.dm.session.get(remote_file_path)
+        with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
             outfile.write(fil_in_mem.content)
         return True
 
