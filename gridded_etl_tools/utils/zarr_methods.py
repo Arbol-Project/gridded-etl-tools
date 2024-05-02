@@ -550,10 +550,6 @@ class Publish(Transform, Metadata):
         # adjust default dask configuration parameters as needed and spin up a LocalCluster
         self.dask_configuration()
 
-        # instances = [i for i in LocalCluster._instances if i.status.name != "closed"]
-        # for i in instances:
-        #     i._loop_runner.stop()
-
         with LocalCluster(
             processes=self.dask_use_process_scheduler,
             dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
