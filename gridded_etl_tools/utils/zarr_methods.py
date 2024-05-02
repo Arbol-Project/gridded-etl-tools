@@ -13,7 +13,6 @@ import os
 import s3fs
 import zarr
 
-from contextlib import nullcontext
 from subprocess import Popen
 from typing import Any, Generator, Union
 from collections.abc import MutableMapping
@@ -22,7 +21,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from dask.distributed import Client, LocalCluster
+from dask.distributed import LocalCluster
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.grib2 import scan_grib
 from kerchunk.combine import MultiZarrToZarr
