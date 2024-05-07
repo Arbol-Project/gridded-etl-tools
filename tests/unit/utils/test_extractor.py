@@ -7,9 +7,6 @@ from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
 from .test_convenience import DummyFtpClient
 
-import os
-from unittest.mock import patch
-
 
 class ConcreteExtractor(Extractor):
     def request(*args, **kwargs):
@@ -41,6 +38,7 @@ class TestExtractor:
         result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
         assert result is False
+
 
 class TestHTTPExtractor:
 

@@ -199,11 +199,12 @@ class DummyManagerBase(dataset_manager.DatasetManager):
     def static_metadata(self):
         return self._static_metadata
 
-class DummySession():
+
+class DummySession:
 
     def get(self, *args, **kwargs):
         return_object = Mock()
-        return_object.content = b'get it while the gettins good'
+        return_object.content = b"get it while the gettins good"
         return return_object
 
 
@@ -214,7 +215,7 @@ class DummyManager(DummyManagerBase):
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
-    
+
     def get_session(self):
         self.session = DummySession()
 
