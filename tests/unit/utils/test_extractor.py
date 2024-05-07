@@ -4,8 +4,11 @@ import ftplib
 import pathlib
 
 from unittest.mock import Mock
-from gridded_etl_tools.utils.extractor import Extractor, S3Extractor, FTPExtractor
+from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
 from .test_convenience import DummyFtpClient
+
+import os
+from unittest.mock import patch
 
 
 class ConcreteExtractor(Extractor):
@@ -38,6 +41,26 @@ class TestExtractor:
         result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
         assert result is False
+
+class TestHTTPExtractor:
+
+    @staticmethod
+    def test_http_request(manager_class, tmp_path):
+        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
+        extractor = HTTPExtractor(manager_class())
+        extractor.dm.local_input_path = Mock(return_value=tmp_path)
+
+        rfp = "https://remote/sand/depo/castle1.json"
+        lfp = "castle1.json"
+        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
+
+        extractor.dm.get_session = Mock(side_effect=extractor.dm.get_session)
+        extractor.dm.session.get = Mock(side_effect=extractor.dm.session.get)
+
+        extractor.request(**kwargs)
+        # TODO correctly test that get_session is called
+        # extractor.dm.get_session.assert_called_once()
+        extractor.dm.session.get.assert_called_once_with(rfp)
 
 
 class TestS3Extractor:

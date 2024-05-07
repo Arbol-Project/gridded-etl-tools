@@ -1,6 +1,7 @@
 import datetime
 import json
 import pathlib
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -198,6 +199,13 @@ class DummyManagerBase(dataset_manager.DatasetManager):
     def static_metadata(self):
         return self._static_metadata
 
+class DummySession():
+
+    def get(self, *args, **kwargs):
+        return_object = Mock()
+        return_object.content = b'get it while the gettins good'
+        return return_object
+
 
 class DummyManager(DummyManagerBase):
     collection_name = "Vintage Guitars"
@@ -206,6 +214,9 @@ class DummyManager(DummyManagerBase):
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+    
+    def get_session(self):
+        self.session = DummySession()
 
 
 # Set up overcomplicated mro for testing get_subclass(es)
