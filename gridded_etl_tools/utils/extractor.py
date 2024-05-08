@@ -34,11 +34,15 @@ class Extractor(ABC):
         """
         Executes a batch of jobs concurrently using asyncio.
 
-        Args:
-            batch (typing.Sequence[typing.Sequence]): A sequence of job arguments.
+        Parameters
+        ----------
+        batch : typing.Sequence[typing.Sequence])
+            A sequence of job arguments.
 
-        Returns:
-            bool: True if all of the jobs succeeded, False otherwise.
+        Returns
+        -------
+        bool
+            True if all of the jobs succeeded, False otherwise.
         """
 
         with ThreadPool(self._concurrency_limit) as pool:
@@ -56,11 +60,15 @@ class Extractor(ABC):
         """
         Helper function to unpack the arguments for the request method.
 
-        Args:
-            dict_arg (dict): A dictionary of arguments to be passed to the request method.
+        Parameters
+        ----------
+        dict_arg  : dict
+            A dictionary of arguments to be passed to the request method.
 
-        Returns:
-            bool: True if the request was successful, False otherwise.
+        Returns
+        -------
+        bool
+            True if the request was successful, False otherwise.
         """
         return self.request(**dict_arg)
 
@@ -85,8 +93,11 @@ class HTTPExtractor(Extractor):
 
         Parameters
         ----------
-        host
-            Address to connect to for source data
+        dm
+            Source data for this dataset manager will be extracted
+        concurrency_limit
+            The maximum permitted number of concurrent requests. Use to manage throttling
+            and/or available threads.
         """
         super().__init__(dm, concurrency_limit=concurrency_limit)
         if not hasattr(dm, "session"):
