@@ -80,6 +80,9 @@ class HTTPExtractor(Extractor):
         Initializes a session within the dataset manager if it hasn't yet been initialized,
         so that the `request` method works as intended
 
+        Note that `get_session` is therefore a required method for any DatasetManager using
+        the HTTPExtractor class.
+
         Parameters
         ----------
         host
