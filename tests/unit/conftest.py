@@ -152,6 +152,11 @@ def manager_class():
     return DummyManager
 
 
+@pytest.fixture
+def session_obj():
+    return DummySession
+
+
 def unimplemented(*args, **kwargs):  # pragma NO COVER
     raise NotImplementedError
 
