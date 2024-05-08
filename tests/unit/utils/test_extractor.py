@@ -45,20 +45,20 @@ class TestHTTPExtractor:
     @staticmethod
     def test_http_request(manager_class, tmp_path):
         tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
-        extractor = HTTPExtractor(manager_class())
-        extractor.dm.local_input_path = Mock(return_value=tmp_path)
+        dm = manager_class()
+        dm.get_session = Mock(side_effect=dm.get_session)
+
+        extractor = HTTPExtractor(dm)
+        dm.local_input_path = Mock(return_value=tmp_path)
+        dm.session.get = Mock(side_effect=dm.session.get)
 
         rfp = "https://remote/sand/depo/castle1.json"
         lfp = "castle1.json"
         kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
 
-        extractor.dm.get_session = Mock(side_effect=extractor.dm.get_session)
-        extractor.dm.session.get = Mock(side_effect=extractor.dm.session.get)
-
         extractor.request(**kwargs)
-        # TODO correctly test that get_session is called
-        # extractor.dm.get_session.assert_called_once()
-        extractor.dm.session.get.assert_called_once_with(rfp)
+        dm.get_session.assert_called_once()
+        dm.session.get.assert_called_once_with(rfp)
 
 
 class TestS3Extractor:
