@@ -34,11 +34,15 @@ class Extractor(ABC):
         """
         Executes a batch of jobs concurrently using asyncio.
 
-        Args:
-            batch (typing.Sequence[typing.Sequence]): A sequence of job arguments.
+        Parameters
+        ----------
+        batch : typing.Sequence[typing.Sequence])
+            A sequence of job arguments.
 
-        Returns:
-            bool: True if all of the jobs succeeded, False otherwise.
+        Returns
+        -------
+        bool
+            True if all of the jobs succeeded, False otherwise.
         """
 
         with ThreadPool(self._concurrency_limit) as pool:
@@ -56,11 +60,15 @@ class Extractor(ABC):
         """
         Helper function to unpack the arguments for the request method.
 
-        Args:
-            dict_arg (dict): A dictionary of arguments to be passed to the request method.
+        Parameters
+        ----------
+        dict_arg  : dict
+            A dictionary of arguments to be passed to the request method.
 
-        Returns:
-            bool: True if the request was successful, False otherwise.
+        Returns
+        -------
+        bool
+            True if the request was successful, False otherwise.
         """
         return self.request(**dict_arg)
 
@@ -70,6 +78,40 @@ class Extractor(ABC):
         Abstract method to be implemented by subclasses. This method should perform an extraction operation
         and return True if data is retrieved, False otherwise
         """
+
+
+class HTTPExtractor(Extractor):
+
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
+        """
+        Set the host parameter when initializing an HTTPExtractor object
+        Initializes a session within the dataset manager if it hasn't yet been initialized,
+        so that the `request` method works as intended
+
+        Note that `get_session` is therefore a required method for any DatasetManager using
+        the HTTPExtractor class.
+
+        Parameters
+        ----------
+        dm
+            Source data for this dataset manager will be extracted
+        concurrency_limit
+            The maximum permitted number of concurrent requests. Use to manage throttling
+            and/or available threads.
+        """
+        super().__init__(dm, concurrency_limit=concurrency_limit)
+        if not hasattr(dm, "session"):
+            dm.get_session()
+
+    def request(self, remote_file_path: str, local_file_path: str) -> bool:
+        """
+        Request a file from an HTTP Server and save it to disk
+        Requires an active session within the dataset manager
+        """
+        self.dm.info(f"Downloading {local_file_path}")
+        with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
+            outfile.write(self.dm.session.get(remote_file_path).content)
+        return True
 
 
 class S3Extractor(Extractor):

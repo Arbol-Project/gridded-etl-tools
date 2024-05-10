@@ -4,7 +4,7 @@ import ftplib
 import pathlib
 
 from unittest.mock import Mock
-from gridded_etl_tools.utils.extractor import Extractor, S3Extractor, FTPExtractor
+from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
 from .test_convenience import DummyFtpClient
 
 
@@ -38,6 +38,46 @@ class TestExtractor:
         result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
         assert result is False
+
+
+class TestHTTPExtractor:
+
+    @staticmethod
+    def test_http_request_no_existing_session(manager_class, tmp_path):
+        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
+        dm = manager_class()
+        dm.get_session = Mock(side_effect=dm.get_session)
+
+        extractor = HTTPExtractor(dm)
+        dm.local_input_path = Mock(return_value=tmp_path)
+        dm.session.get = Mock(side_effect=dm.session.get)
+
+        rfp = "https://remote/sand/depo/castle1.json"
+        lfp = "castle1.json"
+        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
+
+        extractor.request(**kwargs)
+        dm.get_session.assert_called_once()
+        dm.session.get.assert_called_once_with(rfp)
+
+    @staticmethod
+    def test_http_request_session_already_exists(manager_class, tmp_path, session_obj):
+        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
+        dm = manager_class()
+        dm.session = session_obj
+        dm.get_session = Mock(side_effect=dm.get_session)
+
+        extractor = HTTPExtractor(dm)
+        dm.local_input_path = Mock(return_value=tmp_path)
+        dm.session.get = Mock(side_effect=dm.session.get)
+
+        rfp = "https://remote/sand/depo/castle1.json"
+        lfp = "castle1.json"
+        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
+
+        extractor.request(**kwargs)
+        dm.get_session.assert_not_called()
+        dm.session.get.assert_called_once_with(rfp)
 
 
 class TestS3Extractor:

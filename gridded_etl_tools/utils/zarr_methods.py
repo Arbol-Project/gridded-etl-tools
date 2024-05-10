@@ -763,7 +763,7 @@ class Publish(Transform, Metadata):
 
         return dataset
 
-    def transformed_dataset(self):
+    def transformed_dataset(self) -> xr.Dataset:
         """
         Overall method to return the fully processed and transformed dataset
         Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
