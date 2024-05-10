@@ -76,6 +76,8 @@ class CHIRPS(DatasetManager):
             "standard name": self.standard_name,
             "long name": self.long_name,
             "unit of measurement": self.unit_of_measurement,
+            "final lag in days": self.final_lag_in_days,
+            "preliminary lag in days": self.preliminary_lag_in_days,
         }
 
         return static_metadata
@@ -166,6 +168,8 @@ class CHIRPS(DatasetManager):
     def bbox_rounding_value(self) -> int:
         """Value to round bbox values by"""
         return 3
+
+    final_lag_in_days = 30
 
     def extract(self, *, date_range: tuple[datetime.datetime, datetime.datetime] | None = None, **kwargs) -> bool:
         """
@@ -401,3 +405,5 @@ class CHIRPSPrelim05(CHIRPS):
     def populate_metadata(self):
         super().populate_metadata()
         self.metadata["revision"] = "preliminary"
+
+    preliminary_lag_in_days = 6

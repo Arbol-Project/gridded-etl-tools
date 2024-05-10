@@ -54,6 +54,8 @@ class MyNewETL(DatasetManager):
             "standard name": self.standard_name,
             "long name": self.long_name,
             "unit of measurement": self.unit_of_measurement,
+            "final lag in days": self.final_lag_in_days,
+            "preliminary lag in days": self.preliminary_lag_in_days,
         }
 
         return static_metadata
