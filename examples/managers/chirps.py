@@ -6,6 +6,8 @@ import glob
 import datetime
 import pathlib
 import xarray as xr
+from abc import ABC
+
 from gridded_etl_tools.dataset_manager import DatasetManager
 from gridded_etl_tools.utils import extractor
 
@@ -295,7 +297,7 @@ class CHIRPS(DatasetManager):
             dataset[self.data_var()].encoding.pop(key, None)
 
 
-class CHIRPSFinal(CHIRPS):
+class CHIRPSFinal(CHIRPS, ABC):
     """
     A class for finalized CHIRPS data
     """
@@ -312,6 +314,8 @@ class CHIRPSFinal(CHIRPS):
     def populate_metadata(self):
         super().populate_metadata()
         self.metadata["revision"] = "final"
+        
+    final_lag_in_days = 30
 
 
 class CHIRPSFinal05(CHIRPSFinal):
