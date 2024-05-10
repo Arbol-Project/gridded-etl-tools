@@ -109,9 +109,8 @@ class HTTPExtractor(Extractor):
         Requires an active session within the dataset manager
         """
         self.dm.info(f"Downloading {local_file_path}")
-        fil_in_mem = self.dm.session.get(remote_file_path)
         with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
-            outfile.write(fil_in_mem.content)
+            outfile.write(self.dm.session.get(remote_file_path).content)
         return True
 
 
