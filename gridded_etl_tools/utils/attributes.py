@@ -272,6 +272,24 @@ class Attributes(ABC):
     The number of decimal places to round bounding box values to.
     """
 
+    final_lag_in_days: int = abstract_class_property()
+    """
+    The number of days betweenm an observation taking place and its publication in finalized form
+    w/in the dataset. For example, if today is April 6th and the latest data in a dataset is for April 1st,
+    it has a 5 day lag.
+
+    May stretch into the hundreds or thousands for some datasets that publish finalized data on a an extreme lag.
+    """
+
+    preliminary_lag_in_days: int = None
+    """
+    The number of days betweenm an observation taking place and its publication in preliminary form
+    w/in the dataset. For example, if today is April 6th and the latest data in a dataset is for April 1st,
+    it has a 5 day lag.
+
+    Only applicable to datasets that publish preliminary data, for example CHIRPS Preliminary
+    """
+
     @property
     def store(self) -> StoreInterface:
         """
