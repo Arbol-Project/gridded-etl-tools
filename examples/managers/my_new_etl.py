@@ -5,11 +5,12 @@ All filled fields are examples that can be replaced; all unfilled fields must be
 
 import datetime
 import pathlib
+from abc import ABC
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
 
-class MyNewETL(DatasetManager):
+class MyNewETL(DatasetManager, ABC):
     """
     Base class for datasets from a provider. For example's sake assumes that such data are published in NetCDF format
     """
@@ -131,6 +132,8 @@ class MyNewETL(DatasetManager):
         other relevant dimension
         """
         return ["time"]
+
+    final_lag_in_days = 2
 
     def extract(
         self, rebuild: bool = False, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs
@@ -310,7 +313,7 @@ class MyNewETLPrecip(MyNewETL):
         return "mm"
 
 
-class MyNewETLTemp(MyNewETL):
+class MyNewETLTemp(MyNewETL, ABC):
     """
     Base class for gridded temperature data
     """
@@ -338,6 +341,8 @@ class MyNewETLTemp(MyNewETL):
     @property
     def spatial_resolution(self) -> float:
         return 0.5
+
+    final_lag_in_days = 2
 
 
 class MyNewETLTempMin(MyNewETLTemp):

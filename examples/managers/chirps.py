@@ -171,8 +171,6 @@ class CHIRPS(DatasetManager):
         """Value to round bbox values by"""
         return 3
 
-    final_lag_in_days = 30
-
     def extract(self, *, date_range: tuple[datetime.datetime, datetime.datetime] | None = None, **kwargs) -> bool:
         """
         Download climate data netCDF files from CHIRPS's FTP server. Files are assumed to be stored in the format
@@ -314,7 +312,7 @@ class CHIRPSFinal(CHIRPS, ABC):
     def populate_metadata(self):
         super().populate_metadata()
         self.metadata["revision"] = "final"
-        
+
     final_lag_in_days = 30
 
 
@@ -409,5 +407,7 @@ class CHIRPSPrelim05(CHIRPS):
     def populate_metadata(self):
         super().populate_metadata()
         self.metadata["revision"] = "preliminary"
+
+    final_lag_in_days = 30
 
     preliminary_lag_in_days = 6
