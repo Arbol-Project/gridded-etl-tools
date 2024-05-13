@@ -220,6 +220,7 @@ class DummyManager(DummyManagerBase):
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+    final_lag_in_days = 3
 
     def get_session(self):
         self.session = DummySession()

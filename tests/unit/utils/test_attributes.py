@@ -158,6 +158,14 @@ class TestAttributes:
             assert manager_class.irregular_update_cadence() is None
 
     @staticmethod
+    def test_final_lag_in_days(manager_class):
+        assert manager_class.final_lag_in_days == 3
+
+    @staticmethod
+    def test_preliminary_lag_in_days(manager_class):
+        assert not manager_class.preliminary_lag_in_days
+
+    @staticmethod
     def test_open_dataset_kwargs(manager_class):
         assert manager_class.open_dataset_kwargs == {}
 
