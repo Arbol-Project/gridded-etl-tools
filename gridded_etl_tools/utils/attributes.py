@@ -262,6 +262,10 @@ class Attributes(ABC):
     Default value set as False
     """
 
+    open_dataset_kwargs = {}
+    """Some dataset types (e.g. HDF5) need special kwargs to open in Xarray. This will pass them automatically
+    during post-parse QC so these datasets can be checked automatically without issue"""
+
     @classmethod
     @deprecation.deprecated("Use the update_cadence_bounds attribute")
     def irregular_update_cadence(cls) -> None | tuple[np.timedelta64, np.timedelta64]:
