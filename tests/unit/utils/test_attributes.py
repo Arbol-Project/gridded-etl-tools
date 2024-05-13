@@ -158,6 +158,10 @@ class TestAttributes:
             assert manager_class.irregular_update_cadence() is None
 
     @staticmethod
+    def test_open_dataset_kwargs(manager_class):
+        assert manager_class.open_dataset_kwargs == {}
+
+    @staticmethod
     def test_store_with_correct_type(manager_class):
         dm = manager_class()
         local_store = store.Local(dm)
