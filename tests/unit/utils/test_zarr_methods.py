@@ -822,6 +822,8 @@ class TestPublish:
     @staticmethod
     def test_parse_ipld_first_time(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -845,9 +847,14 @@ class TestPublish:
         dm.update_zarr.assert_not_called()
         dm.write_initial_zarr.assert_called_once_with()
 
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
+
     @staticmethod
     def test_parse_ipld_update(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -870,9 +877,15 @@ class TestPublish:
         dm.update_zarr.assert_called_once_with()
         dm.write_initial_zarr.assert_not_called()
 
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
+
     @staticmethod
     def test_parse_not_ipld_rebuild(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=True)
@@ -895,9 +908,15 @@ class TestPublish:
         dm.update_zarr.assert_not_called()
         dm.write_initial_zarr.assert_called_once_with()
 
+        Client.assert_called_once_with(cluster)
+        nullcontext.assert_not_called()
+
     @staticmethod
     def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=False)
@@ -921,9 +940,14 @@ class TestPublish:
         dm.update_zarr.assert_not_called()
         dm.write_initial_zarr.assert_not_called()
 
+        Client.assert_called_once_with(cluster)
+        nullcontext.assert_not_called()
+
     @staticmethod
     def test_parse_ipld_update_ctrl_c(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -945,6 +969,9 @@ class TestPublish:
         dm.dask_configuration.assert_called_once_with()
         dm.update_zarr.assert_called_once_with()
         dm.write_initial_zarr.assert_not_called()
+
+        Client.assert_not_called()
+        nullcontext.assert_called_once_with()
 
     @staticmethod
     def test_publish_metadata(manager_class):
