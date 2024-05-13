@@ -1584,7 +1584,7 @@ class Publish(Transform, Metadata):
             A file path
         """
         if self.protocol == "file":
-            return xr.open_dataset(file_path)
+            return xr.open_dataset(file_path, **self.open_dataset_kwargs)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
