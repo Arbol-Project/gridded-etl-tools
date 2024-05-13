@@ -583,6 +583,8 @@ class Publish(Transform, Metadata):
                             "There is already a zarr at the specified path and a rebuild is requested, "
                             "but overwrites are not allowed."
                         )
+                    # manually closing the cluter within the Client block prevents observed serialization problems
+                    # for reasons not entirely understood
                     cluster.close()
                 except KeyboardInterrupt:
                     self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
