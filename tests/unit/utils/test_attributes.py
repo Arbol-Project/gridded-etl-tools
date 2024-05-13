@@ -165,6 +165,7 @@ class TestAttributes:
     def test_preliminary_lag_in_days(manager_class):
         assert not manager_class.preliminary_lag_in_days
 
+    @staticmethod
     def test_open_dataset_kwargs(manager_class):
         assert manager_class.open_dataset_kwargs == {}
 
