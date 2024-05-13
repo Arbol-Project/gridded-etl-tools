@@ -130,6 +130,7 @@ class S3Extractor(Extractor):
             Source data for this dataset manager will be extracted
         """
         super().__init__(dm)
+        self.dm.zarr_jsons = []
 
     def request(
         self,
