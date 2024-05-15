@@ -38,7 +38,7 @@ dependencies = [
     "deprecation",
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
-    "kerchunk",
+    "kerchunk<0.2.5",
     "multiformats",
     "natsort",
     "nest-asyncio",
