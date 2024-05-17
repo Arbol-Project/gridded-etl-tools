@@ -287,6 +287,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         Rework downloaded data into a virtual Zarr JSON conforming to Arbol's standard format for gridded datasets
         """
+        self.raw_transform()
+        self.ds_transform()
+
+    def raw_transform(self):
+        """
+        Rework downloaded data into a "virtual Zarr" (Xarray Dataset)
+        conforming to Arbol's standard format for gridded datasets
+        """
         # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
         self.populate_metadata()
         # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
@@ -296,6 +304,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference
         # from Dask
         self.create_zarr_json()
+
+    def ds_transform(self):
+        """Lazy transform steps on an in-memory Xarray Dataset"""
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):

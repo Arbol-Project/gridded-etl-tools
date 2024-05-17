@@ -571,13 +571,19 @@ class Publish(Transform, Metadata):
                     # start parsing and issue a warning.
                     if self.store.has_existing and not self.rebuild_requested:
                         self.info(f"Updating existing data at {self.store}")
-                        self.update_zarr()
+                        self.info("First transforming the in-memory dataset...")
+                        original_dataset, update_dataset, insert_times, append_times = self.update_ds_transform()
+                        self.info(f"Now writing to {self.store}")
+                        self.update_zarr(original_dataset, update_dataset, insert_times, append_times)
                     elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
                         if not self.store.has_existing:
                             self.info(f"No existing data found. Creating new Zarr at {self.store}.")
                         else:
                             self.info(f"Data at {self.store} will be replaced.")
-                        self.write_initial_zarr()
+                        self.info("First transforming the in-memory dataset...")
+                        dataset = self.initial_ds_transform()
+                        self.info(f"Now writing to {self.store}")
+                        self.write_initial_zarr(dataset)
                     else:
                         raise RuntimeError(
                             "There is already a zarr at the specified path and a rebuild is requested, "
@@ -734,7 +740,7 @@ class Publish(Transform, Metadata):
 
     # PREPARATION
 
-    def pre_initial_dataset(self) -> xr.Dataset:
+    def initial_ds_transform(self) -> xr.Dataset:
         """
         Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the
         virtual Zarr JSON at the path returned by `Creation.zarr_json_path`, normalize the axes, re-chunk the dataset
@@ -773,7 +779,9 @@ class Publish(Transform, Metadata):
         Overall method to return the fully processed and transformed dataset
         Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
         """
-        return self.zarr_json_to_dataset()
+        raw_dataset = self.zarr_json_to_dataset()
+        final_dataset = self.postprocess_zarr(raw_dataset)
+        return final_dataset
 
     def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
         """
@@ -835,8 +843,7 @@ class Publish(Transform, Metadata):
         }
         dataset = xr.open_dataset(**input_kwargs)
 
-        # Apply any further postprocessing on the way out
-        return self.postprocess_zarr(dataset)
+        return dataset
 
     def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
         """
@@ -901,27 +908,21 @@ class Publish(Transform, Metadata):
 
     # INITIAL
 
-    def write_initial_zarr(self):
+    def write_initial_zarr(self, dataset: xr.Dataset):
         """
         Writes the first iteration of zarr for the dataset to the store specified at initialization. If the store is
         `IPLD`, does some additional metadata processing
         """
-        # Transform the JSON Zar
-        dataset = self.pre_initial_dataset()
         mapper = self.store.mapper(set_root=False)
-
         self.to_zarr(dataset, mapper, consolidated=True, mode="w")
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
     # UPDATES
 
-    def update_zarr(self):
-        """
-        Update discrete regions of an N-D dataset saved to disk as a Zarr. If updates span multiple date ranges, pushes
-        separate updates to each region. If the IPLD store is in use, after updating the dataset, this function updates
-        the corresponding STAC Item and summaries in the parent STAC Collection.
-        """
+    def update_ds_transform(self):
+        """Transform steps relevant to an update operation"""
+
         original_dataset = self.store.dataset()
         update_dataset = self.transformed_dataset()
 
@@ -930,15 +931,12 @@ class Publish(Transform, Metadata):
         self.info(f"Original dataset\n{original_dataset}")
 
         # Prepare inputs for the update operation
-        insert_times, append_times = self.update_setup(original_dataset, update_dataset)
+        insert_times, append_times = self.prepare_update_times(original_dataset, update_dataset)
+        return original_dataset, update_dataset, insert_times, append_times
 
-        # Conduct update operations
-        self.update_parse_operations(original_dataset, update_dataset, insert_times, append_times)
-
-    def update_setup(self, original_dataset: xr.Dataset, update_dataset: xr.Dataset) -> tuple[list, list]:
+    def prepare_update_times(self, original_dataset: xr.Dataset, update_dataset: xr.Dataset) -> tuple[list, list]:
         """
-        Create needed inputs for the actual update parses: a variable to hold the hash and lists of any times to insert
-        and/or append.
+        Create lists of any datetimes to insert and/or append, needed inputs for the update
 
         Parameters
         ----------
@@ -965,7 +963,7 @@ class Publish(Transform, Metadata):
 
         return insert_times, append_times
 
-    def update_parse_operations(
+    def update_zarr(
         self,
         original_dataset: xr.Dataset,
         update_dataset: xr.Dataset,
@@ -973,8 +971,12 @@ class Publish(Transform, Metadata):
         append_times: tuple[datetime.datetime],
     ):
         """
-        An enclosing method triggering insert and/or append operations based on the presence of valid records for
-        either.
+        Update discrete regions of an N-D dataset saved to disk as a Zarr. Trigger insert and/or append
+        operations based on the presence of valid records for either. If updates span multiple date ranges,
+        push separate updates to each region.
+
+        If the IPLD store is in use, after updating the dataset, this function updates
+        the corresponding STAC Item and summaries in the parent STAC Collection.
 
         Parameters
         ----------
