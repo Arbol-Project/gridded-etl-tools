@@ -1603,7 +1603,7 @@ class Publish(Transform, Metadata):
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
 
-    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset) -> np.array | list:
+    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset) -> np.ndarray | list:
         """
         Convert times in the raw data to an array or list of values that can be compared to
         the published data values w/in the binary_search function.
