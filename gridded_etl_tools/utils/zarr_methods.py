@@ -1622,13 +1622,13 @@ class Publish(Transform, Metadata):
         time_values = np.atleast_1d(ds[self.time_dim].values)
 
         # Convert any raw time values in esoteric formats that break the binary search comparison logic.
-        # NOTE the expectation is that the `convert_orig_times` function is defined w/in the ETL manager
+        # NOTE the expectation is that the `convert_raw_times` function is defined w/in the ETL manager
         if type(time_values[0]) is not np.datetime64:
-            time_values = self.convert_orig_times_to_numpy_times(time_values)
+            time_values = self.convert_raw_times_to_numpy_times(time_values)
 
         return time_values
 
-    def convert_orig_times_to_numpy_times(self, orig_times: np.array) -> np.array:
+    def convert_raw_times_to_numpy_times(self, orig_times: np.array) -> np.array:
         """Placeholder for custom function to be defined within managers that need it"""
         return orig_times
 

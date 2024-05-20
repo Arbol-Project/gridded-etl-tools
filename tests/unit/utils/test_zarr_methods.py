@@ -14,7 +14,7 @@ import pytest
 
 from gridded_etl_tools.utils import store, zarr_methods
 
-from ...common import get_manager, convert_orig_times_to_numpy_times
+from ...common import get_manager, convert_raw_times_to_numpy_times
 
 
 @pytest.fixture
@@ -2450,6 +2450,32 @@ class TestPublish:
         dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(dataset)
 
+    @staticmethod
+    def test_convert_standard_raw_times_to_comparable_times(manager_class, fake_original_dataset):
+        dm = get_manager(manager_class)
+        time_vals = dm.convert_raw_times_to_comparable_times(fake_original_dataset)
+        assert isinstance(time_vals, (list, numpy.ndarray))
+        assert len(time_vals)
+        assert numpy.datetime64("1900-01-01") < time_vals[0]
+
+    @staticmethod
+    def test_convert_weird_raw_times_to_comparable_times(mocker, manager_class, single_esoteric_time_instant_dataset):
+        dm = get_manager(manager_class)
+        mocker.patch(
+            "gridded_etl_tools.utils.zarr_methods.Publish.convert_raw_times_to_numpy_times",
+            convert_raw_times_to_numpy_times,
+        )
+        time_vals = dm.convert_raw_times_to_comparable_times(single_esoteric_time_instant_dataset)
+        assert isinstance(time_vals, (list, numpy.ndarray))
+        assert len(time_vals)
+        assert numpy.datetime64("1900-01-01") < time_vals[0]
+
+    @staticmethod
+    def test_convert_raw_times_to_numpy_times(manager_class, fake_original_dataset):
+        dm = get_manager(manager_class)
+        time_coords = fake_original_dataset.time.values
+        numpy.testing.assert_equal(dm.convert_raw_times_to_numpy_times(fake_original_dataset.time), time_coords)
+
 
 class DummyDataset(UserDict):
 
@@ -2488,67 +2514,3 @@ def test_shuffled_coords():
     unshuffled_set = set((frozenset(coords.items()) for coords in unshuffled))
     shuffled_set = set((frozenset(coords.items()) for coords in shuffled))
     assert shuffled_set == unshuffled_set
-
-
-# def test_binary_search_logic(mocker, manager_class, single_time_instant_dataset):
-#     """
-#     Test that the binary search method correctly converts unusual time values in the raw source data
-#     into np.datetime64 values
-#     """
-#     # # Prepare a dataset manager
-#     dm = get_manager(manager_class)
-#     # Compare identical datasets
-#     mocker.patch(
-#         "gridded_etl_tools.utils.zarr_methods.Publish.raw_file_to_dataset",
-#         return_value=single_time_instant_dataset,
-#     )
-#     dm.binary_search_for_file(target_datetime=single_time_instant_dataset["time"], time_dim=dm.time_dim)
-
-
-# def test_binary_search_logic_weird_times(
-#     mocker, manager_class, single_time_instant_dataset, single_esoteric_time_instant_dataset
-# ):
-#     """
-#     Test that the binary search method correctly converts unusual time values in the raw source data
-#     into np.datetime64 values
-#     """
-#     # # Prepare a dataset manager
-#     dm = get_manager(manager_class)
-#     # Force a comparison between datasets w/ np.datetime64s and unusual time values
-#     mocker.patch(
-#         "gridded_etl_tools.utils.zarr_methods.Publish.raw_file_to_dataset",
-#         return_value=single_esoteric_time_instant_dataset,
-#     )
-#     mocker.patch(
-#         "gridded_etl_tools.utils.zarr_methods.Publish.convert_orig_times_to_numpy_times",
-#         convert_orig_times_to_numpy_times,
-#     )
-#     # If the comparison logic work, the test will raise a FileNotFoundError because there's no local data to check.
-#     with pytest.raises(FileNotFoundError):
-#         dm.binary_search_for_file(target_datetime=single_time_instant_dataset["time"], time_dim=dm.time_dim)
-
-
-def test_convert_standard_orig_times_to_comparable_times(manager_class, fake_original_dataset):
-    dm = get_manager(manager_class)
-    time_vals = dm.convert_raw_times_to_comparable_times(fake_original_dataset)
-    assert isinstance(time_vals, (list, numpy.ndarray))
-    assert len(time_vals)
-    assert numpy.datetime64("1900-01-01") < time_vals[0]
-
-
-def test_convert_weird_orig_times_to_comparable_times(mocker, manager_class, single_esoteric_time_instant_dataset):
-    dm = get_manager(manager_class)
-    mocker.patch(
-        "gridded_etl_tools.utils.zarr_methods.Publish.convert_orig_times_to_numpy_times",
-        convert_orig_times_to_numpy_times,
-    )
-    time_vals = dm.convert_raw_times_to_comparable_times(single_esoteric_time_instant_dataset)
-    assert isinstance(time_vals, (list, numpy.ndarray))
-    assert len(time_vals)
-    assert numpy.datetime64("1900-01-01") < time_vals[0]
-
-
-def test_convert_orig_times_to_numpy_times(manager_class, fake_original_dataset):
-    dm = get_manager(manager_class)
-    time_coords = fake_original_dataset.time.values
-    numpy.testing.assert_equal(dm.convert_orig_times_to_numpy_times(fake_original_dataset.time), time_coords)

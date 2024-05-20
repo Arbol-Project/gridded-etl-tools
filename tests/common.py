@@ -317,10 +317,10 @@ def json_input_files(self):
     return jsons
 
 
-original_convert_times = DatasetManager.convert_orig_times_to_numpy_times
+original_convert_times = DatasetManager.convert_raw_times_to_numpy_times
 
 
-def convert_orig_times_to_numpy_times(self, orig_times: np.array) -> np.array:
+def convert_raw_times_to_numpy_times(self, orig_times: np.array) -> np.array:
     orig_times = original_convert_times(self, orig_times=orig_times)
     return [
         np.datetime64(datetime.datetime.strptime(orig_time.isoformat(), "%Y-%m-%dT%H:%M:%S"))
