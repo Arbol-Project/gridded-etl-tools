@@ -1548,7 +1548,7 @@ class Publish(Transform, Metadata):
             with self.raw_file_to_dataset(current_file_path) as ds:
                 if time_dim in ds:
                     # Extract time values
-                    time_values = self.convert_raw_times_to_comparable_times(ds)
+                    time_values = self.convert_raw_times_to_comparable_times(ds, time_dim=time_dim)
 
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
@@ -1603,7 +1603,7 @@ class Publish(Transform, Metadata):
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
 
-    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset) -> np.ndarray | list:
+    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset, time_dim: str) -> np.ndarray | list:
         """
         Convert times in the raw data to an array or list of values that can be compared to
         the published data values w/in the binary_search function.
@@ -1619,7 +1619,7 @@ class Publish(Transform, Metadata):
             An array or list of time values
         """
         # Extract time values and convert them to an array for len() and filtering, if of length 1
-        time_values = np.atleast_1d(ds[self.time_dim].values)
+        time_values = np.atleast_1d(ds[time_dim].values)
 
         # Convert any raw time values in esoteric formats that break the binary search comparison logic.
         # NOTE the expectation is that the `convert_raw_times` function is defined w/in the ETL manager
@@ -1628,9 +1628,9 @@ class Publish(Transform, Metadata):
 
         return time_values
 
-    def convert_raw_times_to_numpy_times(self, orig_times: np.array) -> np.array:
+    def convert_raw_times_to_numpy_times(self, raw_times: np.array) -> np.array:
         """Placeholder for custom function to be defined within managers that need it"""
-        return orig_times
+        return raw_times
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
