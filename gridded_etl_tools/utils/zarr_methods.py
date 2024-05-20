@@ -1616,7 +1616,7 @@ class Publish(Transform, Metadata):
         Returns
         -------
         np.array
-            An array or list of time values
+            An array or list of converted time values
         """
         # Extract time values and convert them to an array for len() and filtering, if of length 1
         time_values = np.atleast_1d(ds[time_dim].values)
