@@ -14,6 +14,8 @@ import pytest
 
 from gridded_etl_tools.utils import store, zarr_methods
 
+from ...common import get_manager, convert_orig_times_to_numpy_times
+
 
 @pytest.fixture
 def input_files(tmp_path, mocker):
@@ -2486,3 +2488,26 @@ def test_shuffled_coords():
     unshuffled_set = set((frozenset(coords.items()) for coords in unshuffled))
     shuffled_set = set((frozenset(coords.items()) for coords in shuffled))
     assert shuffled_set == unshuffled_set
+
+
+def test_binary_search_weird_times(
+    mocker, manager_class, single_time_instant_dataset, single_esoteric_time_instant_dataset
+):
+    """
+    Test that the binary search method correctly converts unusual time values in the raw source data
+    into np.datetime64 values
+    """
+    # # Prepare a dataset manager
+    dm = get_manager(manager_class)
+    # Force a comparison between datasets w/ np.datetime64s and unusual time values
+    mocker.patch(
+        "gridded_etl_tools.utils.zarr_methods.Publish.raw_file_to_dataset",
+        return_value=single_esoteric_time_instant_dataset,
+    )
+    mocker.patch(
+        "gridded_etl_tools.utils.zarr_methods.Publish.convert_orig_times_to_numpy_times",
+        convert_orig_times_to_numpy_times,
+    )
+    # If the comparison logic work, the test will raise a FileNotFoundError because there's no local data to check.
+    with pytest.raises(FileNotFoundError):
+        dm.binary_search_for_file(target_datetime=single_time_instant_dataset["time"], time_dim=dm.time_dim)

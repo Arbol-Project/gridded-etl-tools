@@ -1550,6 +1550,11 @@ class Publish(Transform, Metadata):
                     # Extract time values and convert them to an array for len() and filtering, if of length 1
                     time_values = np.atleast_1d(ds[time_dim].values)
 
+                    # Convert any raw time values in esoteric formats that break the below comparison logic.
+                    # NOTE the expectation is that the `convert_orig_times` function is defined w/in the ETL manager
+                    if type(time_values[0]) is not np.datetime64:
+                        time_values = self.convert_orig_times_to_numpy_times(time_values)
+
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -1602,6 +1607,10 @@ class Publish(Transform, Metadata):
 
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
+
+    def convert_orig_times_to_numpy_times(self, orig_times: np.array) -> np.array:
+        """Placeholder for custom function to be defined within managers that need it"""
+        pass
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
