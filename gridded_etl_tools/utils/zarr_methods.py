@@ -1669,11 +1669,14 @@ def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None
 
     for i in range(n_elements):
         coords = []
+        offset = 0
         x = i
         for dim in dataset.dims:
             values = shuffled[dim]
             n_values = len(values)
-            coords.append(values[x % n_values])
+            index = x % n_values
+            coords.append(values[(index + offset) % n_values])
+            offset += index
             x //= n_values
 
         yield dict(zip(dataset.dims, coords))
