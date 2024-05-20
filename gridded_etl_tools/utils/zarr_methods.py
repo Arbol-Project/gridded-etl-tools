@@ -1610,7 +1610,7 @@ class Publish(Transform, Metadata):
 
     def convert_orig_times_to_numpy_times(self, orig_times: np.array) -> np.array:
         """Placeholder for custom function to be defined within managers that need it"""
-        pass
+        return orig_times
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
