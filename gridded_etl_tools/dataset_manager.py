@@ -326,6 +326,12 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             publish_dataset = self.update_ds_transform()
         elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
             publish_dataset = self.initial_ds_transform()
+        else:
+            raise RuntimeError(
+                "There is already a zarr at the specified path and a rebuild is requested, "
+                "but overwrites are not allowed. Therefore the appropriate transformation, "
+                "not to mention the appropriate eventual write operation, is unclear."
+            )
         return publish_dataset
 
     @abstractmethod

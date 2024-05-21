@@ -834,7 +834,7 @@ class TestTransform:
 
         dataset1 = dm.load_dataset_from_disk.return_value
 
-        assert dm.initial_ds_transform() is dataset1
+        assert dm.update_ds_transform() is dataset1
 
         dm.load_dataset_from_disk.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
