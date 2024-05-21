@@ -29,8 +29,8 @@ def input_files(tmp_path, mocker):
     def kerchunkify(self, path):
         return json.load(open(path))
 
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Transform.kerchunkify", kerchunkify)
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Transform.input_files", mock.Mock(return_value=files))
+    mocker.patch("gridded_etl_tools.utils.transform.Transform.kerchunkify", kerchunkify)
+    mocker.patch("gridded_etl_tools.utils.transform.Transform.input_files", mock.Mock(return_value=files))
 
     return files
 
@@ -38,7 +38,7 @@ def input_files(tmp_path, mocker):
 class TestTransform:
     @staticmethod
     def test_create_zarr_json(manager_class, tmp_path, mocker, input_files):
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
 
@@ -60,7 +60,7 @@ class TestTransform:
 
     @staticmethod
     def test_create_zarr_json_w_file_filter(manager_class, tmp_path, mocker, input_files):
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
 
@@ -82,7 +82,7 @@ class TestTransform:
 
     @staticmethod
     def test_create_zarr_json_w_zarr_jsons_attribute(manager_class, tmp_path, mocker, input_files):
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
         md.zarr_jsons = ["how's", "my", "driving?"]
@@ -104,7 +104,7 @@ class TestTransform:
 
     @staticmethod
     def test_create_zarr_json_w_outfile_path(manager_class, tmp_path, mocker, input_files):
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
 
@@ -130,7 +130,7 @@ class TestTransform:
         outfile = folder / "DummyManager_zarr.json"
         open(outfile, "w").write("already done")
 
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
 
@@ -144,7 +144,7 @@ class TestTransform:
         outfile = folder / "DummyManager_zarr.json"
         open(outfile, "w").write("already done")
 
-        mzz = mocker.patch("gridded_etl_tools.utils.zarr_methods.MultiZarrToZarr")
+        mzz = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr")
         md = manager_class()
         md._root_directory = tmp_path
 
@@ -257,11 +257,11 @@ class TestTransform:
 
     @staticmethod
     def test_local_kerchunk_netcdf(manager_class, mocker):
-        fsspec = mocker.patch("gridded_etl_tools.utils.zarr_methods.fsspec")
+        fsspec = mocker.patch("gridded_etl_tools.utils.transform.fsspec")
         fs = fsspec.filesystem.return_value
         infile = fs.open.return_value.__enter__.return_value
 
-        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.zarr_methods.SingleHdf5ToZarr")
+        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.transform.SingleHdf5ToZarr")
         scanned_zarr_json = SingleHdf5ToZarr.return_value.translate.return_value
 
         md = manager_class()
@@ -274,7 +274,7 @@ class TestTransform:
 
     @staticmethod
     def test_local_kerchunk_grib(manager_class, mocker):
-        scan_grib = mocker.patch("gridded_etl_tools.utils.zarr_methods.scan_grib")
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
         scanned_zarr_json = mock.Mock()
         scan_grib.return_value = [scanned_zarr_json]
 
@@ -293,11 +293,11 @@ class TestTransform:
 
     @staticmethod
     def test_local_kerchunk_netcdf_os_error(manager_class, mocker):
-        fsspec = mocker.patch("gridded_etl_tools.utils.zarr_methods.fsspec")
+        fsspec = mocker.patch("gridded_etl_tools.utils.transform.fsspec")
         fs = fsspec.filesystem.return_value
         fs.open.return_value.__enter__.return_value
 
-        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.zarr_methods.SingleHdf5ToZarr")
+        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.transform.SingleHdf5ToZarr")
         SingleHdf5ToZarr.side_effect = OSError
 
         md = manager_class()
@@ -307,11 +307,11 @@ class TestTransform:
 
     @staticmethod
     def test_remote_kerchunk_netcdf(manager_class, mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.zarr_methods.s3fs")
+        s3fs = mocker.patch("gridded_etl_tools.utils.transform.s3fs")
         s3 = s3fs.S3FileSystem.return_value
         infile = s3.open.return_value.__enter__.return_value
 
-        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.zarr_methods.SingleHdf5ToZarr")
+        SingleHdf5ToZarr = mocker.patch("gridded_etl_tools.utils.transform.SingleHdf5ToZarr")
         SingleHdf5ToZarr.return_value.translate.return_value = scanned_zarr_json = {"hi": "mom!"}
 
         md = manager_class()
@@ -329,7 +329,7 @@ class TestTransform:
 
     @staticmethod
     def test_remote_kerchunk_grib(manager_class, mocker):
-        scan_grib = mocker.patch("gridded_etl_tools.utils.zarr_methods.scan_grib")
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
         scanned_zarr_json = {"hi": "mom!"}
         scan_grib.return_value = [scanned_zarr_json]
 
@@ -350,7 +350,7 @@ class TestTransform:
 
     @staticmethod
     def test_remote_kerchunk_grib_non_zero_scan_indices(manager_class, mocker):
-        scan_grib = mocker.patch("gridded_etl_tools.utils.zarr_methods.scan_grib")
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
         scanned_zarr_json = {"hi": "mom!"}
         scan_grib.return_value = {42: scanned_zarr_json}
 
@@ -379,7 +379,7 @@ class TestTransform:
 
     @staticmethod
     def test_remote_kerchunk_grib_remote_scan_returns_list(manager_class, mocker):
-        scan_grib = mocker.patch("gridded_etl_tools.utils.zarr_methods.scan_grib")
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
         scanned_zarr_json = [{"hi": "mom!"}]
         scan_grib.return_value = [scanned_zarr_json]
 
@@ -400,7 +400,7 @@ class TestTransform:
 
     @staticmethod
     def test_remote_kerchunk_grib_remote_scan_returns_unexpected_structure(manager_class, mocker):
-        scan_grib = mocker.patch("gridded_etl_tools.utils.zarr_methods.scan_grib")
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
         scanned_zarr_json = {"hi", "mom!"}
         scan_grib.return_value = [scanned_zarr_json]
 
@@ -495,14 +495,14 @@ class TestTransform:
             def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
-        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+        mocker.patch("gridded_etl_tools.utils.transform.Popen", DummyPopen)
 
         removed_files = []
 
         def remove(path):
             removed_files.append(path)
 
-        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os = mocker.patch("gridded_etl_tools.utils.transform.os")
         os.remove = remove
 
         N = 250
@@ -540,14 +540,14 @@ class TestTransform:
             def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
-        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+        mocker.patch("gridded_etl_tools.utils.transform.Popen", DummyPopen)
 
         removed_files = []
 
         def remove(path):  # pragma NO COVER
             removed_files.append(path)
 
-        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os = mocker.patch("gridded_etl_tools.utils.transform.os")
         os.remove = remove
         os.environ = {}
 
@@ -587,14 +587,14 @@ class TestTransform:
             def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
-        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+        mocker.patch("gridded_etl_tools.utils.transform.Popen", DummyPopen)
 
         removed_files = []
 
         def remove(path):  # pragma NO COVER
             removed_files.append(path)
 
-        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os = mocker.patch("gridded_etl_tools.utils.transform.os")
         os.remove = remove
         os.environ = {}
 
@@ -634,14 +634,14 @@ class TestTransform:
             def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
-        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+        mocker.patch("gridded_etl_tools.utils.transform.Popen", DummyPopen)
 
         removed_files = []
 
         def remove(path):  # pragma NO COVER
             removed_files.append(path)
 
-        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os = mocker.patch("gridded_etl_tools.utils.transform.os")
         os.remove = remove
 
         N = 250
@@ -679,14 +679,14 @@ class TestTransform:
             def __repr__(self):  # pragma NO COVER
                 return f"DummyPopen({self.args}, waited={self.waited})"
 
-        mocker.patch("gridded_etl_tools.utils.zarr_methods.Popen", DummyPopen)
+        mocker.patch("gridded_etl_tools.utils.transform.Popen", DummyPopen)
 
         removed_files = []
 
         def remove(path):
             removed_files.append(path)
 
-        os = mocker.patch("gridded_etl_tools.utils.zarr_methods.os")
+        os = mocker.patch("gridded_etl_tools.utils.transform.os")
         os.remove = remove
 
         N = 250
@@ -799,12 +799,3 @@ class TestTransform:
             tmpdir / "one_originals" / fname for fname in ("one.nc", "two.nc4", "three.foo", "four.nc", "five.nc")
         ]
         assert all([file.exists() for file in moved_files])
-
-
-class fake_vmem(dict):
-    """
-    Fake a vmem object with 16gb total memory using a dict
-    """
-
-    def __init__(self):
-        self.total = 2**34

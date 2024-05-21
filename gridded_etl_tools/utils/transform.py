@@ -26,7 +26,7 @@ from .metadata import Metadata
 TWENTY_MINUTES = 1200
 
 
-class Transform(Convenience, Metadata):
+class Transform(Metadata, Convenience):
     """
     Base class for transforming a collection of downloaded input files first int NetCDF4 Classic format, then
     (sequentially) kerchunk JSONs, then a MultiZarr Kerchunk JSON,

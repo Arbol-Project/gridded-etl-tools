@@ -22,7 +22,7 @@ from .transform import Transform
 TWENTY_MINUTES = 1200
 
 
-class Publish(Transform, Metadata):
+class Publish(Transform):
     """
     Base class for publishing methods -- both initial publication and updates to existing datasets
     """

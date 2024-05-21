@@ -13,12 +13,20 @@ import pytest
 from gridded_etl_tools.utils import publish, store
 
 
+class fake_vmem(dict):
+    """
+    Fake a vmem object with 16gb total memory using a dict
+    """
+
+    def __init__(self):
+        self.total = 2**34
+
 class TestPublish:
     @staticmethod
     def test_parse_ipld_first_time(manager_class, mocker):
-        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
-        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -47,9 +55,9 @@ class TestPublish:
 
     @staticmethod
     def test_parse_ipld_update(manager_class, mocker):
-        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
-        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -77,10 +85,10 @@ class TestPublish:
 
     @staticmethod
     def test_parse_not_ipld_rebuild(manager_class, mocker):
-        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
-        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=True)
@@ -108,10 +116,10 @@ class TestPublish:
 
     @staticmethod
     def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
-        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
-        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=False)
@@ -140,9 +148,9 @@ class TestPublish:
 
     @staticmethod
     def test_parse_ipld_update_ctrl_c(manager_class, mocker):
-        LocalCluster = mocker.patch("gridded_etl_tools.utils.zarr_methods.LocalCluster")
-        Client = mocker.patch("gridded_etl_tools.utils.zarr_methods.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.zarr_methods.nullcontext")
+        LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
+        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
@@ -451,7 +459,7 @@ class TestPublish:
         def dask_config_set(config):
             dask_config.update(config)
 
-        dask = mocker.patch("gridded_etl_tools.utils.zarr_methods.dask")
+        dask = mocker.patch("gridded_etl_tools.utils.publish.dask")
         dask.config.set = dask_config_set
 
         dm = manager_class()
@@ -476,7 +484,7 @@ class TestPublish:
         def dask_config_set(config):
             dask_config.update(config)
 
-        dask = mocker.patch("gridded_etl_tools.utils.zarr_methods.dask")
+        dask = mocker.patch("gridded_etl_tools.utils.publish.dask")
         dask.config.set = dask_config_set
 
         dm = manager_class()
@@ -526,7 +534,7 @@ class TestPublish:
 
     @staticmethod
     def test_zarr_hash_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dataset = xr.open_zarr.return_value
 
         dm = manager_class()
@@ -541,7 +549,7 @@ class TestPublish:
 
     @staticmethod
     def test_zarr_json_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.postprocess_zarr = mock.Mock()
@@ -568,7 +576,7 @@ class TestPublish:
 
     @staticmethod
     def test_zarr_json_to_dataset_explicit_args(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.postprocess_zarr = mock.Mock()
@@ -1268,7 +1276,7 @@ class TestPublish:
 
     @staticmethod
     def test_post_parse_quality_check(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
+        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
         # Something about setting this return value is confusing coverage
         shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
 
@@ -1289,7 +1297,7 @@ class TestPublish:
 
     @staticmethod
     def test_post_parse_quality_check_skip_it(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
+        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
         # Something about setting this return value is confusing coverage
         shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
 
@@ -1306,10 +1314,10 @@ class TestPublish:
 
     @staticmethod
     def test_post_parse_quality_check_timeout(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.zarr_methods.shuffled_coords")
+        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
         # Something about setting this return value is confusing coverage
         shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
-        time = mocker.patch("gridded_etl_tools.utils.zarr_methods.time")
+        time = mocker.patch("gridded_etl_tools.utils.publish.time")
         time.perf_counter = mock.Mock(side_effect=[0, 1, 2, 5000, 5001])
 
         dm = manager_class()
@@ -1561,7 +1569,7 @@ class TestPublish:
 
     @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.zarr_methods.xr")
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dm = manager_class()
         dm.protocol = "file"
         assert dm.raw_file_to_dataset("some/path") is xr.open_dataset.return_value
