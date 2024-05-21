@@ -594,6 +594,7 @@ class Transform(Metadata, Convenience):
             },
             "decode_times": decode_times,
         }
+
         dataset = xr.open_dataset(**input_kwargs)
 
         return dataset

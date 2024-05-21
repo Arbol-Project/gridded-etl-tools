@@ -15,7 +15,6 @@ import xarray as xr
 
 from dask.distributed import Client, LocalCluster
 
-from .metadata import Metadata
 from .store import IPLD
 from .transform import Transform
 

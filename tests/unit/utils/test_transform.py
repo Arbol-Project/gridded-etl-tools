@@ -6,6 +6,8 @@ from unittest import mock
 
 import pytest
 
+from gridded_etl_tools.utils import store
+
 
 @pytest.fixture
 def input_files(tmp_path, mocker):
@@ -799,3 +801,175 @@ class TestTransform:
             tmpdir / "one_originals" / fname for fname in ("one.nc", "two.nc4", "three.foo", "four.nc", "five.nc")
         ]
         assert all([file.exists() for file in moved_files])
+
+    @staticmethod
+    def test_initial_ds_transform(manager_class):
+        """
+        Test that a pre initial dataset is instantiated as anticipated
+        """
+        dm = manager_class()
+        dm.load_dataset_from_disk = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.set_zarr_metadata = mock.Mock()
+
+        dataset1 = dm.load_dataset_from_disk.return_value
+        dataset2 = dataset1.transpose.return_value
+        dataset3 = dm.set_zarr_metadata.return_value
+
+        assert dm.initial_ds_transform() is dataset3
+
+        dm.load_dataset_from_disk.assert_called_once_with()
+        dm.set_key_dims.assert_called_once_with()
+        dataset1.transpose.assert_called_once_with(*dm.standard_dims)
+        dm.set_zarr_metadata.assert_called_once_with(dataset2)
+
+    @staticmethod
+    def test_transformed_dataset(manager_class):
+        dm = manager_class()
+        dm.zarr_json_to_dataset = mock.Mock()
+        dm.zarr_json_to_dataset.return_value = dataset = mock.Mock()
+        dm.postprocess_zarr = mock.Mock()
+        assert dm.load_dataset_from_disk() is dm.postprocess_zarr.return_value
+        dm.zarr_json_to_dataset.assert_called_once_with()
+        dm.postprocess_zarr.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_zarr_hash_to_dataset(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_zarr.return_value
+
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.IPLD)
+        mapper = dm.store.mapper.return_value
+
+        assert dm.zarr_hash_to_dataset("QmHiMom") is dataset
+
+        dm.store.mapper.assert_called_once_with(set_root=False)
+        mapper.set_root.assert_called_once_with("QmHiMom")
+        xr.open_zarr.assert_called_once_with(mapper)
+
+    @staticmethod
+    def test_zarr_json_to_dataset(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset() is dataset
+        dm.zarr_json_path.assert_called_once_with()
+        xr.open_dataset.assert_called_once_with(
+            filename_or_obj="reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/zarr.json",
+                    "remote_protocol": "handshake",
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=True,
+        )
+
+    @staticmethod
+    def test_zarr_json_to_dataset_explicit_args(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dataset
+        dm.zarr_json_path.assert_not_called()
+        xr.open_dataset.assert_called_once_with(
+            filename_or_obj="reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/different.json",
+                    "remote_protocol": "handshake",
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=False,
+        )
+
+    @staticmethod
+    def test_postprocess_zarr(manager_class):
+        dm = manager_class()
+        dataset = object()
+        assert dm.postprocess_zarr(dataset) is dataset
+
+    @staticmethod
+    def test_set_key_dims(manager_class):
+        dm = manager_class()
+
+        dm.set_key_dims()
+        assert dm.standard_dims == ["time", "latitude", "longitude"]
+        assert dm.time_dim == "time"
+
+    @staticmethod
+    def test_set_key_dims_hindcast(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "hindcast"
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "hindcast_reference_time",
+            "forecast_reference_offset",
+            "step",
+            "ensemble",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "hindcast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_ensemble(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "ensemble"
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "forecast_reference_time",
+            "step",
+            "ensemble",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_forecast(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "forecast"
+
+        dm.set_key_dims()
+        assert dm.standard_dims == [
+            "forecast_reference_time",
+            "step",
+            "latitude",
+            "longitude",
+        ]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_misspecified(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "nocast"
+
+        with pytest.raises(ValueError):
+            dm.set_key_dims()
+
+    @staticmethod
+    def test__standard_dims_except(manager_class):
+        dm = manager_class()
+        dm.standard_dims = ["a", "b", "c", "d"]
+        assert dm._standard_dims_except("c") == ["a", "b", "d"]
+        assert dm._standard_dims_except("b", "d", "e") == ["a", "c"]
+        assert dm._standard_dims_except("e") == ["a", "b", "c", "d"]
+        assert dm._standard_dims_except("a", "b", "c", "d") == []

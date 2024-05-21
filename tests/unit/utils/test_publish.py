@@ -21,6 +21,7 @@ class fake_vmem(dict):
     def __init__(self):
         self.total = 2**34
 
+
 class TestPublish:
     @staticmethod
     def test_parse_ipld_first_time(manager_class, mocker):
