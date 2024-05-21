@@ -35,8 +35,9 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.IPLD, has_existing=False)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
+        publish_dataset = mock.Mock()
 
-        dm.parse()
+        dm.parse(publish_dataset)
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -48,7 +49,7 @@ class TestPublish:
 
         dm.dask_configuration.assert_called_once_with()
         dm.update_zarr.assert_not_called()
-        dm.write_initial_zarr.assert_called_once_with()
+        dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
         Client.assert_not_called()
         nullcontext.assert_called_once_with()
@@ -65,8 +66,9 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
+        publish_dataset = mock.Mock()
 
-        dm.parse()
+        dm.parse(publish_dataset)
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -77,7 +79,7 @@ class TestPublish:
         )
 
         dm.dask_configuration.assert_called_once_with()
-        dm.update_zarr.assert_called_once_with()
+        dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_not_called()
@@ -96,8 +98,9 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
+        publish_dataset = mock.Mock()
 
-        dm.parse()
+        dm.parse(publish_dataset)
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -109,7 +112,7 @@ class TestPublish:
 
         dm.dask_configuration.assert_called_once_with()
         dm.update_zarr.assert_not_called()
-        dm.write_initial_zarr.assert_called_once_with()
+        dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
         Client.assert_called_once_with(cluster)
         nullcontext.assert_not_called()
@@ -127,9 +130,10 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
+        publish_dataset = mock.Mock()
 
         with pytest.raises(RuntimeError):
-            dm.parse()
+            dm.parse(publish_dataset)
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -158,8 +162,9 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
+        publish_dataset = mock.Mock()
 
-        dm.parse()
+        dm.parse(publish_dataset)
 
         LocalCluster.assert_called_once_with(
             processes=False,
@@ -170,7 +175,7 @@ class TestPublish:
         )
 
         dm.dask_configuration.assert_called_once_with()
-        dm.update_zarr.assert_called_once_with()
+        dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_not_called()
@@ -502,202 +507,25 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_pre_initial_dataset(manager_class):
-        """
-        Test that a pre initial dataset is instantiated as anticipated
-        """
-        dm = manager_class()
-        dm.transformed_dataset = mock.Mock()
-        dm.set_key_dims = mock.Mock()
-        dm.set_zarr_metadata = mock.Mock()
-
-        dataset1 = dm.transformed_dataset.return_value
-        dataset2 = dataset1.transpose.return_value
-        dataset3 = dm.set_zarr_metadata.return_value
-        dataset4 = dataset3.chunk.return_value
-
-        assert dm.pre_initial_dataset() is dataset4
-
-        dm.transformed_dataset.assert_called_once_with()
-        dm.set_key_dims.assert_called_once_with()
-        dataset1.transpose.assert_called_once_with(*dm.standard_dims)
-        dm.set_zarr_metadata.assert_called_once_with(dataset2)
-        dataset3.chunk.assert_called_once_with(dm.requested_dask_chunks)
-        dm.set_zarr_metadata(dataset4)
-
-    @staticmethod
-    def test_transformed_dataset(manager_class):
-        dm = manager_class()
-        dm.zarr_json_to_dataset = mock.Mock()
-        assert dm.transformed_dataset() is dm.zarr_json_to_dataset.return_value
-        dm.zarr_json_to_dataset.assert_called_once_with()
-
-    @staticmethod
-    def test_zarr_hash_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
-        dataset = xr.open_zarr.return_value
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        mapper = dm.store.mapper.return_value
-
-        assert dm.zarr_hash_to_dataset("QmHiMom") is dataset
-
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        mapper.set_root.assert_called_once_with("QmHiMom")
-        xr.open_zarr.assert_called_once_with(mapper)
-
-    @staticmethod
-    def test_zarr_json_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
-        dataset = xr.open_dataset.return_value
-        dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
-
-        assert dm.zarr_json_to_dataset() is dm.postprocess_zarr.return_value
-        dm.zarr_json_path.assert_called_once_with()
-        xr.open_dataset.assert_called_once_with(
-            filename_or_obj="reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
-                "storage_options": {
-                    "fo": "/path/to/zarr.json",
-                    "remote_protocol": "handshake",
-                    "skip_instance_cache": True,
-                    "default_cache_type": "readahead",
-                },
-                "consolidated": False,
-            },
-            decode_times=True,
-        )
-        dm.postprocess_zarr.assert_called_once_with(dataset)
-
-    @staticmethod
-    def test_zarr_json_to_dataset_explicit_args(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
-        dataset = xr.open_dataset.return_value
-        dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
-
-        assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dm.postprocess_zarr.return_value
-        dm.zarr_json_path.assert_not_called()
-        xr.open_dataset.assert_called_once_with(
-            filename_or_obj="reference://",
-            engine="zarr",
-            chunks={},
-            backend_kwargs={
-                "storage_options": {
-                    "fo": "/path/to/different.json",
-                    "remote_protocol": "handshake",
-                    "skip_instance_cache": True,
-                    "default_cache_type": "readahead",
-                },
-                "consolidated": False,
-            },
-            decode_times=False,
-        )
-        dm.postprocess_zarr.assert_called_once_with(dataset)
-
-    @staticmethod
-    def test_postprocess_zarr(manager_class):
-        dm = manager_class()
-        dataset = object()
-        assert dm.postprocess_zarr(dataset) is dataset
-
-    @staticmethod
-    def test_set_key_dims(manager_class):
-        dm = manager_class()
-
-        dm.set_key_dims()
-        assert dm.standard_dims == ["time", "latitude", "longitude"]
-        assert dm.time_dim == "time"
-
-    @staticmethod
-    def test_set_key_dims_hindcast(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "hindcast"
-
-        dm.set_key_dims()
-        assert dm.standard_dims == [
-            "hindcast_reference_time",
-            "forecast_reference_offset",
-            "step",
-            "ensemble",
-            "latitude",
-            "longitude",
-        ]
-        assert dm.time_dim == "hindcast_reference_time"
-
-    @staticmethod
-    def test_set_key_dims_ensemble(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "ensemble"
-
-        dm.set_key_dims()
-        assert dm.standard_dims == [
-            "forecast_reference_time",
-            "step",
-            "ensemble",
-            "latitude",
-            "longitude",
-        ]
-        assert dm.time_dim == "forecast_reference_time"
-
-    @staticmethod
-    def test_set_key_dims_forecast(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "forecast"
-
-        dm.set_key_dims()
-        assert dm.standard_dims == [
-            "forecast_reference_time",
-            "step",
-            "latitude",
-            "longitude",
-        ]
-        assert dm.time_dim == "forecast_reference_time"
-
-    @staticmethod
-    def test_set_key_dims_misspecified(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "nocast"
-
-        with pytest.raises(ValueError):
-            dm.set_key_dims()
-
-    @staticmethod
-    def test__standard_dims_except(manager_class):
-        dm = manager_class()
-        dm.standard_dims = ["a", "b", "c", "d"]
-        assert dm._standard_dims_except("c") == ["a", "b", "d"]
-        assert dm._standard_dims_except("b", "d", "e") == ["a", "c"]
-        assert dm._standard_dims_except("e") == ["a", "b", "c", "d"]
-        assert dm._standard_dims_except("a", "b", "c", "d") == []
-
-    @staticmethod
     def test_write_initial_zarr_ipld(manager_class):
         class DummyHash:
             def __str__(self):
                 return "QmHiMom"
 
         dm = manager_class()
-        dm.pre_initial_dataset = mock.Mock()
         dm.store = mock.Mock(spec=store.IPLD)
         dm.to_zarr = mock.Mock()
         dm.dataset_hash = None
+        publish_dataset = mock.Mock()
+        publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
 
-        dataset = dm.pre_initial_dataset.return_value
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = DummyHash()
 
-        dm.write_initial_zarr()
+        dm.write_initial_zarr(publish_dataset)
 
-        dm.pre_initial_dataset.assert_called_once_with()
         dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(dataset, mapper, consolidated=True, mode="w")
+        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
         assert dm.dataset_hash == "QmHiMom"
 
     @staticmethod
@@ -705,48 +533,45 @@ class TestPublish:
         class DummyHash: ...
 
         dm = manager_class()
-        dm.pre_initial_dataset = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.to_zarr = mock.Mock()
         dm.dataset_hash = None
+        publish_dataset = mock.Mock()
+        publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
 
-        dataset = dm.pre_initial_dataset.return_value
         mapper = dm.store.mapper.return_value
         mapper.freeze.return_value = DummyHash()
 
-        dm.write_initial_zarr()
+        dm.write_initial_zarr(publish_dataset)
 
-        dm.pre_initial_dataset.assert_called_once_with()
         dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(dataset, mapper, consolidated=True, mode="w")
+        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
         assert dm.dataset_hash is None
 
-    @staticmethod
-    def test_update_zarr(manager_class):
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.transformed_dataset = mock.Mock()
-        dm.set_key_dims = mock.Mock()
-        dm.update_setup = mock.Mock()
-        dm.update_parse_operations = mock.Mock()
+    # @staticmethod
+    # def test_update_zarr(manager_class):
+    #     dm = manager_class()
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
+    #     publish_dataset = mock.Mock()
+    #     dm.prepare_update_times = mock.Mock()
+    #     dm.update_quality_check = mock.Mock()
+    #     dm.insert_into_dataset = mock.Mock()
+    #     dm.append_to_dataset = mock.Mock()
 
-        original_dataset = dm.store.dataset.return_value
-        update_dataset = dm.transformed_dataset.return_value
-        dm.update_setup.return_value = (insert_times, append_times) = (object(), object())
-        dm.update_zarr()
+    #     original_dataset = dm.store.dataset.return_value
+    #     dm.prepare_update_times.return_value = (insert_times, append_times) = ([object()], [object()])
+    #     dm.update_zarr(publish_dataset)
 
-        dm.store.dataset.assert_called_once_with()
-        dm.transformed_dataset.assert_called_once_with()
-        dm.set_key_dims.assert_called_once_with()
-        dm.update_setup.assert_called_once_with(original_dataset, update_dataset)
-        dm.update_parse_operations.assert_called_once_with(
-            original_dataset, update_dataset, insert_times, append_times
-        )
+    #     dm.store.dataset.assert_called_once_with()
+    #     dm.transformed_dataset.assert_called_once_with()
+    #     dm.set_key_dims.assert_called_once_with()
+    #     dm.prepare_update_times.assert_called_once_with(original_dataset, publish_dataset)
+    #     dm.update_quality_check.assert_called_once_with(original_dataset, insert_times, append_times)
 
     @staticmethod
-    def test_update_setup(manager_class, fake_original_dataset, fake_complex_update_dataset):
+    def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
         dm = manager_class()
-        insert_times, update_times = dm.update_setup(fake_original_dataset, fake_complex_update_dataset)
+        insert_times, update_times = dm.prepare_update_times(fake_original_dataset, fake_complex_update_dataset)
         assert insert_times == [
             numpy.datetime64("2021-10-10T00:00:00.000000000"),
         ] + list(
@@ -776,67 +601,66 @@ class TestPublish:
         )
 
     @staticmethod
-    def test_update_setup_no_time_dimension(manager_class, fake_original_dataset, fake_complex_update_dataset):
+    def test_prepare_update_times_no_time_dimension(manager_class, fake_original_dataset, fake_complex_update_dataset):
         update_dataset = fake_complex_update_dataset.sel(time=[numpy.datetime64("2021-10-10T00:00:00.000000000")])
         update_dataset = update_dataset.squeeze()
         assert "time" not in update_dataset.dims
         dm = manager_class()
-        insert_times, update_times = dm.update_setup(fake_original_dataset, update_dataset)
+        insert_times, update_times = dm.prepare_update_times(fake_original_dataset, update_dataset)
         assert insert_times == [
             numpy.datetime64("2021-10-10T00:00:00.000000000"),
         ]
         assert update_times == []
 
+    # TODO
     @staticmethod
-    def test_update_parse_operations(manager_class, fake_original_dataset):
-        update_dataset = object()
-        insert_times = []
-        append_times = [object()]
-
+    def test_update_zarr(manager_class, fake_original_dataset):
+        publish_dataset = object()
         dm = manager_class()
+        insert_times, append_times = [], [object()]
+        dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
         dm.insert_into_dataset = mock.Mock()
         dm.append_to_dataset = mock.Mock()
 
-        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+        dm.update_zarr(publish_dataset)
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_not_called()
-        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times)
+        dm.append_to_dataset.assert_called_once_with(publish_dataset, append_times)
 
     @staticmethod
-    def test_update_parse_operations_insert_but_overwrite_not_allowed(manager_class, fake_original_dataset):
-        update_dataset = object()
-        insert_times = [object()]
-        append_times = [object()]
+    def test_update_zarr_insert_but_overwrite_not_allowed(manager_class, fake_original_dataset):
+        publish_dataset = object()
 
         dm = manager_class()
+        insert_times, append_times = [object()], [object()]
+        dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
         dm.insert_into_dataset = mock.Mock()
         dm.append_to_dataset = mock.Mock()
 
-        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+        dm.update_zarr(publish_dataset)
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_not_called()
-        dm.append_to_dataset.assert_called_once_with(update_dataset, append_times)
+        dm.append_to_dataset.assert_called_once_with(publish_dataset, append_times)
 
     @staticmethod
-    def test_update_parse_operations_insert(manager_class, fake_original_dataset):
-        update_dataset = object()
-        insert_times = [object()]
-        append_times = []
-
+    def test_update_zarr_insert(manager_class, fake_original_dataset):
+        publish_dataset = object()
         dm = manager_class()
         dm.allow_overwrite = True
+        insert_times, append_times = [object()], []
+        dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
         dm.insert_into_dataset = mock.Mock()
         dm.append_to_dataset = mock.Mock()
 
-        dm.update_parse_operations(fake_original_dataset, update_dataset, insert_times, append_times)
+        dm.update_zarr(publish_dataset)
 
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
-        dm.insert_into_dataset.assert_called_once_with(fake_original_dataset, update_dataset, insert_times)
+        dm.insert_into_dataset.assert_called_once_with(fake_original_dataset, publish_dataset, insert_times)
         dm.append_to_dataset.assert_not_called()
 
     @staticmethod
