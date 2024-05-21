@@ -16,7 +16,7 @@ import psutil
 
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
-from .utils.zarr_methods import Publish
+from .utils.publish import Publish
 from .utils.ipfs import IPFS
 from .utils.store import Local, IPLD, S3
 
@@ -285,28 +285,18 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
     def transform(self):
         """
-        Rework downloaded data into a virtual Zarr JSON conforming to Arbol's standard format for gridded datasets
-        """
-        self.raw_transform()
-        self.ds_transform()
-
-    def raw_transform(self):
-        """
-        Rework downloaded data into a "virtual Zarr" (Xarray Dataset)
+        Open all raw files in self.local_input_path(). Transform the data contained in them into a virtual Zarr JSON
         conforming to Arbol's standard format for gridded datasets
-        """
-        # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
-        self.populate_metadata()
-        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
-        # MultiZarring
-        if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
-            self.prepare_input_files()
-        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference
-        # from Dask
-        self.create_zarr_json()
 
-    def ds_transform(self):
-        """Lazy transform steps on an in-memory Xarray Dataset"""
+        This is the core function for transforming data from a provider's raw files to a finished, publishable dataset
+        and should be standard for all ETLs. Modify the child methods it calls to tailor the methods to the individual
+        dataset and resolve any issues
+        """
+        # Transform raw files on disk into their final format and consolidate them into a Zarr JSON that can be
+        # read as a single dataset
+        self.raw_transform()
+        # Load the single dataset and perform any necessary transformations of it using Xarray
+        self.ds_transform()
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):
