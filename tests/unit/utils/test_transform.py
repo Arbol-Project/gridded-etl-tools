@@ -805,7 +805,7 @@ class TestTransform:
     @staticmethod
     def test_initial_ds_transform(manager_class):
         """
-        Test that a pre initial dataset is instantiated as anticipated
+        Test that an initial dataset is instantiated as anticipated
         """
         dm = manager_class()
         dm.load_dataset_from_disk = mock.Mock()
@@ -822,6 +822,22 @@ class TestTransform:
         dm.set_key_dims.assert_called_once_with()
         dataset1.transpose.assert_called_once_with(*dm.standard_dims)
         dm.set_zarr_metadata.assert_called_once_with(dataset2)
+
+    @staticmethod
+    def test_update_ds_transform(manager_class):
+        """
+        Test that an update ds is instantiated as anticipated
+        """
+        dm = manager_class()
+        dm.load_dataset_from_disk = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+
+        dataset1 = dm.load_dataset_from_disk.return_value
+
+        assert dm.initial_ds_transform() is dataset1
+
+        dm.load_dataset_from_disk.assert_called_once_with()
+        dm.set_key_dims.assert_called_once_with()
 
     @staticmethod
     def test_transformed_dataset(manager_class):
