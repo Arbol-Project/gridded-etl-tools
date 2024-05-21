@@ -49,7 +49,6 @@ def simulate_file_download(root, initial_input_path, appended_input_path):
 @pytest.fixture(scope="function", autouse=True)
 def setup_and_teardown_per_test(
     mocker,
-    request,
     initial_input_path,
     appended_input_path,
     create_heads_file_for_testing,
@@ -97,7 +96,7 @@ def teardown_module(request, heads_path):
     request.addfinalizer(test_clean)
 
 
-def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
     Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
     "test_".
@@ -121,8 +120,9 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with
@@ -148,7 +148,7 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     assert output_value == original_value
 
 
-def test_append_only(mocker, request, manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(manager_class, heads_path, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -160,8 +160,9 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file

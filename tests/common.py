@@ -62,8 +62,9 @@ def run_etl(
         **kwargs,
     )
     # Parse
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     return manager
 
