@@ -24,12 +24,12 @@ TWENTY_MINUTES = 1200
 
 class Publish(Transform, Metadata):
     """
-    Base class for publishing methods -- both initial publication and updates
+    Base class for publishing methods -- both initial publication and updates to existing datasets
     """
 
     # PARSING
 
-    def parse(self) -> bool:
+    def parse(self, publish_dataset: xr.Dataset) -> bool:
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
@@ -41,6 +41,11 @@ class Publish(Transform, Metadata):
         This is the core function for writing data (to disk, S3, or IPLD) and should be standard for
         all ETLs. Modify the child methods it calls or the dask configuration settings to resolve any performance or
         parsing issues.
+
+        Parameters
+        ----------
+        publish_dataset : xr.Dataset
+            A dataset containing all records to publish, either as an initial dataset or an update to an existing one
 
         Returns
         -------
@@ -71,14 +76,14 @@ class Publish(Transform, Metadata):
                     # start parsing and issue a warning.
                     if self.store.has_existing and not self.rebuild_requested:
                         self.info(f"Updating existing data at {self.store}")
-                        self.update_zarr()
+                        self.update_zarr(publish_dataset)
                     elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
                         if not self.store.has_existing:
                             self.info(f"No existing data found. Creating new Zarr at {self.store}.")
                         else:
                             self.info(f"Data at {self.store} will be replaced.")
                         self.info(f"Now writing to {self.store}")
-                        self.write_initial_zarr()
+                        self.write_initial_zarr(publish_dataset)
                     else:
                         raise RuntimeError(
                             "There is already a zarr at the specified path and a rebuild is requested, "
@@ -235,19 +240,32 @@ class Publish(Transform, Metadata):
 
     # INITIAL
 
-    def write_initial_zarr(self):
+    def write_initial_zarr(self, publish_dataset: xr.Dataset):
         """
         Writes the first iteration of zarr for the dataset to the store specified at initialization. If the store is
         `IPLD`, does some additional metadata processing
+
+        Parameters
+        ----------
+        publish_dataset : xr.Dataset
+            A dataset containing all records to publish as an initial dataset
         """
+        # Re-chunk
+        self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
+        # store a version of the dataset that is not re-chunked for use in the pre-parse quality check
+        # this is necessary for performance reasons (rechunking for every point comparison is slow)
+        self.pre_chunk_dataset = publish_dataset.copy()
+        publish_dataset = publish_dataset.chunk(self.requested_dask_chunks)
+        self.info(f"Chunks after rechunk are {publish_dataset.chunks}")
+        # Now write
         mapper = self.store.mapper(set_root=False)
-        self.to_zarr(self.publish_dataset, mapper, consolidated=True, mode="w")
+        self.to_zarr(publish_dataset, mapper, consolidated=True, mode="w")
         if isinstance(self.store, IPLD):
             self.dataset_hash = str(mapper.freeze())
 
     # UPDATES
 
-    def update_zarr(self):
+    def update_zarr(self, publish_dataset: xr.Dataset):
         """
         Update discrete regions of an N-D dataset saved to disk as a Zarr. Trigger insert and/or append
         operations based on the presence of valid records for either. If updates span multiple date ranges,
@@ -255,10 +273,15 @@ class Publish(Transform, Metadata):
 
         If the IPLD store is in use, after updating the dataset, this function updates
         the corresponding STAC Item and summaries in the parent STAC Collection.
+
+        Parameters
+        ----------
+        publish_dataset : xr.Dataset
+            A dataset containing all updated (insert) and new (append) records
         """
         original_dataset = self.store.dataset()
         # Create a list of any datetimes to insert and/or append
-        insert_times, append_times = self.prepare_update_times(original_dataset, self.update_dataset)
+        insert_times, append_times = self.prepare_update_times(original_dataset, publish_dataset)
         # First check that the data is not obviously wrong
         self.update_quality_check(original_dataset, insert_times, append_times)
         # Now write out updates to existing data using the 'region=' command...
@@ -269,12 +292,12 @@ class Publish(Transform, Metadata):
                     "flag has not been set and store is not IPLD"
                 )
             else:
-                self.insert_into_dataset(original_dataset, self.update_dataset, insert_times)
+                self.insert_into_dataset(original_dataset, publish_dataset, insert_times)
         else:
             self.info("No modified records to insert into original zarr")
         # ...then write new data (appends) using the 'append_dim=' command
         if len(append_times) > 0:
-            self.append_to_dataset(self.update_dataset, append_times)
+            self.append_to_dataset(publish_dataset, append_times)
         else:
             self.info("No new records to append to original zarr")
 
@@ -472,7 +495,7 @@ class Publish(Transform, Metadata):
 
         return datetime_ranges, regions_indices
 
-    # CHECKS
+    # QUALITY CHECKS
 
     def pre_parse_quality_check(self, dataset: xr.Dataset):
         """

@@ -283,20 +283,50 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             )
         self.new_files = []
 
-    def transform(self):
+    def transform_data_on_disk(self):
         """
         Open all raw files in self.local_input_path(). Transform the data contained in them into a virtual Zarr JSON
         conforming to Arbol's standard format for gridded datasets
 
-        This is the core function for transforming data from a provider's raw files to a finished, publishable dataset
-        and should be standard for all ETLs. Modify the child methods it calls to tailor the methods to the individual
-        dataset and resolve any issues
+        This is the core function for transforming data from a provider's raw files and should be standard for all ETLs
+        Modify the child methods it calls to tailor the methods to the individual dataset and resolve any issues
         """
-        # Transform raw files on disk into their final format and consolidate them into a Zarr JSON that can be
-        # read as a single dataset
-        self.raw_transform()
+        self.info("Transforming raw files to an in-memory dataset")
+        # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
+        self.populate_metadata()
+        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
+        # MultiZarring
+        if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
+            self.prepare_input_files()
+        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference
+        # from Dask
+        self.create_zarr_json()
+
+    def transform_dataset_in_memory(self) -> xr.Dataset:
+        """
+        Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the
+        virtual Zarr JSON at the path returned by `Creation.zarr_json_path` and *lazily* normalize the axes,
+        re-chunk the dataset according to this object's chunking parameters,
+        and add custom metadata defined by this class.
+
+        This is the core function for transforming a dataset in-memory and should be standard for all ETLs.
+        Modify the child methods it calls to tailor the methods to the individual dataset and resolve any issues
+
+        NOTE that rechunking must be done within the Dask cluster to be optimized for a task graph,
+        so it's located within the parse step
+
+        Returns
+        -------
+        publish_dataset : xr.Dataset
+            A finalized in-memory dataset ready for rechunking and publication
+        """
         # Load the single dataset and perform any necessary transformations of it using Xarray
-        self.ds_transform()
+        self.info("Transforming in-memory dataset to its final format")
+        if self.store.has_existing and not self.rebuild_requested:
+            publish_dataset = self.update_ds_transform()
+        elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
+            publish_dataset = self.initial_ds_transform()
+        return publish_dataset
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):

@@ -12,7 +12,7 @@ import numpy
 import pandas as pd
 import pytest
 
-from gridded_etl_tools.utils import store, zarr_methods
+from gridded_etl_tools.utils import publish, store
 
 
 @pytest.fixture
@@ -2476,11 +2476,11 @@ def test_shuffled_coords():
         ("c", [i * 1.5 for i in range(10)]),
     )
     unshuffled = list(dataset.coords())
-    shuffled = list(zarr_methods.shuffled_coords(dataset))
+    shuffled = list(publish.shuffled_coords(dataset))
 
     # infinitesimally small chance they match, so keep going until they don't, to make sure shuffling is going on
     while unshuffled == shuffled:  # pragma NO COVER
-        shuffled = list(zarr_methods.shuffled_coords(dataset))
+        shuffled = list(publish.shuffled_coords(dataset))
 
     # order should be different but set of values should be the same
     unshuffled_set = set((frozenset(coords.items()) for coords in unshuffled))

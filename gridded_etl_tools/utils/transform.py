@@ -28,40 +28,10 @@ TWENTY_MINUTES = 1200
 
 class Transform(Convenience, Metadata):
     """
-    Base class for transforming a collection of downloaded input files in NetCDF4 Classic format into
-    (sequentially) kerchunk JSONs, a MultiZarr Kerchunk JSON, and finally an Xarray Dataset based on that MultiZarr.
+    Base class for transforming a collection of downloaded input files first int NetCDF4 Classic format, then
+    (sequentially) kerchunk JSONs, then a MultiZarr Kerchunk JSON,
+    and finally an Xarray Dataset based on that MultiZarr.
     """
-
-    ##########################
-    # BASE METHODS
-    ##########################
-
-    def raw_transform(self):
-        """
-        Rework downloaded data into a "virtual Zarr" (JSON readable as an Xarray Dataset)
-        conforming to Arbol's standard format for gridded datasets
-        """
-        self.info("Transforming raw files to an in-memory dataset")
-        # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
-        self.populate_metadata()
-        # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
-        # MultiZarring
-        if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
-            self.prepare_input_files()
-        # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference
-        # from Dask
-        self.create_zarr_json()
-
-    def ds_transform(self):
-        """
-        Lazily transform the in-memory dataset to its final format
-        """
-        self.info("Transforming in-memory dataset to its final format")
-        if self.store.has_existing and not self.rebuild_requested:
-            dataset = self.update_ds_transform()
-        elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
-            dataset = self.initial_ds_transform()
-        self.publish_dataset = dataset
 
     ##########################
     # RAW DATA TRANSFORMATIONS
@@ -366,7 +336,7 @@ class Transform(Convenience, Metadata):
         )
         return opts
 
-    # PRE AND POST PROCESSING
+    # PRE PROCESSING FILES ON DISK
 
     @classmethod
     def preprocess_kerchunk(cls, refs: dict) -> dict:
@@ -566,7 +536,7 @@ class Transform(Convenience, Metadata):
     # IN-MEMORY DATA TRANSFORMATIONS
     ################################
 
-    # LOAD RAW TO IN-MEMORY
+    # LOAD RAW DATA TO IN-MEMORY DATASET
 
     def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
         """
@@ -646,10 +616,68 @@ class Transform(Convenience, Metadata):
         """
         return dataset
 
+    # IN-MEMORY TRANSFORMS
+
+    def initial_ds_transform(self) -> xr.Dataset:
+        """
+        In-memory transform steps relevant to an initial dataset publish
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
+        """
+        # Transform the JSON Zarr into an Xarray Dataset
+        dataset = self.load_dataset_from_disk()
+
+        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
+        self.set_key_dims()
+        dataset = dataset.transpose(*self.standard_dims)
+
+        # Add metadata to dataset
+        dataset = self.set_zarr_metadata(dataset)
+
+        # Log the state of the dataset before writing
+        self.info(f"Initial dataset\n{dataset}")
+        return dataset
+
+    def update_ds_transform(self) -> xr.Dataset:
+        """
+        In-memory transform steps relevant to an update operation
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
+        """
+        # Transform the JSON Zarr into an Xarray Dataset
+        dataset = self.load_dataset_from_disk()
+
+        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
+        self.set_key_dims()
+
+        # Log the state of the original dataset before writing
+        self.info(f"Original dataset\n{self.store.dataset()}")
+        return dataset
+
+    def load_dataset_from_disk(self) -> xr.Dataset:
+        """
+        Overall method to return the fully processed and transformed dataset
+        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
+
+        Returns
+        -------
+        postprocessed_dataset : xr.Dataset
+            An Xarray dataset with dataset-specific Xarray postprocessing applied
+        """
+        raw_dataset = self.zarr_json_to_dataset()
+        postprocessed_dataset = self.postprocess_zarr(raw_dataset)
+        return postprocessed_dataset
+
     def set_key_dims(self):
         """
-        Set the standard and time dimensions based on a dataset's type. Valid types are an ensemble dataset,
-        a forecast (ensemble mean) dataset, or a "normal" observational dataset.
+        Set the standard and time dimension instance variables based on a dataset's type.
+        Valid types are an ensemble dataset, a forecast (ensemble mean) dataset, or a "normal" observational dataset.
 
         The self.dataset_category property defaults to "observation". If a dataset provides a different type of data,
          the property should be specific in that dataset's manager; otherwise the default value suffices.
@@ -687,64 +715,3 @@ class Transform(Convenience, Metadata):
 
     def _standard_dims_except(self, *exclude_dims: list[str]) -> list[str]:
         return [dim for dim in self.standard_dims if dim not in exclude_dims]
-
-    def transformed_dataset(self) -> xr.Dataset:
-        """
-        Overall method to return the fully processed and transformed dataset
-        Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
-        """
-        raw_dataset = self.zarr_json_to_dataset()
-        postprocessed_dataset = self.postprocess_zarr(raw_dataset)
-        return postprocessed_dataset
-
-    # INITIAL
-
-    def initial_ds_transform(self):
-        """
-        Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the
-        virtual Zarr JSON at the path returned by `Creation.zarr_json_path`, normalize the axes, re-chunk the dataset
-        according to this object's chunking parameters, and add custom metadata defined by this class.
-
-        Returns
-        -------
-        xr.Dataset
-            The dataset from `Creation.zarr_json_to_dataset` with custom metadata, normalized axes, and rechunked
-        """
-        # Transform the JSON Zarr into an xarray Dataset
-        dataset = self.transformed_dataset()
-
-        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.set_key_dims()
-        dataset = dataset.transpose(*self.standard_dims)
-
-        # Add metadata to dataset
-        dataset = self.set_zarr_metadata(dataset)
-
-        # Re-chunk
-        self.info(f"Re-chunking dataset to {self.requested_dask_chunks}")
-        # store a version of the dataset that is not re-chunked for use in the pre-parse quality check
-        # this is necessary for performance reasons (rechunking for every point comparison is slow)
-        self.pre_chunk_dataset = dataset.copy()
-        dataset = dataset.chunk(self.requested_dask_chunks)
-        self.info(f"Chunks after rechunk are {dataset.chunks}")
-
-        # Log the state of the dataset before writing
-        self.info(f"Initial dataset\n{dataset}")
-        return dataset
-
-    # UPDATES
-
-    def update_ds_transform(self):
-        """
-        In-memory transform steps relevant to an update operation
-        NOTE that rechunking must be done for each insert/append dataset slice, so it takes place
-        when these are broken outwithin the publication step
-        """
-        dataset = self.transformed_dataset()
-
-        # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
-        self.set_key_dims()
-
-        # Log the state of the original dataset before writing
-        self.info(f"Original dataset\n{self.store.dataset()}")
-        return dataset
