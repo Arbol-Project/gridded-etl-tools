@@ -921,7 +921,7 @@ class Publish(Transform):
                 )
 
             # Note this will apply postprocess_zarr automtically
-            return self.zarr_json_to_dataset(zarr_json_path=str(file_path))
+            return self.load_dataset_from_disk(zarr_json_path=str(file_path))
 
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
