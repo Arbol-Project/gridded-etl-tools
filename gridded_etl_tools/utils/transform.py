@@ -661,17 +661,26 @@ class Transform(Metadata, Convenience):
         self.info(f"Original dataset\n{self.store.dataset()}")
         return dataset
 
-    def load_dataset_from_disk(self) -> xr.Dataset:
+    def load_dataset_from_disk(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
         """
         Overall method to return the fully processed and transformed dataset
         Defaults to returning zarr_json_to_datset but can be overridden to return a custom transformation instead
+
+        Parameters
+        ----------
+        zarr_json_path : str
+            A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
+            Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
+        decode_times : bool
+            Choose whether to decode the times in inputs file using the CF conventions when opening the Zarr JSON.
+            In most cases this is desirable and necessary, therefore this defaults to True.
 
         Returns
         -------
         postprocessed_dataset : xr.Dataset
             An Xarray dataset with dataset-specific Xarray postprocessing applied
         """
-        raw_dataset = self.zarr_json_to_dataset()
+        raw_dataset = self.zarr_json_to_dataset(zarr_json_path, decode_times)
         postprocessed_dataset = self.postprocess_zarr(raw_dataset)
         return postprocessed_dataset
 
