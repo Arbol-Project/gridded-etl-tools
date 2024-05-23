@@ -72,7 +72,7 @@ def setup_and_teardown_per_test(
     """
     # Force ipns_publish to use offline mode to make tests run faster
     mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.pre_parse_quality_check", Mock())  # speeds things up
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.pre_parse_quality_check", Mock())  # speeds things up
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
     mocker.patch(
         "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
@@ -127,12 +127,12 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     dm.post_parse_quality_check(checks=5)
     dm.post_parse_quality_check(checks=5)
     # Rejects misaligned values
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_bad_data)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_bad_data)
     with pytest.raises(ValueError):
         dm.post_parse_quality_check(checks=5)
     # Skipping the QC
     dm.skip_post_parse_qc = True
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_normal)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_normal)
     dm.post_parse_quality_check(checks=5)
     assert "Skipping post-parse quality check" in caplog.text
 
@@ -145,7 +145,7 @@ def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog,
     # Prepare a dataset manager
     dm = run_etl(manager_class, input_path=initial_input_path)
     # Runs without issue for original datasets of length 1 in the time dimension
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_single_time)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_single_time)
     dm.post_parse_quality_check(checks=5)
 
 
@@ -191,7 +191,7 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     prod_ds = dm.store.dataset()
     random_coords = dm.get_random_coords(prod_ds)
     # Populates time dimension from filename if missing dataset
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_no_time)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_no_time)
     raw_ds, orig_file_path = dm.binary_search_for_file(random_coords["time"], time_dim=dm.time_dim)
     orig_ds = dm.reformat_orig_ds(raw_ds, orig_file_path)
     assert "time" in orig_ds.dims
@@ -213,11 +213,11 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     dm.check_written_value(random_coords, prod_ds)
 
     # raise ValueError if one dataset doesn't match the other
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_random)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_random)
     with pytest.raises(ValueError):
         dm.check_written_value(random_coords, prod_ds)
 
     # raise ValueError if one dataset is all NaNs
-    mocker.patch("gridded_etl_tools.utils.zarr_methods.Publish.get_original_ds", original_ds_null)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_null)
     with pytest.raises(ValueError):
         dm.check_written_value(random_coords, prod_ds)
