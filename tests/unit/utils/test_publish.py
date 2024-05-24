@@ -1403,11 +1403,11 @@ class TestPublish:
     @staticmethod
     def test_raw_file_to_dataset_s3(manager_class):
         dm = manager_class()
-        dm.zarr_json_to_dataset = mock.Mock()
+        dm.load_dataset_from_disk = mock.Mock()
         dm.protocol = "s3"
         dm.use_local_zarr_jsons = True
-        assert dm.raw_file_to_dataset(pathlib.PosixPath("some/path")) is dm.zarr_json_to_dataset.return_value
-        dm.zarr_json_to_dataset.assert_called_once_with(zarr_json_path="some/path")
+        assert dm.raw_file_to_dataset(pathlib.PosixPath("some/path")) is dm.load_dataset_from_disk.return_value
+        dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
 
     @staticmethod
     def test_raw_file_to_dataset_s3_no_local_zarr_json(manager_class):

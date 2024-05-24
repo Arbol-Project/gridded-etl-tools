@@ -840,13 +840,13 @@ class TestTransform:
         dm.set_key_dims.assert_called_once_with()
 
     @staticmethod
-    def test_transformed_dataset(manager_class):
+    def test_load_dataset_from_disk(manager_class):
         dm = manager_class()
         dm.zarr_json_to_dataset = mock.Mock()
         dm.zarr_json_to_dataset.return_value = dataset = mock.Mock()
         dm.postprocess_zarr = mock.Mock()
         assert dm.load_dataset_from_disk() is dm.postprocess_zarr.return_value
-        dm.zarr_json_to_dataset.assert_called_once_with()
+        dm.zarr_json_to_dataset.assert_called_once_with(None, True)
         dm.postprocess_zarr.assert_called_once_with(dataset)
 
     @staticmethod
