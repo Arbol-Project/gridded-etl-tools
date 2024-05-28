@@ -39,7 +39,11 @@ tests/performance_report_*
 tests/*_zarr.json
 .coverage
 .coverage.*
+.nox/
 
 # Logs
 logs/
 *.log
+
+# Mac stuff
+*.DS_STORE*

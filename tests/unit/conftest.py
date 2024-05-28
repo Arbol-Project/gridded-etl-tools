@@ -1,6 +1,7 @@
 import datetime
 import json
 import pathlib
+import cftime
 from unittest.mock import Mock
 
 import numpy as np
@@ -119,6 +120,14 @@ def fake_complex_update_dataset():
 @pytest.fixture
 def single_time_instant_dataset():
     return _single_time_instant_dataset(original_times[:1])
+
+
+@pytest.fixture
+def single_esoteric_time_instant_dataset():
+    ds = _single_time_instant_dataset(original_times[:1])
+    return ds.assign_coords(
+        {"time": np.atleast_1d(cftime.DatetimeJulian(2021, 9, 15, 0, 0, 0, 0, has_year_zero=False))}
+    )
 
 
 def _single_time_instant_dataset(times):

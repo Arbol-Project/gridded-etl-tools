@@ -1,5 +1,7 @@
 import pathlib
 import shutil
+import cftime
+import datetime
 import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
@@ -277,6 +279,14 @@ def original_ds_single_time(self, *args, **kwargs):
     return orig_ds
 
 
+def original_ds_esoteric_time(self, *args, **kwargs):
+    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    time_val = orig_ds.time.values[-1]
+    cftime_val = cftime.DatetimeJulian(time_val)
+    orig_ds = orig_ds.sel({"time": cftime_val}).expand_dims("time")
+    return orig_ds
+
+
 def original_ds_random(self, *args, **kwargs):
     orig_ds = original_get_original_ds(self, *args, **kwargs)
     orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
@@ -306,3 +316,13 @@ def json_input_files(self):
         if fil.suffix == ".json"
     ]
     return jsons
+
+
+original_convert_times = DatasetManager.convert_raw_times_to_numpy_times
+
+
+def convert_raw_times_to_numpy_times(self, raw_times: np.array) -> np.array:
+    raw_times = original_convert_times(self, raw_times=raw_times)
+    return [
+        np.datetime64(datetime.datetime.strptime(raw_time.isoformat(), "%Y-%m-%dT%H:%M:%S")) for raw_time in raw_times
+    ]
