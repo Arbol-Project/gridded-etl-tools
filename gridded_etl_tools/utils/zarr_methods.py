@@ -1603,7 +1603,7 @@ class Publish(Transform, Metadata):
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
 
-    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset, time_dim: str) -> np.ndarray | list:
+    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset, time_dim: str) -> np.ndarray:
         """
         Convert times in the raw data to an array or list of values that can be compared to
         the published data values w/in the binary_search function.
@@ -1628,7 +1628,7 @@ class Publish(Transform, Metadata):
 
         return time_values
 
-    def convert_raw_times_to_numpy_times(self, raw_times: np.array) -> np.array:
+    def convert_raw_times_to_numpy_times(self, raw_times: np.ndarray) -> np.ndarray:
         """Placeholder for custom function to be defined within managers that need it"""
         return raw_times
 
