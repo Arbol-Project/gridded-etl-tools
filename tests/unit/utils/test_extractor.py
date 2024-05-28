@@ -23,7 +23,7 @@ class TestExtractor:
         extractor = ConcreteExtractor(dm)
         assert extractor.dm == dm
 
-    def test_pool_no_args(self):
+    def test_pool_no_jobs(self):
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         extractor.request = Mock(return_value=True)
