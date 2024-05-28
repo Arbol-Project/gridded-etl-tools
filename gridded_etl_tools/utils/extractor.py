@@ -32,7 +32,7 @@ class Extractor(ABC):
 
     def pool(self, batch: typing.Sequence[typing.Dict]) -> bool:
         """
-        Executes a batch of jobs concurrently using asyncio.
+        Executes a batch of jobs concurrently using ThreadPool.
 
         Parameters
         ----------
@@ -44,6 +44,9 @@ class Extractor(ABC):
         bool
             True if all of the jobs succeeded, False otherwise.
         """
+        if not batch:
+            log.info("No jobs submitted for downloading, exiting ETL.")
+            return False
 
         with ThreadPool(self._concurrency_limit) as pool:
             results = pool.map(self._request_helper, batch)
