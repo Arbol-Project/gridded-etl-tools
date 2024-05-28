@@ -14,6 +14,8 @@ import pytest
 
 from gridded_etl_tools.utils import store, zarr_methods
 
+from ...common import get_manager, convert_raw_times_to_numpy_times
+
 
 @pytest.fixture
 def input_files(tmp_path, mocker):
@@ -2447,6 +2449,32 @@ class TestPublish:
 
         dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_convert_standard_raw_times_to_comparable_times(manager_class, fake_original_dataset):
+        dm = get_manager(manager_class)
+        time_vals = dm.convert_raw_times_to_comparable_times(fake_original_dataset, time_dim="time")
+        assert isinstance(time_vals, (list, numpy.ndarray))
+        assert len(time_vals)
+        assert numpy.datetime64("1900-01-01") < time_vals[0]
+
+    @staticmethod
+    def test_convert_weird_raw_times_to_comparable_times(mocker, manager_class, single_esoteric_time_instant_dataset):
+        dm = get_manager(manager_class)
+        mocker.patch(
+            "gridded_etl_tools.utils.zarr_methods.Publish.convert_raw_times_to_numpy_times",
+            convert_raw_times_to_numpy_times,
+        )
+        time_vals = dm.convert_raw_times_to_comparable_times(single_esoteric_time_instant_dataset, time_dim="time")
+        assert isinstance(time_vals, (list, numpy.ndarray))
+        assert len(time_vals)
+        assert numpy.datetime64("1900-01-01") < time_vals[0]
+
+    @staticmethod
+    def test_convert_raw_times_to_numpy_times(manager_class, fake_original_dataset):
+        dm = get_manager(manager_class)
+        time_coords = fake_original_dataset.time.values
+        numpy.testing.assert_equal(dm.convert_raw_times_to_numpy_times(fake_original_dataset.time), time_coords)
 
 
 class DummyDataset(UserDict):
