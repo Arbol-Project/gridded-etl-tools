@@ -28,7 +28,7 @@ class Publish(Transform):
 
     # PARSING
 
-    def parse(self, publish_dataset: xr.Dataset) -> bool:
+    def parse(self, publish_dataset: xr.Dataset):
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
@@ -45,11 +45,6 @@ class Publish(Transform):
         ----------
         publish_dataset : xr.Dataset
             A dataset containing all records to publish, either as an initial dataset or an update to an existing one
-
-        Returns
-        -------
-        bool
-            Flag indicating if new data was / was not successfully parsed
         """
         self.info("Running parse routine")
         # adjust default dask configuration parameters as needed and spin up a LocalCluster

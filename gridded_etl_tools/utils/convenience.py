@@ -348,19 +348,21 @@ class Convenience(Attributes):
             datetime.datetime.strftime(date_range[1], "%Y%m%d%H"),
         )
 
-    def strings_to_date_range(self, date_range: tuple, parse_string: str = "%Y%m%d%H") -> tuple[str, str]:
+    def strings_to_date_range(
+        self, date_range: tuple, parse_string: str = "%Y%m%d%H"
+    ) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Convert a tuple of parseable strings to datetime objects. Necessary for Xarray metadata parsing.
 
         Parameters
         ----------
-        date_range : tuple
-            A (datetime.datetime, datetime.datetime) tuple containing the start and end dates of a date range
+        tuple
+            A tuple of `%Y%m%d%H` formatted start and end dates of a date range
 
         Returns
         -------
-        tuple
-            A tuple of `%Y%m%d%H` formatted start and end dates of a date range
+        date_range : tuple
+            A (datetime.datetime, datetime.datetime) tuple containing the start and end dates of a date range
 
         """
         return (
