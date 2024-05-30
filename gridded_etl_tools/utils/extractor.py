@@ -144,7 +144,7 @@ class S3Extractor(Extractor):
         informative_id: str | None = None,
     ) -> bool:
         """
-        Transform a remote S3 climate file into a JSON file and add it to the given `DatasetManager` object's internal
+        Extract a remote S3 climate file into a JSON and add it to the given `DatasetManager` object's internal
         list of Zarr JSONs. The list can then be processed by `DatasetManager.create_zarr_json` to create a Zarr that
         can be opened remotely in `xarray`.
 
