@@ -712,9 +712,13 @@ class Publish(Transform):
             The production dataset filtered to only the temporal extent of the latest update
         """
         prod_ds = self.store.dataset()
+        # update_date_range = slice(
+        #     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
+        #     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
+        # )
+        # TODO restore above
         update_date_range = slice(
-            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
-            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
+            datetime.datetime.strptime("2024052900", "%Y%m%d%H"), datetime.datetime.strptime("2024052900", "%Y%m%d%H")
         )
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
@@ -793,32 +797,96 @@ class Publish(Transform):
 
     def get_original_ds(self, coords: dict[Any]) -> xr.Dataset:
         """
-        Retrieve the original dataset that corresponds to the given coordinates.
+        Retrieve the original dataset that corresponds to the given coordinates by conducting a consecutive series of
+        binary searches for files matching each coordinate.
 
         Parameters
         ----------
         coords
-            The coordinates to used to locate the original dataset.
+            Randomly selected coordinates from the production dataset
+            used to locate the corresponding original dataset.
 
         Returns
         ----------
         orig_ds
-            The original dataset, unformatted
+            The original dataset, formatted minimally to allow comparison with the production dataset
         """
         # Randomly select an original dataset
         raw_ds, orig_file_path = self.binary_search_for_file(coords[self.time_dim], time_dim=self.time_dim)
 
         # If a forecast dataset then search again, this time for the correct step
+        possible_files = self.custom_filter(list(self.input_files()))
+
         if "step" in coords:
-            frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
-            date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
+            time_filtered_original_files = self.filter_step_files(original_files=possible_files, raw_ds=raw_ds)
             raw_ds, orig_file_path = self.binary_search_for_file(
-                coords["step"], time_dim="step", possible_files=date_filtered_original_files
+                coords["step"], time_dim="step", possible_files=time_filtered_original_files
+            )
+
+        # If an ensemble dataset then search again, this time for correct ensemble number
+        if "ensemble" in coords:
+            step_filtered_original_files = self.filter_ensemble_files(
+                original_files=time_filtered_original_files, raw_ds=raw_ds
+            )
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                coords["ensemble"], time_dim="ensemble", possible_files=step_filtered_original_files
+            )
+
+        # If an ensemble dataset then search again, this time for correct ensemble number
+        if "hindcast_reference_time" in coords:
+            ensemble_filtered_original_files = self.filter_hindcast_files(
+                original_files=step_filtered_original_files, raw_ds=raw_ds
+            )
+            raw_ds, orig_file_path = self.binary_search_for_file(
+                coords["hindcast_reference_time"],
+                time_dim="hindcast_reference_time",
+                possible_files=ensemble_filtered_original_files,
             )
 
         # Reformat the dataset such that it can be selected from equivalently to the prod dataset
         orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds
+
+    def custom_filter(self, original_files: tuple[str]) -> tuple[str]:
+        """
+        Filter down a list of local files to include only files that meet a custom criteria
+
+        Meant to be modified as a child method.
+
+        Parameters
+        ----------
+        original_files: tuple[str]
+            A list of raw files
+
+        Returns
+        -------
+        tuple[str]
+            A list of raw files, filtered to only contain files that meet the criteria.
+            Defaults to returning the same list as a pass through.
+        """
+        return original_files
+
+    def filter_step_files(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+        """
+        Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
+        files that contain that ensemble number
+
+        Parameters
+        ----------
+        original_files: tuple[str]
+            A list of raw files
+
+        raw_ds : xr.Dataset
+            The raw dataset used for filtering
+
+        Returns
+        -------
+        ensemble_filtered_original_files : tuple[str]
+            A list of raw files, filtered to only contain files that contain the specified ensemble number
+        """
+        frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
+        time_filtered_original_files = [fil for fil in original_files if frt_string in str(fil)]
+        return time_filtered_original_files
 
     def binary_search_for_file(
         self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str] | None = None
@@ -865,10 +933,10 @@ class Publish(Transform):
             current_file_path = possible_files[mid]
 
             with self.raw_file_to_dataset(current_file_path) as ds:
+
                 if time_dim in ds:
                     # Extract time values
                     time_values = self.convert_raw_times_to_comparable_times(ds, time_dim=time_dim)
-
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -968,7 +1036,11 @@ class Publish(Transform):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
-        for time_dim in [time_dim for time_dim in [self.time_dim, "step"] if time_dim in self.standard_dims]:
+        for time_dim in [
+            time_dim
+            for time_dim in [self.time_dim, "step", "ensemble", "hindcast_reference_time"]
+            if time_dim in self.standard_dims
+        ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
             if time_dim in orig_ds and time_dim not in orig_ds.dims:
                 orig_ds = orig_ds.expand_dims(time_dim)
