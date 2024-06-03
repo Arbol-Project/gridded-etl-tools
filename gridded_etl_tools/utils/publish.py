@@ -712,13 +712,9 @@ class Publish(Transform):
             The production dataset filtered to only the temporal extent of the latest update
         """
         prod_ds = self.store.dataset()
-        # update_date_range = slice(
-        #     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
-        #     datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
-        # )
-        # TODO restore above
         update_date_range = slice(
-            datetime.datetime.strptime("2024052900", "%Y%m%d%H"), datetime.datetime.strptime("2024052900", "%Y%m%d%H")
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
+            datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
         )
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
@@ -823,7 +819,7 @@ class Publish(Transform):
                 coords["step"], time_dim="step", possible_files=time_filtered_original_files
             )
 
-        # If an ensemble dataset then search again, this time for correct ensemble number
+        # If an ensemble dataset then search again, this time for the correct ensemble number
         if "ensemble" in coords:
             step_filtered_original_files = self.filter_ensemble_files(
                 original_files=time_filtered_original_files, raw_ds=raw_ds
@@ -832,14 +828,14 @@ class Publish(Transform):
                 coords["ensemble"], time_dim="ensemble", possible_files=step_filtered_original_files
             )
 
-        # If an ensemble dataset then search again, this time for correct ensemble number
-        if "hindcast_reference_time" in coords:
+        # If a hindcast dataset then search again, this time for the correct forecast_reference_offset
+        if "forecast_reference_offset" in coords:
             ensemble_filtered_original_files = self.filter_hindcast_files(
                 original_files=step_filtered_original_files, raw_ds=raw_ds
             )
             raw_ds, orig_file_path = self.binary_search_for_file(
-                coords["hindcast_reference_time"],
-                time_dim="hindcast_reference_time",
+                coords["forecast_reference_offset"],
+                time_dim="forecast_reference_offset",
                 possible_files=ensemble_filtered_original_files,
             )
 
@@ -868,8 +864,8 @@ class Publish(Transform):
 
     def filter_step_files(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
         """
-        Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
-        files that contain that ensemble number
+        Find the time in a selected raw dataset and filter down a list of local files to include only
+        files that contain that time
 
         Parameters
         ----------
@@ -881,11 +877,11 @@ class Publish(Transform):
 
         Returns
         -------
-        ensemble_filtered_original_files : tuple[str]
-            A list of raw files, filtered to only contain files that contain the specified ensemble number
+        time_filtered_original_files : tuple[str]
+            A list of raw files, filtered to only contain files that contain the specified time
         """
-        frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
-        time_filtered_original_files = [fil for fil in original_files if frt_string in str(fil)]
+        time_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
+        time_filtered_original_files = [fil for fil in original_files if time_string in str(fil)]
         return time_filtered_original_files
 
     def binary_search_for_file(
