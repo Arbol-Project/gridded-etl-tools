@@ -151,29 +151,82 @@ class TestDatasetManager:
     @staticmethod
     def test_transform(manager_class):
         dm = manager_class()
+        dm.transform_data_on_disk = unittest.mock.Mock()
+        dm.transform_dataset_in_memory = unittest.mock.Mock()
+
+        dm.transform()
+
+        dm.transform_data_on_disk.assert_called_once_with()
+        dm.transform_dataset_in_memory.assert_called_once_with()
+
+    @staticmethod
+    def test_transform_data_on_disk(manager_class):
+        dm = manager_class()
         dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
-        dm.transform()
+        dm.transform_data_on_disk()
 
         dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_called_once_with()
         dm.create_zarr_json.assert_called_once_with()
 
     @staticmethod
-    def test_transform_skip_prepare_input_files(manager_class):
+    def test_transform_dataset_in_memory_new_initial(mocker, manager_class):
+        dm = manager_class(skip_prepare_input_files=True)
+        dm.store = mocker.Mock(spec=store.IPLD, has_existing=False)
+        dm.update_ds_transform = unittest.mock.Mock()
+        dm.initial_ds_transform = unittest.mock.Mock()
+        dm.transform_dataset_in_memory()
+
+        dm.update_ds_transform.assert_not_called()
+        dm.initial_ds_transform.assert_called_once_with()
+
+    @staticmethod
+    def test_transform_dataset_in_memory_update(mocker, manager_class):
+        dm = manager_class(skip_prepare_input_files=True, rebuild_requested=False)
+        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.update_ds_transform = unittest.mock.Mock()
+        dm.initial_ds_transform = unittest.mock.Mock()
+        dm.transform_dataset_in_memory()
+
+        dm.update_ds_transform.assert_called_once_with()
+        dm.initial_ds_transform.assert_not_called()
+
+    @staticmethod
+    def test_transform_dataset_in_memory_update_rebuild_initial(mocker, manager_class):
+        dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=True)
+        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.update_ds_transform = unittest.mock.Mock()
+        dm.initial_ds_transform = unittest.mock.Mock()
+        dm.transform_dataset_in_memory()
+
+        dm.update_ds_transform.assert_not_called()
+        dm.initial_ds_transform.assert_called_once_with()
+
+    @staticmethod
+    def test_transform_dataset_in_memory_update_rebuild_initial_but_overwrite_not_allowed(mocker, manager_class):
+        dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=False)
+        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.update_ds_transform = unittest.mock.Mock()
+        dm.initial_ds_transform = unittest.mock.Mock()
+        with pytest.raises(RuntimeError):
+            dm.transform_dataset_in_memory()
+
+    @staticmethod
+    def test_transform_data_on_disk_skip_prepare_input_files(manager_class):
         dm = manager_class(skip_prepare_input_files=True)
         dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
-        dm.transform()
+        dm.transform_data_on_disk()
 
         dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_not_called()
         dm.create_zarr_json.assert_called_once_with()
 
     @staticmethod
-    def test_transform_skip_post_parse_qc(manager_class):
+    def test_skip_post_parse_qc(manager_class):
         dm = manager_class(skip_post_parse_qc=True)
         dm.get_prod_update_ds = unittest.mock.Mock()
         dm.get_original_ds = unittest.mock.Mock()

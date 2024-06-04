@@ -181,8 +181,9 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.zarr_json_path().unlink(missing_ok=True)
     # Check that a hash wasn't created because the dataset wasn't parsed
     with pytest.raises(FileNotFoundError):
@@ -207,8 +208,9 @@ def test_initial(request, mocker, manager_class, heads_path, test_chunks, initia
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
@@ -265,8 +267,9 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file
@@ -306,9 +309,10 @@ def test_bad_append(
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
     with pytest.raises(IndexError):
-        manager.parse()
+        manager.parse(publish_dataset)
 
 
 def test_metadata(manager_class, heads_path):
@@ -343,8 +347,9 @@ def test_misaligned_zarr_dask_chunks_regression(
             "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
             offline_ipns_publish,
         )
-    manager.transform()
-    manager.parse()
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     manager.publish_metadata()
     # Test an append on this curtailed dataset
     run_etl(manager_class, input_path=appended_input_path, store="ipld")

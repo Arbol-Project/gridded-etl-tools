@@ -311,6 +311,15 @@ class TestConvenience:
         assert dm.date_range_to_string(date_range) == ("2021091600", "2022013100")
 
     @staticmethod
+    def test_strings_to_date_range(manager_class):
+        string_dates = ("2021091600", "2022013100")
+        dm = manager_class()
+        assert dm.strings_to_date_range(string_dates) == (
+            datetime.datetime(2021, 9, 16, 0, 0),
+            datetime.datetime(2022, 1, 31, 0, 0),
+        )
+
+    @staticmethod
     def test_get_newest_file_date_range(mocker, manager_class, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.convenience.xr")
         xr.open_dataset.return_value = fake_original_dataset

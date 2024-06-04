@@ -16,7 +16,7 @@ import psutil
 
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
-from .utils.zarr_methods import Publish
+from .utils.publish import Publish
 from .utils.ipfs import IPFS
 from .utils.store import Local, IPLD, S3
 
@@ -259,6 +259,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
     # MINIMUM ETL METHODS
 
+    # Attributes
+
     @abstractmethod
     def static_metadata(self):
         """
@@ -269,6 +271,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     @abstractmethod
     def dataset_start_date(self):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
+
+    # Extraction
 
     @abstractmethod
     def extract(self, date_range: tuple[datetime.datetime, datetime.datetime] | None = None):
@@ -283,10 +287,30 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             )
         self.new_files = []
 
-    def transform(self):
+    # Transformation
+
+    def transform(self) -> xr.Dataset:
         """
-        Rework downloaded data into a virtual Zarr JSON conforming to Arbol's standard format for gridded datasets
+        Master convenience function encapsulating all transform steps, on-disk and in-memory. These can optionally
+        be broken out and run separately if more useful within an ETL.
+
+        Returns
+        -------
+        xr.Dataset
+            A finalized in-memory dataset ready for rechunking and publication
         """
+        self.transform_data_on_disk()
+        return self.transform_dataset_in_memory()
+
+    def transform_data_on_disk(self):
+        """
+        Open all raw files in self.local_input_path(). Transform the data contained in them into a virtual Zarr JSON
+        conforming to Arbol's standard format for gridded datasets
+
+        This is the core function for transforming data from a provider's raw files and should be standard for all ETLs
+        Modify the child methods it calls to tailor the methods to the individual dataset and resolve any issues
+        """
+        self.info("Transforming raw files to an in-memory dataset")
         # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
         self.populate_metadata()
         # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
@@ -296,6 +320,38 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # Create Zarr JSON outside of Dask client so multiprocessing can use all workers / threads without interference
         # from Dask
         self.create_zarr_json()
+
+    def transform_dataset_in_memory(self) -> xr.Dataset:
+        """
+        Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the
+        virtual Zarr JSON at the path returned by `Creation.zarr_json_path` and *lazily* normalize the axes,
+        re-chunk the dataset according to this object's chunking parameters,
+        and add custom metadata defined by this class.
+
+        This is the core function for transforming a dataset in-memory and should be standard for all ETLs.
+        Modify the child methods it calls to tailor the methods to the individual dataset and resolve any issues
+
+        NOTE that rechunking must be done within the Dask cluster to be optimized for a task graph,
+        so it's located within the parse step
+
+        Returns
+        -------
+        publish_dataset : xr.Dataset
+            A finalized in-memory dataset ready for rechunking and publication
+        """
+        # Load the single dataset and perform any necessary transformations of it using Xarray
+        self.info("Transforming in-memory dataset to its final format")
+        if self.store.has_existing and not self.rebuild_requested:
+            publish_dataset = self.update_ds_transform()
+        elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
+            publish_dataset = self.initial_ds_transform()
+        else:
+            raise RuntimeError(
+                "There is already a zarr at the specified path and a rebuild is requested, "
+                "but overwrites are not allowed. Therefore the appropriate transformation, "
+                "not to mention the appropriate eventual write operation, is unclear."
+            )
+        return publish_dataset
 
     @abstractmethod
     def prepare_input_files(self, keep_originals: bool = True):
@@ -325,6 +381,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Happens after `populate_metadata` and immediately before data publication.
         """
         return super().set_zarr_metadata(dataset)
+
+    # Orchestration
 
     @classmethod
     def get_subclasses(cls) -> typing.Iterator:
