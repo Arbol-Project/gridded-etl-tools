@@ -606,7 +606,7 @@ class Publish(Transform):
             )
 
         # Check that the first value of the append times and the last value of the original dataset are contiguous
-        # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
+        # Skip if original dataset time dim is of len 1 because there's no way to calculate an expected delta in situ
         if append_times and len(original_dataset[self.time_dim]) > 1:
             original_append_bridge_times = [original_dataset[self.time_dim].values[-1], append_times[0]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
