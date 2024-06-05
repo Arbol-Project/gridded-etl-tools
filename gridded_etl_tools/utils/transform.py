@@ -599,11 +599,35 @@ class Transform(Metadata, Convenience):
 
         return dataset
 
+    # IN-MEMORY TRANSFORMS
+
+    def preprocess_zarr(self, dataset: xr.Dataset, file_path: str) -> xr.Dataset:
+        """
+        Method to populate with the specific preprocessing routine of each child class (if relevant)
+        Essentially replicate much of the kerchunk-based preprocessing such that `postprocess_zarr`
+        can work seamlessly with single files of raw data w/out Kerchunk's interventions
+
+        If no preprocessing is happening, return the dataset untouched
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The dataset being processed
+        file_path : str
+            The file path of the dataset in question. Used to
+
+        Returns
+        -------
+        dataset : xr.Dataset
+            The dataset, processed
+        """
+        return dataset
+
     def postprocess_zarr(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Method to populate with the specific postprocessing routine of each child class (if relevant)
 
-        If no preprocessing is happening, return the dataset untouched
+        If no postprocessing is happening, return the dataset untouched
 
         Parameters
         ----------
@@ -613,11 +637,9 @@ class Transform(Metadata, Convenience):
         Returns
         -------
         dataset : xr.Dataset
-            The dataset being processed
+            The dataset, processed
         """
         return dataset
-
-    # IN-MEMORY TRANSFORMS
 
     def initial_ds_transform(self) -> xr.Dataset:
         """

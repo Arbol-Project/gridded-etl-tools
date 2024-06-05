@@ -716,6 +716,9 @@ class Publish(Transform):
             datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
             datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
         )
+        # update_date_range = slice(
+        #     np.datetime64("2024-06-03T00:00:00.000000000"), np.datetime64("2024-06-03T00:00:00.000000000")
+        # )
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
@@ -807,43 +810,44 @@ class Publish(Transform):
         orig_ds
             The original dataset, formatted minimally to allow comparison with the production dataset
         """
-        # Randomly select an original dataset
-        raw_ds, orig_file_path = self.binary_search_for_file(coords[self.time_dim], time_dim=self.time_dim)
+        # Apply any custom filters to the input files. Returns all input files if no custom filter defined.
+        possible_files = self.custom_file_filter(list(self.input_files()))
+
+        # Select an original dataset containing the same time dimension value as the production dataset
+        orig_ds, orig_file_path = self.binary_search_for_file(
+            coords[self.time_dim], time_dim=self.time_dim, possible_files=possible_files
+        )
 
         # If a forecast dataset then search again, this time for the correct step
-        possible_files = self.custom_filter(list(self.input_files()))
-
         if "step" in coords:
-            time_filtered_original_files = self.filter_step_files(original_files=possible_files, raw_ds=raw_ds)
-            raw_ds, orig_file_path = self.binary_search_for_file(
+            time_filtered_original_files = self.filter_files_by_time(original_files=possible_files, raw_ds=orig_ds)
+            orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["step"], time_dim="step", possible_files=time_filtered_original_files
             )
 
         # If an ensemble dataset then search again, this time for the correct ensemble number
         if "ensemble" in coords:
-            step_filtered_original_files = self.filter_ensemble_files(
-                original_files=time_filtered_original_files, raw_ds=raw_ds
+            step_filtered_original_files = self.filter_files_by_step(
+                original_files=time_filtered_original_files, raw_ds=orig_ds
             )
-            raw_ds, orig_file_path = self.binary_search_for_file(
+            orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["ensemble"], time_dim="ensemble", possible_files=step_filtered_original_files
             )
 
         # If a hindcast dataset then search again, this time for the correct forecast_reference_offset
         if "forecast_reference_offset" in coords:
-            ensemble_filtered_original_files = self.filter_hindcast_files(
-                original_files=step_filtered_original_files, raw_ds=raw_ds
+            ensemble_filtered_original_files = self.filter_files_by_ensemble(
+                original_files=step_filtered_original_files, raw_ds=orig_ds
             )
-            raw_ds, orig_file_path = self.binary_search_for_file(
+            orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["forecast_reference_offset"],
                 time_dim="forecast_reference_offset",
                 possible_files=ensemble_filtered_original_files,
             )
 
-        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
-        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
         return orig_ds
 
-    def custom_filter(self, original_files: tuple[str]) -> tuple[str]:
+    def custom_file_filter(self, original_files: tuple[str]) -> tuple[str]:
         """
         Filter down a list of local files to include only files that meet a custom criteria
 
@@ -862,7 +866,7 @@ class Publish(Transform):
         """
         return original_files
 
-    def filter_step_files(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+    def filter_files_by_step(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
         """
         Find the time in a selected raw dataset and filter down a list of local files to include only
         files that contain that time
@@ -885,7 +889,7 @@ class Publish(Transform):
         return time_filtered_original_files
 
     def binary_search_for_file(
-        self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str] | None = None
+        self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str]
     ) -> tuple[xr.Dataset, pathlib.Path]:
         """
         Implement a binary search algorithm to find the file containing a desired datetime
@@ -920,14 +924,12 @@ class Publish(Transform):
         FileNotFoundError
             Indicates that the requested file could not be found
         """
-        if not possible_files:
-            possible_files = list(self.input_files())
-
         low, high = 0, len(possible_files) - 1
         while low <= high:
             mid = (low + high) // 2
             current_file_path = possible_files[mid]
 
+            # Reformat the dataset such that it can be selected from equivalently to the prod dataset
             with self.raw_file_to_dataset(current_file_path) as ds:
 
                 if time_dim in ds:
@@ -956,7 +958,7 @@ class Publish(Transform):
         raise FileNotFoundError(
             "No file found during binary search. "
             f"Last search values target datetime: {target_datetime} "
-            f" low: {low}, high: {high}, possible_files: {possible_files}."
+            f" low: {low}, high: {high}, {len(possible_files)} total possible_files."
         )
 
     def raw_file_to_dataset(self, file_path: str) -> xr.Dataset:
@@ -969,7 +971,8 @@ class Publish(Transform):
             A file path
         """
         if self.protocol == "file":
-            return xr.open_dataset(file_path, **self.open_dataset_kwargs)
+            ds = xr.open_dataset(file_path, **self.open_dataset_kwargs)
+            return self.reformat_orig_ds(ds, file_path)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
@@ -1032,33 +1035,43 @@ class Publish(Transform):
         orig_ds
             The original dataset, reformatted similarly to the production dataset
         """
+        # Setting metadata will clean up data variables and a few other things.
+        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
+        if self.protocol == "file":
+            orig_ds = self.preprocess_zarr(orig_ds, orig_file_path)
+            # Setting metadata will clean up data variables and a few other things.
+            # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
+            orig_ds = self.postprocess_zarr(orig_ds)
+
+        # Apply standard postprocessing to get other data variables in order
+        processed_orig_ds = self.rename_data_variable(orig_ds)
+
+        # Expand any 1D dimensions as needed. This is necessary for later `sel` operations.
         for time_dim in [
             time_dim
-            for time_dim in [self.time_dim, "step", "ensemble", "hindcast_reference_time"]
+            for time_dim in [self.time_dim, "step", "ensemble", "forecast_reference_offset"]
             if time_dim in self.standard_dims
         ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-            if time_dim in orig_ds and time_dim not in orig_ds.dims:
-                orig_ds = orig_ds.expand_dims(time_dim)
+            if time_dim in processed_orig_ds and time_dim not in processed_orig_ds.dims:
+                processed_orig_ds = processed_orig_ds.expand_dims(time_dim)
 
             # ... or create it from the file name if missing entirely in the raw file
-            elif time_dim not in orig_ds:
-                orig_ds = orig_ds.assign_coords(
+            elif time_dim not in processed_orig_ds:
+                processed_orig_ds = processed_orig_ds.assign_coords(
                     {
                         time_dim: datetime.datetime.strptime(
                             re.search(r"([0-9]{4}-[0-9]{2}-[0-9]{2})", str(orig_file_path))[0], "%Y-%m-%d"
                         )
                     }
                 )
-                orig_ds = orig_ds.expand_dims(time_dim)
+                processed_orig_ds = processed_orig_ds.expand_dims(time_dim)
 
-        # Setting metadata will clean up data variables and a few other things.
-        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
-        if self.protocol == "file":
-            orig_ds = self.postprocess_zarr(orig_ds)
+            # Also expand it for the data var!
+            if time_dim in processed_orig_ds.dims and time_dim not in processed_orig_ds[self.data_var()].dims:
+                processed_orig_ds[self.data_var()] = processed_orig_ds[self.data_var()].expand_dims(time_dim)
 
-        # Apply standard postprocessing to get other data variables in order
-        return self.rename_data_variable(orig_ds)
+        return processed_orig_ds
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:
