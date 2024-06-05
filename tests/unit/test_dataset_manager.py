@@ -149,6 +149,17 @@ class TestDatasetManager:
             dm.extract(date_range=[datetime.datetime(1967, 10, 2, 0, 0, 0), datetime.datetime(2010, 5, 12, 0, 0, 0)])
 
     @staticmethod
+    def test_transform(manager_class):
+        dm = manager_class()
+        dm.transform_data_on_disk = unittest.mock.Mock()
+        dm.transform_dataset_in_memory = unittest.mock.Mock()
+
+        dm.transform()
+
+        dm.transform_data_on_disk.assert_called_once_with()
+        dm.transform_dataset_in_memory.assert_called_once_with()
+
+    @staticmethod
     def test_transform_data_on_disk(manager_class):
         dm = manager_class()
         dm.populate_metadata = unittest.mock.Mock()

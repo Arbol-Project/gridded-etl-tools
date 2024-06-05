@@ -259,6 +259,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
     # MINIMUM ETL METHODS
 
+    # Attributes
+
     @abstractmethod
     def static_metadata(self):
         """
@@ -269,6 +271,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     @abstractmethod
     def dataset_start_date(self):
         """First date in dataset. Used to populate corresponding encoding and metadata."""
+
+    # Extraction
 
     @abstractmethod
     def extract(self, date_range: tuple[datetime.datetime, datetime.datetime] | None = None):
@@ -282,6 +286,21 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
                 "request a valid datetime."
             )
         self.new_files = []
+
+    # Transformation
+
+    def transform(self) -> xr.Dataset:
+        """
+        Master convenience function encapsulating all transform steps, on-disk and in-memory. These can optionally
+        be broken out and run separately if more useful within an ETL.
+
+        Returns
+        -------
+        xr.Dataset
+            A finalized in-memory dataset ready for rechunking and publication
+        """
+        self.transform_data_on_disk()
+        return self.transform_dataset_in_memory()
 
     def transform_data_on_disk(self):
         """
@@ -362,6 +381,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         Happens after `populate_metadata` and immediately before data publication.
         """
         return super().set_zarr_metadata(dataset)
+
+    # Orchestration
 
     @classmethod
     def get_subclasses(cls) -> typing.Iterator:
