@@ -716,9 +716,6 @@ class Publish(Transform):
             datetime.datetime.strptime(prod_ds.attrs["update_date_range"][0], "%Y%m%d%H"),
             datetime.datetime.strptime(prod_ds.attrs["update_date_range"][1], "%Y%m%d%H"),
         )
-        # update_date_range = slice(
-        #     np.datetime64("2024-06-03T00:00:00.000000000"), np.datetime64("2024-06-03T00:00:00.000000000")
-        # )
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
@@ -814,6 +811,7 @@ class Publish(Transform):
         possible_files = self.custom_file_filter(list(self.input_files()))
 
         # Select an original dataset containing the same time dimension value as the production dataset
+        # Orig_file_path is unneeded but useful for debugging
         orig_ds, orig_file_path = self.binary_search_for_file(
             coords[self.time_dim], time_dim=self.time_dim, possible_files=possible_files
         )
@@ -933,8 +931,9 @@ class Publish(Transform):
             with self.raw_file_to_dataset(current_file_path) as ds:
 
                 if time_dim in ds:
-                    # Extract time values
-                    time_values = self.convert_raw_times_to_comparable_times(ds, time_dim=time_dim)
+                    # Extract time values and convert them to an array for len() and filtering, if of length 1
+                    # These should already be formatted in a np.datetime64 format via `raw_file_to_dataset`
+                    time_values = np.atleast_1d(ds[time_dim].values)
                     # Return the file name if the target_datetime is equal to the time value in the file,
                     # otherwise cut the search space in half based on whether the file's datetime is later (greater)
                     # or earlier (lesser) than the target datetime
@@ -972,6 +971,8 @@ class Publish(Transform):
         """
         if self.protocol == "file":
             ds = xr.open_dataset(file_path, **self.open_dataset_kwargs)
+            # Apply pre- and post-processing so that file can be selected from equivalently to
+            # the production dataset
             return self.reformat_orig_ds(ds, file_path)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
@@ -988,35 +989,6 @@ class Publish(Transform):
 
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
-
-    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset, time_dim: str) -> np.ndarray:
-        """
-        Convert times in the raw data to an array or list of values that can be compared to
-        the published data values w/in the binary_search function.
-
-        Parameters
-        ----------
-        ds : xr.Dataset
-            The raw dataset
-
-        Returns
-        -------
-        np.array
-            An array or list of converted time values
-        """
-        # Extract time values and convert them to an array for len() and filtering, if of length 1
-        time_values = np.atleast_1d(ds[time_dim].values)
-
-        # Convert any raw time values in esoteric formats that break the binary search comparison logic.
-        # NOTE the expectation is that the `convert_raw_times` function is defined w/in the ETL manager
-        if type(time_values[0]) is not np.datetime64:
-            time_values = self.convert_raw_times_to_numpy_times(time_values)
-
-        return time_values
-
-    def convert_raw_times_to_numpy_times(self, raw_times: np.ndarray) -> np.ndarray:
-        """Placeholder for custom function to be defined within managers that need it"""
-        return raw_times
 
     def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
@@ -1039,8 +1011,6 @@ class Publish(Transform):
         # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
         if self.protocol == "file":
             orig_ds = self.preprocess_zarr(orig_ds, orig_file_path)
-            # Setting metadata will clean up data variables and a few other things.
-            # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
             orig_ds = self.postprocess_zarr(orig_ds)
 
         # Apply standard postprocessing to get other data variables in order
