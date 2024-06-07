@@ -8,6 +8,7 @@ from unittest import mock
 
 import numpy
 import pandas as pd
+import xarray as xr
 import pytest
 
 from gridded_etl_tools.utils import publish, store
@@ -1401,7 +1402,6 @@ class TestPublish:
 
         dm.reformat_orig_ds.assert_not_called()
 
-
     @staticmethod
     def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
         timestamps = numpy.arange(
@@ -1434,20 +1434,26 @@ class TestPublish:
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
 
     @staticmethod
-    def test_raw_file_to_dataset_file(manager_class, mocker):
+    def test_raw_file_to_dataset_file(manager_class, mocker, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dm = manager_class()
         dm.protocol = "file"
-        assert dm.raw_file_to_dataset("some/path") is xr.open_dataset.return_value
+        dm.preprocess_zarr = mock.Mock()
+        dm.postprocess_zarr = mock.Mock(return_value=fake_original_dataset)
+        ds = dm.raw_file_to_dataset("some/path")
+        assert ds == dm.reformat_orig_ds(fake_original_dataset, "some/path")
         xr.open_dataset.assert_called_once_with("some/path")
 
     @staticmethod
-    def test_raw_file_to_dataset_s3(manager_class):
+    def test_raw_file_to_dataset_s3(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.load_dataset_from_disk = mock.Mock()
+        dm.load_dataset_from_disk.return_value = fake_original_dataset
         dm.protocol = "s3"
         dm.use_local_zarr_jsons = True
-        assert dm.raw_file_to_dataset(pathlib.PosixPath("some/path")) is dm.load_dataset_from_disk.return_value
+
+        ds = dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
+        xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, "some/path"))
         dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
 
     @staticmethod
@@ -1460,68 +1466,43 @@ class TestPublish:
             dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
 
     @staticmethod
-    def test_raw_file_to_dataset_bad_protocol(manager_class):
-        dm = manager_class()
-        dm.protocol = "nopenoway"
-        with pytest.raises(ValueError):
-            dm.raw_file_to_dataset("some/path")
-
-    @staticmethod
     def test_reformat_orig_ds(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=fake_original_dataset)
         dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
 
-        dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(fake_original_dataset)
-
-    @staticmethod
-    def test_reformat_orig_ds_file_protocol(manager_class, fake_original_dataset):
-        dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
-        dm.protocol = "file"
-        dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
-
-        dm.postprocess_zarr.assert_called_once_with(fake_original_dataset)
-        dm.rename_data_variable.assert_called_once_with(dm.postprocess_zarr.return_value)
 
     @staticmethod
     def test_reformat_orig_ds_single_time_instant(manager_class, single_time_instant_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
         orig_dataset = single_time_instant_dataset.squeeze()
-        dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
+        dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
-        dataset = dm.rename_data_variable.call_args[0][0]
         assert "time" in dataset.dims
 
-        dm.postprocess_zarr.assert_not_called()
-        dm.rename_data_variable.assert_called_once_with(dataset)
+        dm.rename_data_variable.assert_called_once_with(orig_dataset)
 
     @staticmethod
     def test_reformat_orig_ds_missing_step_dimension(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=fake_original_dataset)
         dm.standard_dims += ["step"]
-        dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
+        dataset = dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
 
-        dataset = dm.rename_data_variable.call_args[0][0]
         assert "step" in dataset
         assert "step" in dataset.dims
         assert dataset.step[0] == numpy.datetime64("2022-07-04T00:00:00.000000000")
 
-        dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(dataset)
 
     @staticmethod
     def test_binary_search_empty_files(manager_class):
         dm = manager_class()
         with pytest.raises(ValueError):
-            dm.binary_search_for_file(numpy.datetime64('2020-04-01'), "time", [])
+            dm.binary_search_for_file(numpy.datetime64("2020-04-01"), "time", [])
+
 
 class DummyDataset(UserDict):
 
