@@ -1276,15 +1276,12 @@ class TestPublish:
         def raw_file_to_dataset(path):
             assert path.startswith("test_path_")
             index = int(path[10:])
-            return orig_datasets[index]
-
-        def reformat_orig_ds(ds, path):
+            ds = orig_datasets[index]
             ds.attrs["reformat_args"] = (ds, path)
             return ds
 
         dm = manager_class()
         dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
         dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
 
         for i in range(10):
@@ -1299,21 +1296,19 @@ class TestPublish:
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
 
     @staticmethod
-    def test_get_original_ds_with_step(manager_class, hindcast_dataset_at):
+    def test_get_original_ds_with_step(manager_class, forecast_dataset_at):
         timestamps = numpy.arange(
             numpy.datetime64("2021-10-16T00:00:00.000000000"),
             numpy.datetime64("2021-10-26T00:00:00.000000000"),
             numpy.timedelta64(1, "[D]"),
         )
         steps = timestamps + numpy.timedelta64(4, "[h]")
-        orig_datasets = [hindcast_dataset_at(timestamp) for timestamp in timestamps]
+        orig_datasets = [forecast_dataset_at(timestamp) for timestamp in timestamps]
 
         def raw_file_to_dataset(path):
             assert path.startswith("test_path_")
             index = int(path[10:12])
-            return orig_datasets[index]
-
-        def reformat_orig_ds(ds, path):
+            ds = orig_datasets[index]
             ds.attrs["reformat_args"] = (ds, path)
             return ds
 
@@ -1323,16 +1318,64 @@ class TestPublish:
 
         dm = manager_class()
         dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
         dm.input_files = mock.Mock(return_value=[path_for(i) for i in range(10)])
-        dm.time_dim = "hindcast_reference_time"
+        dm.time_dim = "forecast_reference_time"
 
         for i in range(10):
             dataset = dm.get_original_ds(
-                {"x": "nobody", "y": "cares", "hindcast_reference_time": timestamps[i], "step": steps[i]}
+                {"x": "nobody", "y": "cares", "forecast_reference_time": timestamps[i], "step": steps[i]}
             )
             assert dataset is orig_datasets[i]
             assert dataset.attrs["reformat_args"] == (dataset, path_for(i))
+
+    @staticmethod
+    def test_get_original_ds_with_ensemble(manager_class, ensemble_dataset_at):
+        timestamps = numpy.arange(
+            numpy.datetime64("2021-10-16T00:00:00.000000000"),
+            numpy.datetime64("2021-10-26T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        steps = [numpy.timedelta64(i * 3600000000000, "[ns]") for i in range(1, 6)]
+        ensembles = [i for i in range(1, 6)]
+        orig_datasets = [ensemble_dataset_at(i) for i in range(5)]
+
+        def raw_file_to_dataset(path):
+            assert path.startswith("test_path_")
+            index = int(path[-1]) - 1
+            ds = orig_datasets[index]
+            return ds
+
+        def path_for(range_num: int) -> list[str]:
+            date_files = []
+            for i in range(0, range_num + 1):
+                date_str = pd.Timestamp(timestamps[i]).to_pydatetime().date().isoformat()
+                date_files.append(f"test_path_time-{date_str}")
+            date_step_files = []
+            for file in date_files:
+                for i in range(1, range_num + 1):
+                    date_step_files.append(file + f"_step-{i}")
+            date_step_ensemble_files = []
+            for file in date_step_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_files.append(file + f"_ensemble-{i}")
+            return date_step_ensemble_files
+
+        dm = manager_class()
+        dm.raw_file_to_dataset = raw_file_to_dataset
+        dm.input_files = mock.Mock(return_value=path_for(5))
+        dm.time_dim = "forecast_reference_time"
+
+        for i in range(5):
+            dataset = dm.get_original_ds(
+                {
+                    "x": "nobody",
+                    "y": "cares",
+                    "forecast_reference_time": timestamps[i],
+                    "step": steps[i],
+                    "ensemble": ensembles[i],
+                }
+            )
+            assert dataset is orig_datasets[i]
 
     @staticmethod
     def test_get_original_ds_missing_time(manager_class, hindcast_dataset_at):
@@ -1370,15 +1413,12 @@ class TestPublish:
         def raw_file_to_dataset(path):
             assert path.startswith("test_path_")
             index = int(path[10:])
-            return orig_datasets[index]
-
-        def reformat_orig_ds(ds, path):
+            ds = orig_datasets[index]
             ds.attrs["reformat_args"] = (ds, path)
             return ds
 
         dm = manager_class()
         dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
         dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
 
         for i in range(10):

@@ -886,6 +886,50 @@ class Publish(Transform):
         time_filtered_original_files = [fil for fil in original_files if time_string in str(fil)]
         return time_filtered_original_files
 
+    def filter_files_by_step(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+        """
+        Find the step number in a selected raw dataset and filter down a list of local files to include only
+        files that contain that step number
+
+        Parameters
+        ----------
+        original_files: tuple[str]
+            A list of raw files, similarly filtered to only include files covering a specific forecast step.
+
+        raw_ds : xr.Dataset
+            The raw dataset used for filtering
+
+        Returns
+        -------
+        step_filtered_original_files : tuple[str]
+            A list of raw files, filtered to only contain files that contain the specified step number
+        """
+        step_string = "step-" + str(int(raw_ds["step"].values[0] / 3600000000000)) + "_"
+        step_filtered_original_files = [fil for fil in original_files if step_string in str(fil)]
+        return step_filtered_original_files
+
+    def filter_files_by_ensemble(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+        """
+        Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
+        files that contain that ensemble
+
+        Parameters
+        ----------
+        original_files: tuple[str]
+            A list of raw files, similarly filtered to only include files covering a specific ensemble number.
+
+        raw_ds : xr.Dataset
+            The raw dataset used for filtering
+
+        Returns
+        -------
+        ensemble_filtered_original_files : tuple[str]
+            A list of raw files, filtered to only contain files that contain the specified ensemble
+        """
+        ensemble_string = "ensemble-" + str(raw_ds["ensemble"].values[0]) + "_"
+        ensemble_filtered_original_files = [fil for fil in original_files if ensemble_string in str(fil)]
+        return ensemble_filtered_original_files
+
     def binary_search_for_file(
         self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str]
     ) -> tuple[xr.Dataset, pathlib.Path]:
@@ -922,6 +966,12 @@ class Publish(Transform):
         FileNotFoundError
             Indicates that the requested file could not be found
         """
+        if not possible_files:
+            raise ValueError(
+                "Empty list of possible files passed to `binary_search_for_file` "
+                f"for time dim {time_dim}. Check your code and resubmit."
+            )
+
         low, high = 0, len(possible_files) - 1
         while low <= high:
             mid = (low + high) // 2
@@ -955,7 +1005,7 @@ class Publish(Transform):
                     )
 
         raise FileNotFoundError(
-            "No file found during binary search. "
+            f"No file found during binary search over dimension {time_dim}. "
             f"Last search values target datetime: {target_datetime} "
             f" low: {low}, high: {high}, {len(possible_files)} total possible_files."
         )
