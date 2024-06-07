@@ -1401,6 +1401,7 @@ class TestPublish:
 
         dm.reformat_orig_ds.assert_not_called()
 
+
     @staticmethod
     def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
         timestamps = numpy.arange(
@@ -1516,6 +1517,11 @@ class TestPublish:
         dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(dataset)
 
+    @staticmethod
+    def test_binary_search_empty_files(manager_class):
+        dm = manager_class()
+        with pytest.raises(ValueError):
+            dm.binary_search_for_file(numpy.datetime64('2020-04-01'), "time", [])
 
 class DummyDataset(UserDict):
 
