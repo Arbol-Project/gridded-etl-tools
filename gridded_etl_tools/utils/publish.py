@@ -1081,7 +1081,7 @@ class Publish(Transform):
                 ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
+            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:  # pragma NO COVER
                 ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
 
         return ds

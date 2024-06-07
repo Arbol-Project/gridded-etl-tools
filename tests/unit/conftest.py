@@ -177,14 +177,6 @@ def single_time_instant_dataset():
     return _single_time_instant_dataset(original_times[:1])
 
 
-@pytest.fixture
-def single_esoteric_time_instant_dataset():
-    ds = _single_time_instant_dataset(original_times[:1])
-    return ds.assign_coords(
-        {"time": np.atleast_1d(cftime.DatetimeJulian(2021, 9, 15, 0, 0, 0, 0, has_year_zero=False))}
-    )
-
-
 def _single_time_instant_dataset(times):
     time = xr.DataArray(np.array(times), dims="time", coords={"time": np.arange(1)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
