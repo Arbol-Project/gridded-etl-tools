@@ -192,7 +192,9 @@ def test_reformat_orig_ds(mocker, manager_class, initial_input_path, qc_input_pa
     random_coords = dm.get_random_coords(prod_ds)
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.publish.Publish.get_original_ds", original_ds_no_time)
-    raw_ds, orig_file_path = dm.binary_search_for_file(random_coords["time"], time_dim=dm.time_dim)
+    raw_ds, orig_file_path = dm.binary_search_for_file(
+        random_coords["time"], time_dim=dm.time_dim, possible_files=dm.original_files
+    )
     orig_ds = dm.reformat_orig_ds(raw_ds, orig_file_path)
     assert "time" in orig_ds.dims
 

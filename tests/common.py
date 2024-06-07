@@ -1,7 +1,6 @@
 import pathlib
 import shutil
 import cftime
-import datetime
 import numpy as np
 
 from gridded_etl_tools.dataset_manager import DatasetManager
@@ -316,13 +315,3 @@ def json_input_files(self):
         if fil.suffix == ".json"
     ]
     return jsons
-
-
-original_convert_times = DatasetManager.convert_raw_times_to_numpy_times
-
-
-def convert_raw_times_to_numpy_times(self, raw_times: np.array) -> np.array:
-    raw_times = original_convert_times(self, raw_times=raw_times)
-    return [
-        np.datetime64(datetime.datetime.strptime(raw_time.isoformat(), "%Y-%m-%dT%H:%M:%S")) for raw_time in raw_times
-    ]
