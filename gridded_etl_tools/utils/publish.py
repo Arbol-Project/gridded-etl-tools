@@ -864,7 +864,7 @@ class Publish(Transform):
         """
         return original_files
 
-    def filter_files_by_step(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+    def filter_files_by_time(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
         """
         Find the time in a selected raw dataset and filter down a list of local files to include only
         files that contain that time
@@ -973,7 +973,8 @@ class Publish(Transform):
             ds = xr.open_dataset(file_path, **self.open_dataset_kwargs)
             # Apply pre- and post-processing so that file can be selected from equivalently to
             # the production dataset
-            return self.reformat_orig_ds(ds, file_path)
+            ds = self.preprocess_zarr(ds, file_path)
+            ds = self.postprocess_zarr(ds)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
@@ -984,38 +985,30 @@ class Publish(Transform):
                     "Please enable `use_local_zarr_jsons` to permit post-parse QC"
                 )
 
-            # Note this will apply postprocess_zarr automtically
-            return self.load_dataset_from_disk(zarr_json_path=str(file_path))
+            # This will apply postprocess_zarr automtically
+            ds = self.load_dataset_from_disk(zarr_json_path=str(file_path))
 
-        else:
-            raise ValueError('Expected either "file" or "s3" protocol')
+        return self.reformat_orig_ds(ds, file_path)
 
-    def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
+    def reformat_orig_ds(self, ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
         Open and reformat the original dataset so it can be selected from identically to the production dataset
         Basically re-run key elements of the transform step
 
         Parameters
         ----------
-        orig_ds
+        ds
             The original dataset, unformatted
         orig_file_path
             A pathlib.Path to the randomly selected original file
 
         Returns
         -------
-        orig_ds
+        ds
             The original dataset, reformatted similarly to the production dataset
         """
-        # Setting metadata will clean up data variables and a few other things.
-        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
-        if self.protocol == "file":
-            orig_ds = self.preprocess_zarr(orig_ds, orig_file_path)
-            orig_ds = self.postprocess_zarr(orig_ds)
-
         # Apply standard postprocessing to get other data variables in order
-        processed_orig_ds = self.rename_data_variable(orig_ds)
-
+        ds = self.rename_data_variable(ds)
         # Expand any 1D dimensions as needed. This is necessary for later `sel` operations.
         for time_dim in [
             time_dim
@@ -1023,25 +1016,25 @@ class Publish(Transform):
             if time_dim in self.standard_dims
         ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-            if time_dim in processed_orig_ds and time_dim not in processed_orig_ds.dims:
-                processed_orig_ds = processed_orig_ds.expand_dims(time_dim)
+            if time_dim in ds and time_dim not in ds.dims:
+                ds = ds.expand_dims(time_dim)
 
             # ... or create it from the file name if missing entirely in the raw file
-            elif time_dim not in processed_orig_ds:
-                processed_orig_ds = processed_orig_ds.assign_coords(
+            elif time_dim not in ds:
+                ds = ds.assign_coords(
                     {
                         time_dim: datetime.datetime.strptime(
                             re.search(r"([0-9]{4}-[0-9]{2}-[0-9]{2})", str(orig_file_path))[0], "%Y-%m-%d"
                         )
                     }
                 )
-                processed_orig_ds = processed_orig_ds.expand_dims(time_dim)
+                ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in processed_orig_ds.dims and time_dim not in processed_orig_ds[self.data_var()].dims:
-                processed_orig_ds[self.data_var()] = processed_orig_ds[self.data_var()].expand_dims(time_dim)
+            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
+                ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
 
-        return processed_orig_ds
+        return ds
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:

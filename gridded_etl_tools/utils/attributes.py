@@ -136,9 +136,9 @@ class Attributes(ABC):
     Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
     """
 
-    protocol: str = abstract_class_property(fallback="remote_protocol")
+    protocol: typing.Literal["s3", "file"] = abstract_class_property(fallback="remote_protocol")
     """
-    Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
+    Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'file' for local, 's3'
     for S3, etc. See fsspec docs for more details.
     """
 
