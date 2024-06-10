@@ -334,6 +334,15 @@ class TestConvenience:
         xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None)
 
     @staticmethod
+    def test_get_next_date_as_date_range(mocker, manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.store.dataset = Mock()
+        dm.store.dataset.return_value = fake_original_dataset
+
+        next_date_date_range = dm.get_next_date_as_date_range()
+        assert next_date_date_range == (datetime.datetime(2022, 2, 1), datetime.datetime(2022, 2, 1))
+
+    @staticmethod
     def test_sync_ftp_files(mocker, manager_class, tmp_path):
         ftp_client = DummyFtpClient()
         mocker.patch("gridded_etl_tools.utils.convenience.ftplib", Mock(FTP=ftp_client))
