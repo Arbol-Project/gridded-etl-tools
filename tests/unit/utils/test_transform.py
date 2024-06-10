@@ -915,6 +915,12 @@ class TestTransform:
         )
 
     @staticmethod
+    def test_preprocess_zarr(manager_class):
+        dm = manager_class()
+        dataset = object()
+        assert dm.preprocess_zarr(dataset) is dataset
+
+    @staticmethod
     def test_postprocess_zarr(manager_class):
         dm = manager_class()
         dataset = object()

@@ -1379,13 +1379,68 @@ class TestPublish:
             assert dataset is orig_datasets[i]
 
     @staticmethod
-    def test_get_original_ds_missing_time(manager_class, hindcast_dataset_at):
+    def test_get_original_ds_with_hindcast(manager_class, hindcast_dataset_at):
         timestamps = numpy.arange(
             numpy.datetime64("2021-10-16T00:00:00.000000000"),
             numpy.datetime64("2021-10-26T00:00:00.000000000"),
             numpy.timedelta64(1, "[D]"),
         )
-        orig_datasets = [hindcast_dataset_at(timestamp) for timestamp in timestamps]
+        steps = [numpy.timedelta64(i * 3600000000000, "[ns]") for i in range(1, 6)]
+        ensembles = [i for i in range(1, 6)]
+        forecast_offsets = [numpy.timedelta64(i, "[D]") for i in range(1, 6)]
+        orig_datasets = [hindcast_dataset_at(i) for i in range(5)]
+
+        def raw_file_to_dataset(path):
+            assert path.startswith("test_path_")
+            index = int(path[-1]) - 1
+            ds = orig_datasets[index]
+            return ds
+
+        def path_for(range_num: int) -> list[str]:
+            date_files = []
+            for i in range(0, range_num + 1):
+                date_str = pd.Timestamp(timestamps[i]).to_pydatetime().date().isoformat()
+                date_files.append(f"test_path_time-{date_str}")
+            date_step_files = []
+            for file in date_files:
+                for i in range(1, range_num + 1):
+                    date_step_files.append(file + f"_step-{i}")
+            date_step_ensemble_files = []
+            for file in date_step_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_files.append(file + f"_ensemble-{i}")
+            date_step_ensemble_fro_files = []
+            for file in date_step_ensemble_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_fro_files.append(file + f"_forecast_reference_offset-{i}")
+            return date_step_ensemble_fro_files
+
+        dm = manager_class()
+        dm.raw_file_to_dataset = raw_file_to_dataset
+        dm.input_files = mock.Mock(return_value=path_for(5))
+        dm.time_dim = "hindcast_reference_time"
+
+        for i in range(5):
+            dataset = dm.get_original_ds(
+                {
+                    "x": "nobody",
+                    "y": "cares",
+                    "hindcast_reference_time": timestamps[i],
+                    "step": steps[i],
+                    "ensemble": ensembles[i],
+                    "forecast_reference_offset": forecast_offsets[i],
+                }
+            )
+            assert dataset is orig_datasets[i]
+
+    @staticmethod
+    def test_get_original_ds_missing_time(manager_class, forecast_dataset_at):
+        timestamps = numpy.arange(
+            numpy.datetime64("2021-10-16T00:00:00.000000000"),
+            numpy.datetime64("2021-10-26T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+        orig_datasets = [forecast_dataset_at(timestamp) for timestamp in timestamps]
 
         def raw_file_to_dataset(path):
             assert path.startswith("test_path_")
@@ -1453,7 +1508,7 @@ class TestPublish:
         dm.use_local_zarr_jsons = True
 
         ds = dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
-        xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, "some/path"))
+        xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, pathlib.Path("some/path")))
         dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
 
     @staticmethod
@@ -1464,6 +1519,13 @@ class TestPublish:
         dm.use_local_zarr_jsons = False
         with pytest.raises(ValueError):
             dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
+
+    @staticmethod
+    def test_raw_file_to_dataset_bad_protocol(manager_class):
+        dm = manager_class()
+        dm.protocol = "nopenoway"
+        with pytest.raises(ValueError):
+            dm.raw_file_to_dataset("some/path")
 
     @staticmethod
     def test_reformat_orig_ds(manager_class, fake_original_dataset):

@@ -601,7 +601,7 @@ class Transform(Metadata, Convenience):
 
     # IN-MEMORY TRANSFORMS
 
-    def preprocess_zarr(self, dataset: xr.Dataset, file_path: str) -> xr.Dataset:
+    def preprocess_zarr(self, dataset: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """
         Method to populate with the specific preprocessing routine of each child class (if relevant)
         Essentially replicate much of the kerchunk-based preprocessing such that `postprocess_zarr`
@@ -613,8 +613,6 @@ class Transform(Metadata, Convenience):
         ----------
         dataset : xr.Dataset
             The dataset being processed
-        file_path : str
-            The file path of the dataset in question. Used to
 
         Returns
         -------

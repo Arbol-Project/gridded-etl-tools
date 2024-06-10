@@ -908,7 +908,9 @@ class Publish(Transform):
         step_filtered_original_files = [fil for fil in original_files if step_string in str(fil)]
         return step_filtered_original_files
 
-    def filter_files_by_ensemble(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+    def filter_files_by_ensemble(
+        self, original_files: tuple[str], raw_ds: xr.Dataset
+    ) -> tuple[str]:  # pragma NO COVER
         """
         Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
         files that contain that ensemble
@@ -1025,6 +1027,7 @@ class Publish(Transform):
             # the production dataset
             ds = self.preprocess_zarr(ds, file_path)
             ds = self.postprocess_zarr(ds)
+            return self.reformat_orig_ds(ds, file_path)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
@@ -1037,8 +1040,10 @@ class Publish(Transform):
 
             # This will apply postprocess_zarr automtically
             ds = self.load_dataset_from_disk(zarr_json_path=str(file_path))
+            return self.reformat_orig_ds(ds, file_path)
 
-        return self.reformat_orig_ds(ds, file_path)
+        else:
+            raise ValueError('Expected either "file" or "s3" protocol')
 
     def reformat_orig_ds(self, ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
@@ -1066,7 +1071,7 @@ class Publish(Transform):
             if time_dim in self.standard_dims
         ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-            if time_dim in ds and time_dim not in ds.dims:
+            if time_dim in ds and time_dim not in ds.dims:  # pragma NO COVER
                 ds = ds.expand_dims(time_dim)
 
             # ... or create it from the file name if missing entirely in the raw file

@@ -1,7 +1,6 @@
 import datetime
 import json
 import pathlib
-import cftime
 from unittest.mock import Mock
 
 import numpy as np
@@ -134,21 +133,34 @@ def hindcast_dataset():
 
 @pytest.fixture
 def hindcast_dataset_at():
-    def hindcast_dataset_at(timestamp):
-        time = xr.DataArray(
-            np.array([timestamp]), dims="hindcast_reference_time", coords={"hindcast_reference_time": np.arange(1)}
+    def hindcast_dataset_at(i):
+        hrt = xr.DataArray(
+            np.array([np.datetime64("2021-10-16T00:00:00.000000000") + np.timedelta64(i, "[D]")]),
+            dims="hindcast_reference_time",
+            coords={"hindcast_reference_time": np.arange(1)},
         )
         step = xr.DataArray(
-            np.array([timestamp]) + np.timedelta64(4, "[h]"), dims="step", coords={"step": np.arange(1)}
+            [np.timedelta64((i + 1) * 3600000000000, "[ns]")], dims="step", coords={"step": np.arange(1)}
+        )
+        ensembles = xr.DataArray([np.array(i + 1)], dims="ensemble", coords={"ensemble": np.arange(1)})
+        fro = xr.DataArray(
+            [np.array(np.timedelta64(i + 1, "[D]"))], dims="ensemble", coords={"ensemble": np.arange(1)}
         )
         latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
         longitude = xr.DataArray(
             np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)}
         )
         data = xr.DataArray(
-            np.random.randn(1, 4, 4, 1),
-            dims=("hindcast_reference_time", "latitude", "longitude", "step"),
-            coords=(time, latitude, longitude, step),
+            np.random.randn(1, 1, 1, 1, 4, 4),
+            dims=(
+                "hindcast_reference_time",
+                "step",
+                "ensemble",
+                "forecast_reference_offset",
+                "latitude",
+                "longitude",
+            ),
+            coords=(hrt, step, ensembles, fro, latitude, longitude),
         )
 
         ds = xr.Dataset({"data": data})
