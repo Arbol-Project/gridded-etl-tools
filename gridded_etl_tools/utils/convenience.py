@@ -405,6 +405,8 @@ class Convenience(Attributes):
                 "Dataset has irregular update cadence, so the next date cannot be derived "
                 "programmatically. Please locate the date manually."
             )
+        if not hasattr(self, "time_dim"):
+            self.set_key_dims()
         dataset = self.store.dataset()
         time_delta = dataset[self.time_dim].values[-1] - dataset[self.time_dim].values[-2]
         return self.numpydate_to_py(dataset[self.time_dim].values[-1] + time_delta)
