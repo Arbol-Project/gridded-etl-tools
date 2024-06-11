@@ -809,38 +809,25 @@ class Publish(Transform):
         """
         possible_files = self.filter_files(coords)
 
-        # Select an original dataset containing the same time dimension value as the production dataset
-        # Orig_file_path is unneeded but useful for debugging
+        # Build selection coordinates based on the time dimension
         if self.dataset_category == "observation":
-            orig_ds, orig_file_path = self.binary_search_for_file(
-                coords[self.time_dim], time_dim=self.time_dim, possible_files=possible_files
-            )
-
-        # If a forecast dataset then search again, this time for the correct step
+            selection_coord, selection_time_dim = coords[self.time_dim], self.time_dim
         elif self.dataset_category == "forecast":
-            orig_ds, orig_file_path = self.binary_search_for_file(
-                coords["step"], time_dim="step", possible_files=possible_files
-            )
-
-        # If an ensemble dataset then search again, this time for the correct ensemble number
+            selection_coord, selection_time_dim = coords["step"], "step"
         elif self.dataset_category == "ensemble":
-            orig_ds, orig_file_path = self.binary_search_for_file(
-                coords["ensemble"], time_dim="ensemble", possible_files=possible_files
-            )
-
-        # If a hindcast dataset then search again, this time for the correct forecast_reference_offset
+            selection_coord, selection_time_dim = coords["ensemble"], "ensemble"
         elif self.dataset_category == "hindcast":
-            orig_ds, orig_file_path = self.binary_search_for_file(
-                coords["forecast_reference_offset"],
-                time_dim="forecast_reference_offset",
-                possible_files=possible_files,
-            )
+            selection_coord, selection_time_dim = coords["forecast_reference_offset"], time_dim="forecast_reference_offset"
         else:
             raise ValueError(
                 f"Dataset category {self.dataset_category} does not match known dataset type, "
                 "unclear how to filter out original files"
             )
-
+        # Select an original dataset containing the same time dimension value as the production dataset
+        # Orig_file_path is unneeded but useful for debugging
+        orig_ds, orig_file_path = self.binary_search_for_file(
+            selection_coord, time_dim=selection_time_dim, possible_files=possible_files
+        )
         return orig_ds
 
     def filter_files(self, coords: dict[Any]) -> tuple[str]:
