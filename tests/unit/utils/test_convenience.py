@@ -334,7 +334,15 @@ class TestConvenience:
         xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None)
 
     @staticmethod
-    def test_get_next_date_as_date_range(mocker, manager_class, fake_original_dataset):
+    def test_next_date(manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.store.dataset = Mock()
+        dm.store.dataset.return_value = fake_original_dataset
+
+        assert dm.next_date == datetime.datetime(2022, 2, 1)
+
+    @staticmethod
+    def test_get_next_date_as_date_range(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.store.dataset = Mock()
         dm.store.dataset.return_value = fake_original_dataset
