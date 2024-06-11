@@ -798,9 +798,9 @@ class Publish(Transform):
 
         Parameters
         ----------
-        coords
-            Randomly selected coordinates from the production dataset
-            used to locate the corresponding original dataset.
+        coords : dict[Any]
+            Randomly selected coordinates from the most recently updated portion of the production dataset,
+            used to locate the corresponding original dataset on disk.
 
         Returns
         ----------
@@ -817,21 +817,18 @@ class Publish(Transform):
             )
 
         # If a forecast dataset then search again, this time for the correct step
-        # if "step" in coords:
         elif self.dataset_category == "forecast":
             orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["step"], time_dim="step", possible_files=possible_files
             )
 
         # If an ensemble dataset then search again, this time for the correct ensemble number
-        # if "ensemble" in coords:
         elif self.dataset_category == "ensemble":
             orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["ensemble"], time_dim="ensemble", possible_files=possible_files
             )
 
         # If a hindcast dataset then search again, this time for the correct forecast_reference_offset
-        # if "forecast_reference_offset" in coords:
         elif self.dataset_category == "hindcast":
             orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["forecast_reference_offset"],
@@ -849,6 +846,12 @@ class Publish(Transform):
     def filter_files(self, coords: dict[Any]) -> tuple[str]:
         """
         Filter the entire possible file search space to just the relevant files for these coordinates
+
+        Parameters
+        ----------
+        coords : dict[Any]
+            Randomly selected coordinates from the most recently updated portion of the production dataset,
+            used to locate the corresponding original dataset on disk.
 
         Returns
         -------
