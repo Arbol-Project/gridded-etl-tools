@@ -807,43 +807,64 @@ class Publish(Transform):
         orig_ds
             The original dataset, formatted minimally to allow comparison with the production dataset
         """
-        # Apply any custom filters to the input files. Returns all input files if no custom filter defined.
-        possible_files = self.custom_file_filter(list(self.input_files()))
+        possible_files = self.filter_files(coords)
 
         # Select an original dataset containing the same time dimension value as the production dataset
         # Orig_file_path is unneeded but useful for debugging
-        orig_ds, orig_file_path = self.binary_search_for_file(
-            coords[self.time_dim], time_dim=self.time_dim, possible_files=possible_files
-        )
+        if self.dataset_category == "observation":
+            orig_ds, orig_file_path = self.binary_search_for_file(
+                coords[self.time_dim], time_dim=self.time_dim, possible_files=possible_files
+            )
 
         # If a forecast dataset then search again, this time for the correct step
-        if "step" in coords:
-            time_filtered_original_files = self.filter_files_by_time(original_files=possible_files, raw_ds=orig_ds)
+        # if "step" in coords:
+        elif self.dataset_category == "forecast":
             orig_ds, orig_file_path = self.binary_search_for_file(
-                coords["step"], time_dim="step", possible_files=time_filtered_original_files
+                coords["step"], time_dim="step", possible_files=possible_files
             )
 
         # If an ensemble dataset then search again, this time for the correct ensemble number
-        if "ensemble" in coords:
-            step_filtered_original_files = self.filter_files_by_step(
-                original_files=time_filtered_original_files, raw_ds=orig_ds
-            )
+        # if "ensemble" in coords:
+        elif self.dataset_category == "ensemble":
             orig_ds, orig_file_path = self.binary_search_for_file(
-                coords["ensemble"], time_dim="ensemble", possible_files=step_filtered_original_files
+                coords["ensemble"], time_dim="ensemble", possible_files=possible_files
             )
 
         # If a hindcast dataset then search again, this time for the correct forecast_reference_offset
-        if "forecast_reference_offset" in coords:
-            ensemble_filtered_original_files = self.filter_files_by_ensemble(
-                original_files=step_filtered_original_files, raw_ds=orig_ds
-            )
+        # if "forecast_reference_offset" in coords:
+        elif self.dataset_category == "hindcast":
             orig_ds, orig_file_path = self.binary_search_for_file(
                 coords["forecast_reference_offset"],
                 time_dim="forecast_reference_offset",
-                possible_files=ensemble_filtered_original_files,
+                possible_files=possible_files,
+            )
+        else:
+            raise ValueError(
+                f"Dataset category {self.dataset_category} does not match known dataset type, "
+                "unclear how to filter out original files"
             )
 
         return orig_ds
+
+    def filter_files(self, coords: dict[Any]) -> tuple[str]:
+        """
+        Filter the entire possible file search space to just the relevant files for these coordinates
+
+        Returns
+        -------
+        tuple[str]
+            Relevant files
+        """
+        # Apply any custom filters to the input files. Returns all input files if no custom filter defined.
+        possible_files = self.custom_file_filter(list(self.input_files()))
+        # Filter the list of files down successively for every coordinate
+        if "step" in coords:
+            possible_files = self.filter_files_by_time(original_files=possible_files, coords=coords)
+        if "ensemble" in coords:
+            possible_files = self.filter_files_by_step(original_files=possible_files, coords=coords)
+        if "forecast_reference_offset" in coords:
+            possible_files = self.filter_files_by_ensemble(original_files=possible_files, coords=coords)
+        return possible_files
 
     def custom_file_filter(self, original_files: tuple[str]) -> tuple[str]:
         """
@@ -864,7 +885,7 @@ class Publish(Transform):
         """
         return original_files
 
-    def filter_files_by_time(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+    def filter_files_by_time(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:
         """
         Find the time in a selected raw dataset and filter down a list of local files to include only
         files that contain that time
@@ -874,19 +895,19 @@ class Publish(Transform):
         original_files: tuple[str]
             A list of raw files
 
-        raw_ds : xr.Dataset
-            The raw dataset used for filtering
+        coords : dict[Any]
+            The randomly selected coordinates being used for filtering
 
         Returns
         -------
         time_filtered_original_files : tuple[str]
             A list of raw files, filtered to only contain files that contain the specified time
         """
-        time_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
+        time_string = self.numpydate_to_py(np.atleast_1d(coords[self.time_dim])[0]).date().isoformat()
         time_filtered_original_files = [fil for fil in original_files if time_string in str(fil)]
         return time_filtered_original_files
 
-    def filter_files_by_step(self, original_files: tuple[str], raw_ds: xr.Dataset) -> tuple[str]:
+    def filter_files_by_step(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:
         """
         Find the step number in a selected raw dataset and filter down a list of local files to include only
         files that contain that step number
@@ -896,21 +917,19 @@ class Publish(Transform):
         original_files: tuple[str]
             A list of raw files, similarly filtered to only include files covering a specific forecast step.
 
-        raw_ds : xr.Dataset
-            The raw dataset used for filtering
+        coords : dict[Any]
+            The randomly selected coordinates being used for filtering
 
         Returns
         -------
         step_filtered_original_files : tuple[str]
             A list of raw files, filtered to only contain files that contain the specified step number
         """
-        step_string = "step-" + str(int(raw_ds["step"].values[0] / 3600000000000)) + "_"
+        step_string = "step-" + str(int(coords["step"] / 3600000000000)) + "_"
         step_filtered_original_files = [fil for fil in original_files if step_string in str(fil)]
         return step_filtered_original_files
 
-    def filter_files_by_ensemble(
-        self, original_files: tuple[str], raw_ds: xr.Dataset
-    ) -> tuple[str]:  # pragma NO COVER
+    def filter_files_by_ensemble(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:  # pragma NO COVER
         """
         Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
         files that contain that ensemble
@@ -920,15 +939,15 @@ class Publish(Transform):
         original_files: tuple[str]
             A list of raw files, similarly filtered to only include files covering a specific ensemble number.
 
-        raw_ds : xr.Dataset
-            The raw dataset used for filtering
+        coords : dict[Any]
+            The randomly selected coordinates being used for filtering
 
         Returns
         -------
         ensemble_filtered_original_files : tuple[str]
             A list of raw files, filtered to only contain files that contain the specified ensemble
         """
-        ensemble_string = "ensemble-" + str(raw_ds["ensemble"].values[0]) + "_"
+        ensemble_string = "ensemble-" + str(coords["ensemble"]) + "_"
         ensemble_filtered_original_files = [fil for fil in original_files if ensemble_string in str(fil)]
         return ensemble_filtered_original_files
 
