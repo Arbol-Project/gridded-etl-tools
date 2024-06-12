@@ -713,7 +713,10 @@ class Publish(Transform):
     def filter_search_space(self, prod_ds: xr.Dataset) -> tuple[pathlib.Path]:
         """
         Filter down all input files to only files that are within the update date range
-        on the production dataset
+        on the production dataset.
+
+        NOTE this implicitly relies on input files being sorted by the time dimension,
+        so that the determined bounds encapsulate the entire range of valid data.
 
         Parameters
         ----------
@@ -722,15 +725,13 @@ class Publish(Transform):
 
         Returns
         -------
-        tuple[str]
-            Valid input files
+        tuple[pathlib.Path]
+            A list of valid input files in pathlib.Path format
         """
         possible_files = list(self.input_files())
         production_date_range = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
 
-        lower_bound_index = -1  # The last item in the list is the lower bound
-
-        # Now determine an upper bound using a binary search
+        # Determine an upper bound using a binary search
         left, right = 0, len(possible_files) - 1
         upper_bound_index = -1
 
@@ -743,7 +744,7 @@ class Publish(Transform):
                 left = mid + 1
 
         # Only return file paths within these bounds
-        possible_files = possible_files[upper_bound_index:lower_bound_index]
+        possible_files = possible_files[upper_bound_index:]
         # Apply any additional, custom filtering on the way out
         return self.custom_file_filter(possible_files)
 

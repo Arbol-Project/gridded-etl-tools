@@ -3,6 +3,7 @@ import copy
 import functools
 import operator
 import pathlib
+import re
 
 from unittest import mock
 
@@ -1487,6 +1488,49 @@ class TestPublish:
 
         with pytest.raises(FileNotFoundError):
             dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
+
+    @staticmethod
+    def test_filter_search_space(manager_class, hindcast_dataset):
+
+        timestamps = numpy.arange(
+            numpy.datetime64("2021-10-16T00:00:00.000000000"),
+            numpy.datetime64("2021-10-26T00:00:00.000000000"),
+            numpy.timedelta64(1, "[D]"),
+        )
+
+        def fake_input_files(range_num: int):
+            date_files = []
+            for i in range(0, range_num):
+                date_str = pd.Timestamp(timestamps[i]).to_pydatetime().date().isoformat()
+                date_files.append(f"test_path_time-{date_str}")
+            date_step_files = []
+            for file in date_files:
+                for i in range(1, range_num + 1):
+                    date_step_files.append(file + f"_step-{i}")
+            date_step_ensemble_files = []
+            for file in date_step_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_files.append(file + f"_ensemble-{i}")
+            date_step_ensemble_fro_files = []
+            for file in date_step_ensemble_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_fro_files.append(file + f"_forecast_reference_offset-{i}")
+            return date_step_ensemble_fro_files
+
+        def raw_file_to_dataset(file_path):
+            path_date = numpy.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
+            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": numpy.atleast_1d(path_date)})
+            return raw_ds
+
+        dm = manager_class()
+        dm.dataset_category = "hindcast"
+        dm.set_key_dims()
+        dm.input_files = mock.Mock(return_value=fake_input_files(10))
+        dm.raw_file_to_dataset = mock.Mock(side_effect=raw_file_to_dataset)
+
+        hindcast_dataset.attrs["update_date_range"] = ("2021102400", "2021102500")
+
+        assert len(dm.filter_search_space(hindcast_dataset)) == 2000
 
     @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker, fake_original_dataset):

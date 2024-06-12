@@ -112,18 +112,27 @@ def ensemble_dataset_at():
 
 @pytest.fixture
 def hindcast_dataset():
-    time = xr.DataArray(
-        np.array(original_times), dims="hindcast_reference_time", coords={"hindcast_reference_time": np.arange(138)}
+    hrt = xr.DataArray(
+        np.array([np.datetime64("2021-10-16T00:00:00.000000000")]),
+        dims="hindcast_reference_time",
+        coords={"hindcast_reference_time": np.arange(1)},
     )
-    step = xr.DataArray(
-        np.array(original_times) + np.timedelta64(4, "[h]"), dims="step", coords={"step": np.arange(138)}
-    )
+    step = xr.DataArray([np.timedelta64(3600000000000, "[ns]")], dims="step", coords={"step": np.arange(1)})
+    ensembles = xr.DataArray([np.array(1)], dims="ensemble", coords={"ensemble": np.arange(1)})
+    fro = xr.DataArray([np.array(np.timedelta64(1, "[D]"))], dims="ensemble", coords={"ensemble": np.arange(1)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
     longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
     data = xr.DataArray(
-        np.random.randn(138, 4, 4, 138),
-        dims=("hindcast_reference_time", "latitude", "longitude", "step"),
-        coords=(time, latitude, longitude, step),
+        np.random.randn(1, 1, 1, 1, 4, 4),
+        dims=(
+            "hindcast_reference_time",
+            "step",
+            "ensemble",
+            "forecast_reference_offset",
+            "latitude",
+            "longitude",
+        ),
+        coords=(hrt, step, ensembles, fro, latitude, longitude),
     )
 
     ds = xr.Dataset({"data": data})
