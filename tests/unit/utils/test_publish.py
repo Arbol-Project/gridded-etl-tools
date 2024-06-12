@@ -1106,7 +1106,7 @@ class TestPublish:
         dm = manager_class()
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
-        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
         dm.raw_file_to_dataset = mock.Mock()
         dm.get_prod_update_ds = mock.Mock()
         dm.filter_search_space = mock.Mock()
@@ -1160,7 +1160,7 @@ class TestPublish:
         dm = manager_class()
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
-        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
         dm.raw_file_to_dataset = mock.Mock()
         dm.get_prod_update_ds = mock.Mock()
         dm.filter_search_space = mock.Mock()
@@ -1203,18 +1203,17 @@ class TestPublish:
     @staticmethod
     def test_check_written_value(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy()
-        coord_indices = (42, 2, 3)
 
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_written_value_value_is_out_of_bounds(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] += 10e-4
         with pytest.raises(ValueError):
@@ -1223,7 +1222,6 @@ class TestPublish:
     @staticmethod
     def test_check_written_value_override_threshold(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
 
@@ -1233,9 +1231,10 @@ class TestPublish:
     @staticmethod
     def test_check_written_value_value_one_infinity(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.inf
         with pytest.raises(ValueError):
@@ -1247,22 +1246,34 @@ class TestPublish:
             dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
 
     @staticmethod
-    def test_check_two_infinities_ish(manager_class, fake_original_dataset):
+    def test_check_two_nans(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
 
-        fake_original_dataset.data[coord_indices] = 2e100
+        fake_original_dataset.data[coord_indices] = numpy.nan
+        prod_ds.data[coord_indices] = numpy.nan
+        dm.check_written_value(fake_original_dataset, prod_ds)
+
+    @staticmethod
+    def test_check_two_infinities_ish(manager_class, fake_original_dataset):
+        dm = manager_class()
+        prod_ds = fake_original_dataset.copy(deep=True)
+        coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
+
+        fake_original_dataset.data[coord_indices] = 5e100
         prod_ds.data[coord_indices] = numpy.inf
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_written_value_value_one_nan(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.nan
         with pytest.raises(ValueError):
@@ -1276,68 +1287,14 @@ class TestPublish:
     @staticmethod
     def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.nan
         fake_original_dataset.data[coord_indices] = numpy.nan
         dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
-
-    @staticmethod
-    def test_get_original_ds_missing_time(manager_class, forecast_dataset_at):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        orig_datasets = [forecast_dataset_at(timestamp) for timestamp in timestamps]
-
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:])
-            return orig_datasets[index]
-
-        dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = mock.Mock()
-        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
-
-        with pytest.raises(ValueError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0]})
-
-        dm.reformat_orig_ds.assert_not_called()
-
-    @staticmethod
-    def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        orig_datasets = [dataset_at(timestamp).squeeze() for timestamp in timestamps]
-
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:])
-            ds = orig_datasets[index]
-            ds.attrs["reformat_args"] = (ds, path)
-            return ds
-
-        dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
-
-        for i in range(10):
-            dataset = dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[i]})
-            assert dataset is orig_datasets[i]
-            assert dataset.attrs["reformat_args"] == (dataset, f"test_path_{i:02d}")
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0] - numpy.timedelta64(1, "[D]")})
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
 
     @staticmethod
     def test_filter_search_space(manager_class, hindcast_dataset):
