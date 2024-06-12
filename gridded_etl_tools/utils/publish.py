@@ -5,6 +5,7 @@ import re
 import pprint
 import dask
 import pathlib
+import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
@@ -684,10 +685,17 @@ class Publish(Transform):
             # Instantiate needed objects
             self.set_key_dims()  # in case running w/out Transform/Parse
             prod_ds = self.get_prod_update_ds()
+            possible_files = self.filter_search_space(prod_ds)
 
-            # Run the data check N times, incrementing after every successfuly check
-            for random_coords in itertools.islice(shuffled_coords(prod_ds), checks):
-                self.check_written_value(random_coords, prod_ds, threshold)
+            # Run the data check N times
+            i = 0
+            while i < checks:
+                # Open and reformat the original dataset such that it's comparable with the prod dataset
+                orig_ds = self.raw_file_to_dataset(random.choice(possible_files))
+
+                # Run the checks
+                self.check_written_value(orig_ds, prod_ds, threshold)
+                i += 1
 
                 # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
                 # go ahead and bail.
@@ -701,6 +709,92 @@ class Publish(Transform):
                 "Written values check successfully passed. "
                 f"Checking dataset took {datetime.timedelta(seconds=elapsed)}"
             )
+
+    def filter_search_space(self, prod_ds: xr.Dataset) -> tuple[pathlib.Path]:
+        """
+        Filter down all input files to only files that are within the update date range
+        on the production dataset.
+
+        NOTE this implicitly relies on input files being sorted by the time dimension,
+        so that the determined bounds encapsulate the entire range of valid data.
+
+        Parameters
+        ----------
+        prod_ds : xr.Dataset
+            The production dataset, filtered down to the most recent update
+
+        Returns
+        -------
+        tuple[pathlib.Path]
+            A list of valid input files in pathlib.Path format
+        """
+        possible_files = list(self.input_files())
+        production_date_range = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
+
+        # Determine an upper bound using a binary search
+        left, right = 0, len(possible_files) - 1
+        upper_bound_index = -1
+
+        while left <= right:
+            mid = (left + right) // 2
+            if self.compare_dates(production_date_range, possible_files[mid]):
+                upper_bound_index = mid
+                right = mid - 1
+            else:
+                left = mid + 1
+
+        # Only return file paths within these bounds
+        possible_files = possible_files[upper_bound_index:]
+        # Apply any additional, custom filtering on the way out
+        return self.custom_file_filter(possible_files)
+
+    def compare_dates(
+        self, production_date_range: tuple[datetime.datetime, datetime.datetime], orig_file_path: pathlib.Path
+    ) -> bool:
+        """
+        Assess whether the date in the selected original dataset falls witihn the production
+
+        Parameters
+        ----------
+        production_date_range : tuple[datetime.datetime, datetime.datetime]
+            The date range for the production dataset
+        orig_file_path : pathlib.Path
+            The path to the original file, on disk or remotely
+
+        Returns
+        -------
+        bool
+            _description_
+        """
+        orig_ds = self.raw_file_to_dataset(orig_file_path)
+
+        if (
+            production_date_range[0]
+            <= self.numpydate_to_py(orig_ds[self.time_dim].values[0])
+            <= production_date_range[1]
+        ):
+            return True
+        else:
+            return False
+
+    def custom_file_filter(self, original_files: tuple[str]) -> tuple[str]:
+        """
+        Filter down a list of local files to include only files that meet a custom criteria
+
+        Meant to be modified as a child method.
+
+        Parameters
+        ----------
+        original_files: tuple[str]
+            A list of raw files
+
+        Returns
+        -------
+        tuple[str]
+            A list of raw files, filtered to only contain files that meet the criteria.
+            Defaults to returning the same list as a pass through.
+        """
+        return original_files
 
     def get_prod_update_ds(self) -> xr.Dataset:
         """
@@ -721,7 +815,7 @@ class Publish(Transform):
 
     def check_written_value(
         self,
-        check_coords: dict[Any],
+        orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
         threshold: float = 10e-5,
     ):
@@ -731,10 +825,10 @@ class Publish(Transform):
 
         Parameters
         ----------
-        random_coords
-            A randomly selected set of individual coordinate values from the filtered production dataset
+        orig_ds
+            A randomly selected original dataset
         prod_ds
-            The filtered production dataset
+            The production dataset, filtered down to the time range of the latest update
         orig_file_path
             A pathlib.Path to the randomly selected original file
         threshold
@@ -752,14 +846,14 @@ class Publish(Transform):
         ValueError
             Indicates a potentially problematic mismatch between source data values and values written to production
         """
-        orig_ds = self.get_original_ds(check_coords)
+        selection_coords = self.get_random_coords(orig_ds)
 
-        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
-        selection_coords = {key: check_coords[key] for key in orig_ds.dims}
+        # # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -788,237 +882,7 @@ class Publish(Transform):
         raise ValueError(
             "Mismatch in written values: "
             f"orig_val {orig_val} and prod_val {prod_val}."
-            f"\nQuery parameters: {check_coords}"
-        )
-
-    def get_original_ds(self, coords: dict[Any]) -> xr.Dataset:
-        """
-        Retrieve the original dataset that corresponds to the given coordinates by conducting a consecutive series of
-        binary searches for files matching each coordinate.
-
-        Parameters
-        ----------
-        coords : dict[Any]
-            Randomly selected coordinates from the most recently updated portion of the production dataset,
-            used to locate the corresponding original dataset on disk.
-
-        Returns
-        ----------
-        orig_ds
-            The original dataset, formatted minimally to allow comparison with the production dataset
-        """
-        possible_files = self.filter_files(coords)
-
-        # Build selection coordinates based on the time dimension
-        if self.dataset_category == "observation":
-            selection_coord, selection_time_dim = coords[self.time_dim], self.time_dim
-        elif self.dataset_category == "forecast":
-            selection_coord, selection_time_dim = coords["step"], "step"
-        elif self.dataset_category == "ensemble":
-            selection_coord, selection_time_dim = coords["ensemble"], "ensemble"
-        elif self.dataset_category == "hindcast":
-            selection_coord, selection_time_dim = coords["forecast_reference_offset"], time_dim="forecast_reference_offset"
-        else:
-            raise ValueError(
-                f"Dataset category {self.dataset_category} does not match known dataset type, "
-                "unclear how to filter out original files"
-            )
-        # Select an original dataset containing the same time dimension value as the production dataset
-        # Orig_file_path is unneeded but useful for debugging
-        orig_ds, orig_file_path = self.binary_search_for_file(
-            selection_coord, time_dim=selection_time_dim, possible_files=possible_files
-        )
-        return orig_ds
-
-    def filter_files(self, coords: dict[Any]) -> tuple[str]:
-        """
-        Filter the entire possible file search space to just the relevant files for these coordinates
-
-        Parameters
-        ----------
-        coords : dict[Any]
-            Randomly selected coordinates from the most recently updated portion of the production dataset,
-            used to locate the corresponding original dataset on disk.
-
-        Returns
-        -------
-        tuple[str]
-            Relevant files
-        """
-        # Apply any custom filters to the input files. Returns all input files if no custom filter defined.
-        possible_files = self.custom_file_filter(list(self.input_files()))
-        # Filter the list of files down successively for every coordinate
-        if "step" in coords:
-            possible_files = self.filter_files_by_time(original_files=possible_files, coords=coords)
-        if "ensemble" in coords:
-            possible_files = self.filter_files_by_step(original_files=possible_files, coords=coords)
-        if "forecast_reference_offset" in coords:
-            possible_files = self.filter_files_by_ensemble(original_files=possible_files, coords=coords)
-        return possible_files
-
-    def custom_file_filter(self, original_files: tuple[str]) -> tuple[str]:
-        """
-        Filter down a list of local files to include only files that meet a custom criteria
-
-        Meant to be modified as a child method.
-
-        Parameters
-        ----------
-        original_files: tuple[str]
-            A list of raw files
-
-        Returns
-        -------
-        tuple[str]
-            A list of raw files, filtered to only contain files that meet the criteria.
-            Defaults to returning the same list as a pass through.
-        """
-        return original_files
-
-    def filter_files_by_time(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:
-        """
-        Find the time in a selected raw dataset and filter down a list of local files to include only
-        files that contain that time
-
-        Parameters
-        ----------
-        original_files: tuple[str]
-            A list of raw files
-
-        coords : dict[Any]
-            The randomly selected coordinates being used for filtering
-
-        Returns
-        -------
-        time_filtered_original_files : tuple[str]
-            A list of raw files, filtered to only contain files that contain the specified time
-        """
-        time_string = self.numpydate_to_py(np.atleast_1d(coords[self.time_dim])[0]).date().isoformat()
-        time_filtered_original_files = [fil for fil in original_files if time_string in str(fil)]
-        return time_filtered_original_files
-
-    def filter_files_by_step(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:
-        """
-        Find the step number in a selected raw dataset and filter down a list of local files to include only
-        files that contain that step number
-
-        Parameters
-        ----------
-        original_files: tuple[str]
-            A list of raw files, similarly filtered to only include files covering a specific forecast step.
-
-        coords : dict[Any]
-            The randomly selected coordinates being used for filtering
-
-        Returns
-        -------
-        step_filtered_original_files : tuple[str]
-            A list of raw files, filtered to only contain files that contain the specified step number
-        """
-        step_string = "step-" + str(int(coords["step"] / 3600000000000)) + "_"
-        step_filtered_original_files = [fil for fil in original_files if step_string in str(fil)]
-        return step_filtered_original_files
-
-    def filter_files_by_ensemble(self, original_files: tuple[str], coords: dict[Any]) -> tuple[str]:  # pragma NO COVER
-        """
-        Find the ensemble number in a selected raw dataset and filter down a list of local files to include only
-        files that contain that ensemble
-
-        Parameters
-        ----------
-        original_files: tuple[str]
-            A list of raw files, similarly filtered to only include files covering a specific ensemble number.
-
-        coords : dict[Any]
-            The randomly selected coordinates being used for filtering
-
-        Returns
-        -------
-        ensemble_filtered_original_files : tuple[str]
-            A list of raw files, filtered to only contain files that contain the specified ensemble
-        """
-        ensemble_string = "ensemble-" + str(coords["ensemble"]) + "_"
-        ensemble_filtered_original_files = [fil for fil in original_files if ensemble_string in str(fil)]
-        return ensemble_filtered_original_files
-
-    def binary_search_for_file(
-        self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str]
-    ) -> tuple[xr.Dataset, pathlib.Path]:
-        """
-        Implement a binary search algorithm to find the file containing a desired datetime
-        within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
-        in half until the desired search target (a file with the correct datetime) is found.
-
-        This function assumes each input file represents a single datetime -- the lowest common denominator
-        of time values in the production dataset.
-
-        Parameters
-        ----------
-        coords
-            The coordinates to use to search for the file. Only the time dimension is used.
-        time_dim
-            The name of the time dimension to check against
-        possible_files
-            A list of raw input files to select from. Defaults to list(self.input_files()).
-
-        Returns
-        ----------
-        ds
-            The original dataset, unformatted
-        current_file_path
-            The pathlib.Path to the randomly selected original file
-
-        Raises
-        ------
-        ValueError
-            Indicates that the requested time dimension is not present in the input file,
-            either because the file was improperly prepared or the dimension name improperly specified
-
-        FileNotFoundError
-            Indicates that the requested file could not be found
-        """
-        if not possible_files:
-            raise ValueError(
-                "Empty list of possible files passed to `binary_search_for_file` "
-                f"for time dim {time_dim}. Check your code and resubmit."
-            )
-
-        low, high = 0, len(possible_files) - 1
-        while low <= high:
-            mid = (low + high) // 2
-            current_file_path = possible_files[mid]
-
-            # Reformat the dataset such that it can be selected from equivalently to the prod dataset
-            with self.raw_file_to_dataset(current_file_path) as ds:
-
-                if time_dim in ds:
-                    # Extract time values and convert them to an array for len() and filtering, if of length 1
-                    # These should already be formatted in a np.datetime64 format via `raw_file_to_dataset`
-                    time_values = np.atleast_1d(ds[time_dim].values)
-                    # Return the file name if the target_datetime is equal to the time value in the file,
-                    # otherwise cut the search space in half based on whether the file's datetime is later (greater)
-                    # or earlier (lesser) than the target datetime
-                    if target_datetime == time_values:
-                        return ds, current_file_path
-
-                    # Found datetime is later than the target, look only in earlier files going foward
-                    elif target_datetime < time_values[len(time_values) // 2]:
-                        high = mid - 1
-
-                    # Found datetime is earlier than the target, look only in later files going foward
-                    else:
-                        low = mid + 1
-                else:
-                    raise ValueError(
-                        f"Time dimension {time_dim} not found in {current_file_path}!"
-                        "Check that the time dimension was properly specified and the input files "
-                        "correctly prepared."
-                    )
-
-        raise FileNotFoundError(
-            f"No file found during binary search over dimension {time_dim}. "
-            f"Last search values target datetime: {target_datetime} "
-            f" low: {low}, high: {high}, {len(possible_files)} total possible_files."
+            f"\nQuery parameters: {selection_coords}"
         )
 
     def raw_file_to_dataset(self, file_path: str) -> xr.Dataset:

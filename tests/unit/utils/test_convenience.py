@@ -338,17 +338,56 @@ class TestConvenience:
         dm = manager_class()
         dm.store.dataset = Mock()
         dm.store.dataset.return_value = fake_original_dataset
+        dm.set_key_dims = Mock()
+
+        dm.set_key_dims.assert_not_called()
+        assert dm.next_date == datetime.datetime(2022, 2, 1)
+
+    @staticmethod
+    def test_next_date_irregular_cadence(mocker, manager_class, fake_original_dataset):
+        mocker.patch(
+            "gridded_etl_tools.dataset_manager.DatasetManager.update_cadence_bounds", return_value=["doesnt", "matter"]
+        )
+        dm = manager_class()
+        dm.store.dataset = Mock()
+        dm.store.dataset.return_value = fake_original_dataset
+
+        with pytest.raises(ValueError):
+            dm.next_date
+
+    @staticmethod
+    def test_next_date_no_key_dims(manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.store.dataset = Mock()
+        dm.store.dataset.return_value = fake_original_dataset
+        del dm.time_dim
+        dm.set_key_dims = Mock(side_effect=dm.set_key_dims)
 
         assert dm.next_date == datetime.datetime(2022, 2, 1)
+        dm.set_key_dims.assert_called_once_with()
 
     @staticmethod
     def test_get_next_date_as_date_range(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.store.dataset = Mock()
         dm.store.dataset.return_value = fake_original_dataset
+        dm.set_key_dims = Mock(side_effect=dm.set_key_dims)
 
         next_date_date_range = dm.get_next_date_as_date_range()
         assert next_date_date_range == (datetime.datetime(2022, 2, 1), datetime.datetime(2022, 2, 1))
+        dm.set_key_dims.assert_not_called()
+
+    @staticmethod
+    def test_get_next_date_as_date_range_irregular_cadence(mocker, manager_class, fake_original_dataset):
+        mocker.patch(
+            "gridded_etl_tools.dataset_manager.DatasetManager.update_cadence_bounds", return_value=["doesnt", "matter"]
+        )
+        dm = manager_class()
+        dm.store.dataset = Mock()
+        dm.store.dataset.return_value = fake_original_dataset
+
+        with pytest.raises(ValueError):
+            dm.get_next_date_as_date_range()
 
     @staticmethod
     def test_sync_ftp_files(mocker, manager_class, tmp_path):
