@@ -3,15 +3,16 @@ import copy
 import functools
 import operator
 import pathlib
+import re
 
 from unittest import mock
 
 import numpy
 import pandas as pd
+import xarray as xr
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from ...common import convert_raw_times_to_numpy_times
 
 
 class fake_vmem(dict):
@@ -1102,65 +1103,90 @@ class TestPublish:
 
     @staticmethod
     def test_post_parse_quality_check(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
-        # Something about setting this return value is confusing coverage
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
-
         dm = manager_class()
+        dm.set_key_dims = mock.Mock()
+        dm.get_random_coords = mock.Mock()
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
+        dm.raw_file_to_dataset = mock.Mock()
         dm.get_prod_update_ds = mock.Mock()
+        dm.filter_search_space = mock.Mock()
+        random = mocker.patch("gridded_etl_tools.utils.publish.random")
+
+        orig_ds = dm.raw_file_to_dataset.return_value
         prod_ds = dm.get_prod_update_ds.return_value
 
-        def check_written_value(coords, dataset, threshold):
-            assert dataset is prod_ds
+        def check_written_value(dataset1, dataset2, threshold):
+            assert dataset1 is orig_ds
+            assert dataset2 is prod_ds
             assert threshold == 10e-5
 
         dm.check_written_value = check_written_value
 
         dm.post_parse_quality_check()
 
-        shuffled_coords.assert_called_once_with(prod_ds)
+        # assert setup functions called once
+        dm.set_key_dims.assert_called_once_with()
+        dm.filter_search_space.assert_called_once_with(prod_ds)
         dm.get_prod_update_ds.assert_called_once_with()
+        # assert functions called in loop
+        assert random.choice.call_count == 100
+        random.choice.assert_called_with(dm.filter_search_space())
+        assert dm.raw_file_to_dataset.call_count == 100
+        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
 
     @staticmethod
     def test_post_parse_quality_check_skip_it(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
-        # Something about setting this return value is confusing coverage
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
-
         dm = manager_class()
-        dm.get_prod_update_ds = mock.Mock()
         dm.skip_post_parse_qc = True
+        dm.set_key_dims = mock.Mock()
+        dm.raw_file_to_dataset = mock.Mock()
+        dm.get_prod_update_ds = mock.Mock()
+        dm.filter_search_space = mock.Mock()
         dm.check_written_value = mock.Mock()
 
         dm.post_parse_quality_check()
 
-        shuffled_coords.assert_not_called()
+        dm.set_key_dims.assert_not_called()
         dm.get_prod_update_ds.assert_not_called()
+        dm.filter_search_space.assert_not_called()
+        dm.raw_file_to_dataset.assert_not_called()
         dm.check_written_value.assert_not_called()
 
     @staticmethod
     def test_post_parse_quality_check_timeout(manager_class, mocker):
-        shuffled_coords = mocker.patch("gridded_etl_tools.utils.publish.shuffled_coords")
-        # Something about setting this return value is confusing coverage
-        shuffled_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO BRANCH
         time = mocker.patch("gridded_etl_tools.utils.publish.time")
         time.perf_counter = mock.Mock(side_effect=[0, 1, 2, 5000, 5001])
 
         dm = manager_class()
+        dm.set_key_dims = mock.Mock()
+        dm.get_random_coords = mock.Mock()
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
+        dm.raw_file_to_dataset = mock.Mock()
         dm.get_prod_update_ds = mock.Mock()
+        dm.filter_search_space = mock.Mock()
+        random = mocker.patch("gridded_etl_tools.utils.publish.random")
+
+        orig_ds = dm.raw_file_to_dataset.return_value
         prod_ds = dm.get_prod_update_ds.return_value
 
-        def check_written_value(coords, dataset, threshold):
-            assert dataset is prod_ds
+        def check_written_value(dataset1, dataset2, threshold):
+            assert dataset1 is orig_ds
+            assert dataset2 is prod_ds
             assert threshold == 10e-5
-            return coords["a"] % 3 == 0
 
         dm.check_written_value = check_written_value
 
         dm.post_parse_quality_check()
 
-        shuffled_coords.assert_called_once_with(prod_ds)
+        # assert setup functions called once
+        dm.set_key_dims.assert_called_once_with()
+        dm.filter_search_space.assert_called_once_with(prod_ds)
         dm.get_prod_update_ds.assert_called_once_with()
+        # assert functions called in loop
+        assert random.choice.call_count == 3
+        random.choice.assert_called_with(dm.filter_search_space())
+        assert dm.raw_file_to_dataset.call_count == 3
+        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
 
     @staticmethod
     def test_get_prod_update_ds(manager_class, fake_original_dataset):
@@ -1177,237 +1203,163 @@ class TestPublish:
     @staticmethod
     def test_check_written_value(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy()
-        coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
 
-        dm.check_written_value(check_coords, prod_ds)
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_written_value_value_is_out_of_bounds(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] += 10e-4
         with pytest.raises(ValueError):
-            dm.check_written_value(check_coords, prod_ds)
+            dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_written_value_override_threshold(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
 
         prod_ds.data[coord_indices] += 10e-4
-        dm.check_written_value(check_coords, prod_ds, threshold=10e-3)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=10e-3)
 
     @staticmethod
     def test_check_written_value_value_one_infinity(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(check_coords, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
         fake_original_dataset.data[coord_indices] = numpy.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(check_coords, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+
+    @staticmethod
+    def test_check_two_nans(manager_class, fake_original_dataset):
+        dm = manager_class()
+        prod_ds = fake_original_dataset.copy(deep=True)
+        coord_indices = (42, 2, 3)
+
+        fake_original_dataset.data[coord_indices] = numpy.nan
+        prod_ds.data[coord_indices] = numpy.nan
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_two_infinities_ish(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        fake_original_dataset.data[coord_indices] = 2e100
+        fake_original_dataset.data[coord_indices] = 5e100
         prod_ds.data[coord_indices] = numpy.inf
-        dm.check_written_value(check_coords, prod_ds)
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
     def test_check_written_value_value_one_nan(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(check_coords, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
         fake_original_dataset.data[coord_indices] = numpy.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(check_coords, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
 
     @staticmethod
     def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.get_original_ds = mock.Mock(return_value=fake_original_dataset)
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
-        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(prod_ds.dims, coord_indices)}
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         prod_ds.data[coord_indices] = numpy.nan
         fake_original_dataset.data[coord_indices] = numpy.nan
-        dm.check_written_value(check_coords, prod_ds, threshold=numpy.inf)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
 
     @staticmethod
-    def test_get_original_ds(manager_class, dataset_at):
+    def test_filter_search_space(manager_class, hindcast_dataset):
+
         timestamps = numpy.arange(
             numpy.datetime64("2021-10-16T00:00:00.000000000"),
             numpy.datetime64("2021-10-26T00:00:00.000000000"),
             numpy.timedelta64(1, "[D]"),
         )
-        orig_datasets = [dataset_at(timestamp) for timestamp in timestamps]
 
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:])
-            return orig_datasets[index]
+        def fake_input_files(range_num: int):
+            date_files = []
+            for i in range(0, range_num):
+                date_str = pd.Timestamp(timestamps[i]).to_pydatetime().date().isoformat()
+                date_files.append(f"test_path_time-{date_str}")
+            date_step_files = []
+            for file in date_files:
+                for i in range(1, range_num + 1):
+                    date_step_files.append(file + f"_step-{i}")
+            date_step_ensemble_files = []
+            for file in date_step_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_files.append(file + f"_ensemble-{i}")
+            date_step_ensemble_fro_files = []
+            for file in date_step_ensemble_files:
+                for i in range(1, range_num + 1):
+                    date_step_ensemble_fro_files.append(file + f"_forecast_reference_offset-{i}")
+            return date_step_ensemble_fro_files
 
-        def reformat_orig_ds(ds, path):
-            ds.attrs["reformat_args"] = (ds, path)
-            return ds
-
-        dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
-        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
-
-        for i in range(10):
-            dataset = dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[i]})
-            assert dataset is orig_datasets[i]
-            assert dataset.attrs["reformat_args"] == (dataset, f"test_path_{i:02d}")
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0] - numpy.timedelta64(1, "[D]")})
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
-
-    @staticmethod
-    def test_get_original_ds_with_step(manager_class, hindcast_dataset_at):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        steps = timestamps + numpy.timedelta64(4, "[h]")
-        orig_datasets = [hindcast_dataset_at(timestamp) for timestamp in timestamps]
-
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:12])
-            return orig_datasets[index]
-
-        def reformat_orig_ds(ds, path):
-            ds.attrs["reformat_args"] = (ds, path)
-            return ds
-
-        def path_for(i: int) -> str:
-            date_str = pd.Timestamp(timestamps[i]).to_pydatetime().date().isoformat()
-            return f"test_path_{i:02d}_{date_str}"
+        def raw_file_to_dataset(file_path):
+            path_date = numpy.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
+            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": numpy.atleast_1d(path_date)})
+            return raw_ds
 
         dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
-        dm.input_files = mock.Mock(return_value=[path_for(i) for i in range(10)])
-        dm.time_dim = "hindcast_reference_time"
+        dm.dataset_category = "hindcast"
+        dm.set_key_dims()
+        dm.input_files = mock.Mock(return_value=fake_input_files(10))
+        dm.raw_file_to_dataset = mock.Mock(side_effect=raw_file_to_dataset)
 
-        for i in range(10):
-            dataset = dm.get_original_ds(
-                {"x": "nobody", "y": "cares", "hindcast_reference_time": timestamps[i], "step": steps[i]}
-            )
-            assert dataset is orig_datasets[i]
-            assert dataset.attrs["reformat_args"] == (dataset, path_for(i))
+        hindcast_dataset.attrs["update_date_range"] = ("2021102400", "2021102500")
+
+        assert len(dm.filter_search_space(hindcast_dataset)) == 2000
 
     @staticmethod
-    def test_get_original_ds_missing_time(manager_class, hindcast_dataset_at):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        orig_datasets = [hindcast_dataset_at(timestamp) for timestamp in timestamps]
-
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:])
-            return orig_datasets[index]
-
-        dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = mock.Mock()
-        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
-
-        with pytest.raises(ValueError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0]})
-
-        dm.reformat_orig_ds.assert_not_called()
-
-    @staticmethod
-    def test_get_original_ds_dimensionless_time(manager_class, dataset_at):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        orig_datasets = [dataset_at(timestamp).squeeze() for timestamp in timestamps]
-
-        def raw_file_to_dataset(path):
-            assert path.startswith("test_path_")
-            index = int(path[10:])
-            return orig_datasets[index]
-
-        def reformat_orig_ds(ds, path):
-            ds.attrs["reformat_args"] = (ds, path)
-            return ds
-
-        dm = manager_class()
-        dm.raw_file_to_dataset = raw_file_to_dataset
-        dm.reformat_orig_ds = reformat_orig_ds
-        dm.input_files = mock.Mock(return_value=[f"test_path_{i:02d}" for i in range(10)])
-
-        for i in range(10):
-            dataset = dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[i]})
-            assert dataset is orig_datasets[i]
-            assert dataset.attrs["reformat_args"] == (dataset, f"test_path_{i:02d}")
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[0] - numpy.timedelta64(1, "[D]")})
-
-        with pytest.raises(FileNotFoundError):
-            dm.get_original_ds({"x": "nobody", "y": "cares", "time": timestamps[9] + numpy.timedelta64(1, "[D]")})
-
-    @staticmethod
-    def test_raw_file_to_dataset_file(manager_class, mocker):
+    def test_raw_file_to_dataset_file(manager_class, mocker, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dm = manager_class()
         dm.protocol = "file"
-        assert dm.raw_file_to_dataset("some/path") is xr.open_dataset.return_value
+        dm.preprocess_zarr = mock.Mock()
+        dm.postprocess_zarr = mock.Mock(return_value=fake_original_dataset)
+        ds = dm.raw_file_to_dataset("some/path")
+        assert ds == dm.reformat_orig_ds(fake_original_dataset, "some/path")
         xr.open_dataset.assert_called_once_with("some/path")
 
     @staticmethod
-    def test_raw_file_to_dataset_s3(manager_class):
+    def test_raw_file_to_dataset_s3(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.load_dataset_from_disk = mock.Mock()
+        dm.load_dataset_from_disk.return_value = fake_original_dataset
         dm.protocol = "s3"
         dm.use_local_zarr_jsons = True
-        assert dm.raw_file_to_dataset(pathlib.PosixPath("some/path")) is dm.load_dataset_from_disk.return_value
+
+        ds = dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
+        xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, pathlib.Path("some/path")))
         dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
 
     @staticmethod
@@ -1429,79 +1381,57 @@ class TestPublish:
     @staticmethod
     def test_reformat_orig_ds(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=fake_original_dataset)
         dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
 
-        dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(fake_original_dataset)
-
-    @staticmethod
-    def test_reformat_orig_ds_file_protocol(manager_class, fake_original_dataset):
-        dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
-        dm.protocol = "file"
-        dm.reformat_orig_ds(fake_original_dataset, "hi/mom.zarr")
-
-        dm.postprocess_zarr.assert_called_once_with(fake_original_dataset)
-        dm.rename_data_variable.assert_called_once_with(dm.postprocess_zarr.return_value)
 
     @staticmethod
     def test_reformat_orig_ds_single_time_instant(manager_class, single_time_instant_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
         orig_dataset = single_time_instant_dataset.squeeze()
-        dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
+        dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
-        dataset = dm.rename_data_variable.call_args[0][0]
         assert "time" in dataset.dims
 
-        dm.postprocess_zarr.assert_not_called()
-        dm.rename_data_variable.assert_called_once_with(dataset)
+        dm.rename_data_variable.assert_called_once_with(orig_dataset)
+
+    @staticmethod
+    def test_reformat_orig_ds_no_time_at_all(manager_class, single_time_instant_dataset):
+        dm = manager_class()
+        dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
+        orig_dataset = single_time_instant_dataset.squeeze().drop("time")
+        dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
+
+        assert "time" in dataset
+
+        dm.rename_data_variable.assert_called_once_with(orig_dataset)
+
+    @staticmethod
+    def test_reformat_orig_ds_no_time_in_data_var(manager_class, single_time_instant_dataset):
+        dm = manager_class()
+        dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
+        orig_dataset = single_time_instant_dataset
+        orig_dataset[dm.data_var()] = orig_dataset[dm.data_var()].squeeze()
+        dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
+
+        assert "time" in dataset[dm.data_var()].dims
+
+        dm.rename_data_variable.assert_called_once_with(orig_dataset)
 
     @staticmethod
     def test_reformat_orig_ds_missing_step_dimension(manager_class, fake_original_dataset):
         dm = manager_class()
-        dm.postprocess_zarr = mock.Mock()
-        dm.rename_data_variable = mock.Mock()
+        dm.rename_data_variable = mock.Mock(return_value=fake_original_dataset)
         dm.standard_dims += ["step"]
-        dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
+        dataset = dm.reformat_orig_ds(fake_original_dataset, "hi/mom-2022-07-04.zarr")
 
-        dataset = dm.rename_data_variable.call_args[0][0]
         assert "step" in dataset
         assert "step" in dataset.dims
         assert dataset.step[0] == numpy.datetime64("2022-07-04T00:00:00.000000000")
 
-        dm.postprocess_zarr.assert_not_called()
         dm.rename_data_variable.assert_called_once_with(dataset)
-
-    @staticmethod
-    def test_convert_standard_raw_times_to_comparable_times(manager_class, fake_original_dataset):
-        dm = manager_class()
-        time_vals = dm.convert_raw_times_to_comparable_times(fake_original_dataset, time_dim="time")
-        assert isinstance(time_vals, (list, numpy.ndarray))
-        assert len(time_vals)
-        assert numpy.datetime64("1900-01-01") < time_vals[0]
-
-    @staticmethod
-    def test_convert_weird_raw_times_to_comparable_times(mocker, manager_class, single_esoteric_time_instant_dataset):
-        dm = manager_class()
-        mocker.patch(
-            "gridded_etl_tools.utils.publish.Publish.convert_raw_times_to_numpy_times",
-            convert_raw_times_to_numpy_times,
-        )
-        time_vals = dm.convert_raw_times_to_comparable_times(single_esoteric_time_instant_dataset, time_dim="time")
-        assert isinstance(time_vals, (list, numpy.ndarray))
-        assert len(time_vals)
-        assert numpy.datetime64("1900-01-01") < time_vals[0]
-
-    @staticmethod
-    def test_convert_raw_times_to_numpy_times(manager_class, fake_original_dataset):
-        dm = manager_class()
-        time_coords = fake_original_dataset.time.values
-        numpy.testing.assert_equal(dm.convert_raw_times_to_numpy_times(fake_original_dataset.time), time_coords)
 
 
 class DummyDataset(UserDict):

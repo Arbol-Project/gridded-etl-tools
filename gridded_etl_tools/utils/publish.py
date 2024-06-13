@@ -5,6 +5,7 @@ import re
 import pprint
 import dask
 import pathlib
+import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
@@ -606,7 +607,7 @@ class Publish(Transform):
             )
 
         # Check that the first value of the append times and the last value of the original dataset are contiguous
-        # Skip if original dataset time dim is of len 1 becasue there's no way to calculate an expected delta in situ
+        # Skip if original dataset time dim is of len 1 because there's no way to calculate an expected delta in situ
         if append_times and len(original_dataset[self.time_dim]) > 1:
             original_append_bridge_times = [original_dataset[self.time_dim].values[-1], append_times[0]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
@@ -684,10 +685,17 @@ class Publish(Transform):
             # Instantiate needed objects
             self.set_key_dims()  # in case running w/out Transform/Parse
             prod_ds = self.get_prod_update_ds()
+            possible_files = self.filter_search_space(prod_ds)
 
-            # Run the data check N times, incrementing after every successfuly check
-            for random_coords in itertools.islice(shuffled_coords(prod_ds), checks):
-                self.check_written_value(random_coords, prod_ds, threshold)
+            # Run the data check N times
+            i = 0
+            while i < checks:
+                # Open and reformat the original dataset such that it's comparable with the prod dataset
+                orig_ds = self.raw_file_to_dataset(random.choice(possible_files))
+
+                # Run the checks
+                self.check_written_value(orig_ds, prod_ds, threshold)
+                i += 1
 
                 # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
                 # go ahead and bail.
@@ -701,6 +709,68 @@ class Publish(Transform):
                 "Written values check successfully passed. "
                 f"Checking dataset took {datetime.timedelta(seconds=elapsed)}"
             )
+
+    def filter_search_space(self, prod_ds: xr.Dataset) -> tuple[pathlib.Path]:
+        """
+        Filter down all input files to only files that are within the update date range
+        on the production dataset.
+
+        NOTE this implicitly relies on input files being sorted by the time dimension,
+        so that the determined bounds encapsulate the entire range of valid data.
+
+        Parameters
+        ----------
+        prod_ds : xr.Dataset
+            The production dataset, filtered down to the most recent update
+
+        Returns
+        -------
+        tuple[pathlib.Path]
+            A list of valid input files in pathlib.Path format
+        """
+        possible_files = list(self.input_files())
+        production_date_range = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
+
+        # Determine an upper bound using a binary search
+        left, right = 0, len(possible_files) - 1
+        upper_bound_index = -1
+
+        while left <= right:
+            mid = (left + right) // 2
+            if self.dataset_date_in_range(date_range=production_date_range, file_path=possible_files[mid]):
+                upper_bound_index = mid
+                right = mid - 1
+            else:
+                left = mid + 1
+
+        # Return file paths within these bounds
+        return possible_files[upper_bound_index:]
+
+    def dataset_date_in_range(
+        self, date_range: tuple[datetime.datetime, datetime.datetime], file_path: pathlib.Path
+    ) -> bool:
+        """
+        Assess whether the date in the selected original dataset falls within a specified date range,
+        implicitly derived from the most recent update to the production dateaset
+
+        Parameters
+        ----------
+        date_range : tuple[datetime.datetime, datetime.datetime]
+            The date range for the production dataset
+        file_path : pathlib.Path
+            The path to the original file, on disk or remotely
+
+        Returns
+        -------
+        bool
+            An indication of whether a single datetime dataset falls within a specified date range
+        """
+        orig_ds = self.raw_file_to_dataset(file_path)
+
+        if date_range[0] <= self.numpydate_to_py(orig_ds[self.time_dim].values[0]) <= date_range[1]:
+            return True
+        else:
+            return False
 
     def get_prod_update_ds(self) -> xr.Dataset:
         """
@@ -721,7 +791,7 @@ class Publish(Transform):
 
     def check_written_value(
         self,
-        check_coords: dict[Any],
+        orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
         threshold: float = 10e-5,
     ):
@@ -731,10 +801,10 @@ class Publish(Transform):
 
         Parameters
         ----------
-        random_coords
-            A randomly selected set of individual coordinate values from the filtered production dataset
+        orig_ds
+            A randomly selected original dataset
         prod_ds
-            The filtered production dataset
+            The production dataset, filtered down to the time range of the latest update
         orig_file_path
             A pathlib.Path to the randomly selected original file
         threshold
@@ -752,14 +822,14 @@ class Publish(Transform):
         ValueError
             Indicates a potentially problematic mismatch between source data values and values written to production
         """
-        orig_ds = self.get_original_ds(check_coords)
+        selection_coords = self.get_random_coords(orig_ds)
 
-        # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
-        selection_coords = {key: check_coords[key] for key in orig_ds.dims}
+        # # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
+        # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords).values
+        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -788,111 +858,7 @@ class Publish(Transform):
         raise ValueError(
             "Mismatch in written values: "
             f"orig_val {orig_val} and prod_val {prod_val}."
-            f"\nQuery parameters: {check_coords}"
-        )
-
-    def get_original_ds(self, coords: dict[Any]) -> xr.Dataset:
-        """
-        Retrieve the original dataset that corresponds to the given coordinates.
-
-        Parameters
-        ----------
-        coords
-            The coordinates to used to locate the original dataset.
-
-        Returns
-        ----------
-        orig_ds
-            The original dataset, unformatted
-        """
-        # Randomly select an original dataset
-        raw_ds, orig_file_path = self.binary_search_for_file(coords[self.time_dim], time_dim=self.time_dim)
-
-        # If a forecast dataset then search again, this time for the correct step
-        if "step" in coords:
-            frt_string = self.numpydate_to_py(np.atleast_1d(raw_ds[self.time_dim])[0]).date().isoformat()
-            date_filtered_original_files = [fil for fil in list(self.input_files()) if frt_string in str(fil)]
-            raw_ds, orig_file_path = self.binary_search_for_file(
-                coords["step"], time_dim="step", possible_files=date_filtered_original_files
-            )
-
-        # Reformat the dataset such that it can be selected from equivalently to the prod dataset
-        orig_ds = self.reformat_orig_ds(raw_ds, orig_file_path)
-        return orig_ds
-
-    def binary_search_for_file(
-        self, target_datetime: np.datetime64, time_dim: str, possible_files: list[str] | None = None
-    ) -> tuple[xr.Dataset, pathlib.Path]:
-        """
-        Implement a binary search algorithm to find the file containing a desired datetime
-        within a sorted list of input files. Binary search repeatedly cuts the search space (available list indices)
-        in half until the desired search target (a file with the correct datetime) is found.
-
-        This function assumes each input file represents a single datetime -- the lowest common denominator
-        of time values in the production dataset.
-
-        Parameters
-        ----------
-        coords
-            The coordinates to use to search for the file. Only the time dimension is used.
-        time_dim
-            The name of the time dimension to check against
-        possible_files
-            A list of raw input files to select from. Defaults to list(self.input_files()).
-
-        Returns
-        ----------
-        ds
-            The original dataset, unformatted
-        current_file_path
-            The pathlib.Path to the randomly selected original file
-
-        Raises
-        ------
-        ValueError
-            Indicates that the requested time dimension is not present in the input file,
-            either because the file was improperly prepared or the dimension name improperly specified
-
-        FileNotFoundError
-            Indicates that the requested file could not be found
-        """
-        if not possible_files:
-            possible_files = list(self.input_files())
-
-        low, high = 0, len(possible_files) - 1
-        while low <= high:
-            mid = (low + high) // 2
-            current_file_path = possible_files[mid]
-
-            with self.raw_file_to_dataset(current_file_path) as ds:
-                if time_dim in ds:
-                    # Extract time values
-                    time_values = self.convert_raw_times_to_comparable_times(ds, time_dim=time_dim)
-
-                    # Return the file name if the target_datetime is equal to the time value in the file,
-                    # otherwise cut the search space in half based on whether the file's datetime is later (greater)
-                    # or earlier (lesser) than the target datetime
-                    if target_datetime == time_values:
-                        return ds, current_file_path
-
-                    # Found datetime is later than the target, look only in earlier files going foward
-                    elif target_datetime < time_values[len(time_values) // 2]:
-                        high = mid - 1
-
-                    # Found datetime is earlier than the target, look only in later files going foward
-                    else:
-                        low = mid + 1
-                else:
-                    raise ValueError(
-                        f"Time dimension {time_dim} not found in {current_file_path}!"
-                        "Check that the time dimension was properly specified and the input files "
-                        "correctly prepared."
-                    )
-
-        raise FileNotFoundError(
-            "No file found during binary search. "
-            f"Last search values target datetime: {target_datetime} "
-            f" low: {low}, high: {high}, possible_files: {possible_files}."
+            f"\nQuery parameters: {selection_coords}"
         )
 
     def raw_file_to_dataset(self, file_path: str) -> xr.Dataset:
@@ -905,7 +871,12 @@ class Publish(Transform):
             A file path
         """
         if self.protocol == "file":
-            return xr.open_dataset(file_path, **self.open_dataset_kwargs)
+            ds = xr.open_dataset(file_path, **self.open_dataset_kwargs)
+            # Apply pre- and post-processing so that file can be selected from equivalently to
+            # the production dataset
+            ds = self.preprocess_zarr(ds, file_path)
+            ds = self.postprocess_zarr(ds)
+            return self.reformat_orig_ds(ds, file_path)
 
         # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
         elif self.protocol == "s3":
@@ -916,81 +887,59 @@ class Publish(Transform):
                     "Please enable `use_local_zarr_jsons` to permit post-parse QC"
                 )
 
-            # Note this will apply postprocess_zarr automtically
-            return self.load_dataset_from_disk(zarr_json_path=str(file_path))
+            # This will apply postprocess_zarr automtically
+            ds = self.load_dataset_from_disk(zarr_json_path=str(file_path))
+            return self.reformat_orig_ds(ds, file_path)
 
         else:
             raise ValueError('Expected either "file" or "s3" protocol')
 
-    def convert_raw_times_to_comparable_times(self, ds: xr.Dataset, time_dim: str) -> np.ndarray:
-        """
-        Convert times in the raw data to an array or list of values that can be compared to
-        the published data values w/in the binary_search function.
-
-        Parameters
-        ----------
-        ds : xr.Dataset
-            The raw dataset
-
-        Returns
-        -------
-        np.array
-            An array or list of converted time values
-        """
-        # Extract time values and convert them to an array for len() and filtering, if of length 1
-        time_values = np.atleast_1d(ds[time_dim].values)
-
-        # Convert any raw time values in esoteric formats that break the binary search comparison logic.
-        # NOTE the expectation is that the `convert_raw_times` function is defined w/in the ETL manager
-        if type(time_values[0]) is not np.datetime64:
-            time_values = self.convert_raw_times_to_numpy_times(time_values)
-
-        return time_values
-
-    def convert_raw_times_to_numpy_times(self, raw_times: np.ndarray) -> np.ndarray:
-        """Placeholder for custom function to be defined within managers that need it"""
-        return raw_times
-
-    def reformat_orig_ds(self, orig_ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
+    def reformat_orig_ds(self, ds: xr.Dataset, orig_file_path: pathlib.Path) -> xr.Dataset:
         """
         Open and reformat the original dataset so it can be selected from identically to the production dataset
         Basically re-run key elements of the transform step
 
         Parameters
         ----------
-        orig_ds
+        ds
             The original dataset, unformatted
         orig_file_path
             A pathlib.Path to the randomly selected original file
 
         Returns
         -------
-        orig_ds
+        ds
             The original dataset, reformatted similarly to the production dataset
         """
-        for time_dim in [time_dim for time_dim in [self.time_dim, "step"] if time_dim in self.standard_dims]:
+        # Apply standard postprocessing to get other data variables in order
+        ds = self.rename_data_variable(ds)
+        # Expand any 1D dimensions as needed. This is necessary for later `sel` operations.
+        for time_dim in [
+            time_dim
+            for time_dim in [self.time_dim, "step", "ensemble", "forecast_reference_offset"]
+            if time_dim in self.standard_dims
+        ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
-            if time_dim in orig_ds and time_dim not in orig_ds.dims:
-                orig_ds = orig_ds.expand_dims(time_dim)
+            # for some reason this is unrecognized by cover, although tested in two places
+            if time_dim in ds and time_dim not in ds.dims:  # pragma NO COVER
+                ds = ds.expand_dims(time_dim)
 
             # ... or create it from the file name if missing entirely in the raw file
-            elif time_dim not in orig_ds:
-                orig_ds = orig_ds.assign_coords(
+            elif time_dim not in ds:
+                ds = ds.assign_coords(
                     {
                         time_dim: datetime.datetime.strptime(
                             re.search(r"([0-9]{4}-[0-9]{2}-[0-9]{2})", str(orig_file_path))[0], "%Y-%m-%d"
                         )
                     }
                 )
-                orig_ds = orig_ds.expand_dims(time_dim)
+                ds = ds.expand_dims(time_dim)
 
-        # Setting metadata will clean up data variables and a few other things.
-        # For Zarr JSONs this is applied by the zarr_json_to_dataset all in get_original_ds
-        if self.protocol == "file":
-            orig_ds = self.postprocess_zarr(orig_ds)
+            # Also expand it for the data var!
+            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
+                ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
 
-        # Apply standard postprocessing to get other data variables in order
-        return self.rename_data_variable(orig_ds)
+        return ds
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:

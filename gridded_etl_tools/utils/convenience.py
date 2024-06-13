@@ -382,6 +382,62 @@ class Convenience(Attributes):
         """
         return self.get_date_range_from_file(list(self.input_files())[-1])
 
+    @property
+    def next_date(self) -> datetime.datetime:
+        """
+        Return the next possible date for time_dim after the latest date in the current production dataset
+
+        This function will raise an error for datasets with irregular cadences.
+
+        Returns
+        -------
+        datetime.datetime
+            The next possible date
+
+        Raises
+        ------
+        ValueError
+            Reject this request for any datasets with irregular cadences, as the next possible date
+            cannot be programmatically derived
+        """
+        if self.update_cadence_bounds:
+            raise ValueError(
+                "Dataset has irregular update cadence, so the next date cannot be derived "
+                "programmatically. Please locate the date manually."
+            )
+        if not hasattr(self, "time_dim"):
+            self.set_key_dims()
+        dataset = self.store.dataset()
+        time_delta = dataset[self.time_dim].values[-1] - dataset[self.time_dim].values[-2]
+        return self.numpydate_to_py(dataset[self.time_dim].values[-1] + time_delta)
+
+    def get_next_date_as_date_range(self) -> tuple[datetime.datetime, datetime.datetime]:
+        """
+        Return the next possible date for time_dim after the latest date in the current production dataset
+        Used to programmatically feed the next possible date, and only that date, to an extract. This is
+        useful for development and debugging
+
+        This function will raise an error for datasets with irregular cadences.
+
+        Returns
+        -------
+        tuple[datetime.datetime, datetime.datetime]
+            The next possible date enclosed in a tuple, so it can be interpreted as a single
+            datetime date range
+
+        Raises
+        ------
+        ValueError
+            Reject this request for any datasets with irregular cadences, as the next possible date
+            cannot be programmatically derived
+        """
+        if self.update_cadence_bounds:
+            raise ValueError(
+                "Dataset has irregular update cadence, so the next date cannot be derived "
+                "programmatically. Please locate the date manually."
+            )
+        return (self.next_date, self.next_date)
+
     # FTP
 
     def sync_ftp_files(
