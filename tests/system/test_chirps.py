@@ -167,7 +167,7 @@ def test_extract(mocker, manager_class, heads_path, test_chunks, extracted_input
     manager.check_if_new_data.assert_called_once_with(date_range[1])
 
 
-def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+def test_initial_dry_run(mocker, manager_class, heads_path, test_chunks, initial_input_path):
     """
     Test that a dry run parse of CHIRPS data does not, in fact, parse data.
     """
@@ -190,7 +190,7 @@ def test_initial_dry_run(request, mocker, manager_class, heads_path, test_chunks
         manager.zarr_hash_to_dataset(manager.latest_hash())
 
 
-def test_initial(request, mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
     """
     Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
     "test_".
@@ -256,7 +256,7 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
     assert len(list(input_nc4s)) == 32
 
 
-def test_append_only(mocker, request, manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(manager_class, heads_path, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -290,13 +290,10 @@ def test_append_only(mocker, request, manager_class, heads_path, test_chunks, ap
 
 
 def test_bad_append(
-    mocker,
-    request,
     manager_class,
     heads_path,
     test_chunks,
     appended_input_path_with_hole,
-    root,
 ):
     """
     Test an update of chirps data by adding new data to the end of existing data.

@@ -248,38 +248,49 @@ def patched_update_cadence_bounds(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
 
 
-original_get_original_ds = DatasetManager.get_original_ds
+original_raw_file_to_dataset = DatasetManager.raw_file_to_dataset
 
 
 def original_ds_normal(self, *args, **kwargs):
-    return original_get_original_ds(self, *args, **kwargs)
+    return original_raw_file_to_dataset(self, *args, **kwargs)
 
 
 def original_ds_bad_data(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     orig_ds[self.data_var()][:] = 1234567
     return orig_ds
 
 
-def original_ds_no_time(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+def original_ds_no_time_dim(self, *args, **kwargs):
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
+    return orig_ds.squeeze()
+
+
+def original_ds_no_time_at_all(self, *args, **kwargs):
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     return orig_ds.squeeze().drop("time")
 
 
+def original_ds_no_time_dim_in_data_var(self, *args, **kwargs):
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
+    orig_ds[self.data_var()] = orig_ds[self.data_var()].squeeze()
+    return orig_ds
+
+
 def original_ds_bad_time(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     orig_ds = orig_ds.assign_coords({"time": np.atleast_1d(np.datetime64("1850-01-01"))})
     return orig_ds
 
 
 def original_ds_single_time(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
     return orig_ds
 
 
 def original_ds_esoteric_time(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     time_val = orig_ds.time.values[-1]
     cftime_val = cftime.DatetimeJulian(time_val)
     orig_ds = orig_ds.sel({"time": cftime_val}).expand_dims("time")
@@ -287,14 +298,14 @@ def original_ds_esoteric_time(self, *args, **kwargs):
 
 
 def original_ds_random(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
     orig_ds.precip.values = np.random.rand(*np.shape(orig_ds.precip.values))
     return orig_ds
 
 
 def original_ds_null(self, *args, **kwargs):
-    orig_ds = original_get_original_ds(self, *args, **kwargs)
+    orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
     orig_ds = orig_ds.sel({"time": orig_ds.time.values[-1]}).expand_dims("time")
     orig_ds["precip"].values = np.full_like(orig_ds["precip"], np.nan)
     return orig_ds
