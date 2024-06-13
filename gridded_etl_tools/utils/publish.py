@@ -737,64 +737,40 @@ class Publish(Transform):
 
         while left <= right:
             mid = (left + right) // 2
-            if self.compare_dates(production_date_range, possible_files[mid]):
+            if self.dataset_date_in_range(date_range=production_date_range, file_path=possible_files[mid]):
                 upper_bound_index = mid
                 right = mid - 1
             else:
                 left = mid + 1
 
-        # Only return file paths within these bounds
-        possible_files = possible_files[upper_bound_index:]
-        # Apply any additional, custom filtering on the way out
-        return self.custom_file_filter(possible_files)
+        # Return file paths within these bounds
+        return possible_files[upper_bound_index:]
 
-    def compare_dates(
-        self, production_date_range: tuple[datetime.datetime, datetime.datetime], orig_file_path: pathlib.Path
+    def dataset_date_in_range(
+        self, date_range: tuple[datetime.datetime, datetime.datetime], file_path: pathlib.Path
     ) -> bool:
         """
-        Assess whether the date in the selected original dataset falls witihn the production
+        Assess whether the date in the selected original dataset falls within a specified date range,
+        implicitly derived from the most recent update to the production dateaset
 
         Parameters
         ----------
-        production_date_range : tuple[datetime.datetime, datetime.datetime]
+        date_range : tuple[datetime.datetime, datetime.datetime]
             The date range for the production dataset
-        orig_file_path : pathlib.Path
+        file_path : pathlib.Path
             The path to the original file, on disk or remotely
 
         Returns
         -------
         bool
-            _description_
+            An indication of whether a single datetime dataset falls within a specified date range
         """
-        orig_ds = self.raw_file_to_dataset(orig_file_path)
+        orig_ds = self.raw_file_to_dataset(file_path)
 
-        if (
-            production_date_range[0]
-            <= self.numpydate_to_py(orig_ds[self.time_dim].values[0])
-            <= production_date_range[1]
-        ):
+        if date_range[0] <= self.numpydate_to_py(orig_ds[self.time_dim].values[0]) <= date_range[1]:
             return True
         else:
             return False
-
-    def custom_file_filter(self, original_files: tuple[str]) -> tuple[str]:
-        """
-        Filter down a list of local files to include only files that meet a custom criteria
-
-        Meant to be modified as a child method.
-
-        Parameters
-        ----------
-        original_files: tuple[str]
-            A list of raw files
-
-        Returns
-        -------
-        tuple[str]
-            A list of raw files, filtered to only contain files that meet the criteria.
-            Defaults to returning the same list as a pass through.
-        """
-        return original_files
 
     def get_prod_update_ds(self) -> xr.Dataset:
         """
