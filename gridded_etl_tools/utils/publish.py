@@ -920,6 +920,7 @@ class Publish(Transform):
             if time_dim in self.standard_dims
         ]:
             # Expand the time dimension if it's of length 1 and Xarray therefore doesn't recognize it as a dimension...
+            # for some reason this is unrecognized by cover, although tested in two places
             if time_dim in ds and time_dim not in ds.dims:  # pragma NO COVER
                 ds = ds.expand_dims(time_dim)
 
@@ -935,7 +936,7 @@ class Publish(Transform):
                 ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:  # pragma NO COVER
+            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
                 ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
 
         return ds
