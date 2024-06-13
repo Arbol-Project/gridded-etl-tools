@@ -249,12 +249,12 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
 
     # raise ValueError if one dataset doesn't match the other
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_random)
+    orig_ds = dm.raw_file_to_dataset(random.choice(original_files))
     with pytest.raises(ValueError):
-        orig_ds = dm.raw_file_to_dataset("/irrelevant/path")
         dm.check_written_value(orig_ds, prod_ds)
 
     # raise ValueError if one dataset is all NaNs
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_null)
+    orig_ds = dm.raw_file_to_dataset(random.choice(original_files))
     with pytest.raises(ValueError):
-        orig_ds = dm.raw_file_to_dataset("/irrelevant/path")
         dm.check_written_value(orig_ds, prod_ds)
