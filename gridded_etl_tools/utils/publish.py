@@ -9,6 +9,7 @@ import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
+from scipy.stats import binomtest
 
 import pandas as pd
 import numpy as np
@@ -18,6 +19,7 @@ from dask.distributed import Client, LocalCluster
 
 from .store import IPLD
 from .transform import Transform
+from .errors import NanFrequencyMismatchError
 
 TWENTY_MINUTES = 1200
 
@@ -510,9 +512,7 @@ class Publish(Transform):
         # TIME CHECK
         # Aggressively assert that the time dimension of the data is in the anticipated order.
         # Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operations,
-        # but it should probably be replaced with a more sophisticated set of flags
-        # that let the user decide how to handle time data at their own risk.
+        # This is to protect against data corruption, especially during insert and append operation
         times = dataset[self.time_dim].values
         if len(times) >= 2:
             # Check is only valid if we have 2 or more values with which to calculate the delta
@@ -532,6 +532,18 @@ class Publish(Transform):
                 f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
             )
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
+
+        # NAN CHECK
+        # Use a binomial test to check whether the percentage of NaN values roughly matches
+        # the anticipated percentage within the dataset, based on historical precedent
+        # Test a maximum of 10 time periods # NOTE this is arbitrary
+        for _ in range(min(len(self.pre_chunk_dataset[self.time_dim]), 10)):
+            time_value = self.get_random_coords(self.pre_chunk_dataset)["time"]
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
+            # this will raise an error if the binomial test fails, otherwise passes silently
+            self.test_nan_frequency(
+                data_array=selected_array, expected_nan_frequency=self.store.dataset().attrs["expected_nan_frequency"]
+            )
 
     def check_random_values(self, dataset: xr.Dataset, checks: int = 100):
         """
@@ -568,6 +580,48 @@ class Publish(Transform):
                             f"Value {random_val} falls outside acceptable range "
                             f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
+
+    def test_nan_frequency(
+        self,
+        data_array: xr.DataArray,
+        expected_nan_frequency: float = 0.2,
+        sample_size: int = 500,
+        alpha: float = 0.05,
+    ):
+        """
+        Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
+        using a binomial test
+
+        Parameters
+        ----------
+        data_array : xr.DataArray
+            The Xarray DataArray to test.
+        expected_frequency : float
+            The expected frequency of NaNs (default is 0.2).
+        alpha : float
+            The significance level for the hypothesis test (default is 0.05).
+
+        Returns
+        ----------
+        bool
+            True if the observed frequency matches the expected frequency, False otherwise.
+        float
+            The p-value from the binomial test.
+        """
+        # Flatten the array
+        flat_array = np.ravel(data_array.values)
+
+        # Select N random values
+        random_values = np.random.choice(flat_array, sample_size, replace=False)
+        nan_count = np.isnan(random_values).sum()
+
+        # Perform the binomial test
+        test_result = binomtest(k=nan_count, n=sample_size, p=expected_nan_frequency, alternative="two-sided")
+        # Determine if we reject the null hypothesis
+        reject_null = test_result.pvalue < alpha
+
+        if reject_null:
+            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, test_result.pvalue)
 
     def update_quality_check(
         self,

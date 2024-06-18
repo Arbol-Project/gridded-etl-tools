@@ -37,6 +37,22 @@ def fake_original_dataset():
 
 
 @pytest.fixture
+def fake_large_dataset():
+    time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
+    latitude = xr.DataArray(np.arange(1, 1001), dims="latitude", coords={"latitude": np.arange(1, 1001)})
+    longitude = xr.DataArray(np.arange(1, 1001), dims="longitude", coords={"longitude": np.arange(1, 1001)})
+    data = xr.DataArray(
+        np.random.randn(138, 1000, 1000),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
 def forecast_dataset():
     time = xr.DataArray(
         np.array(original_times), dims="forecast_reference_time", coords={"forecast_reference_time": np.arange(138)}
