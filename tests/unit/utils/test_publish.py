@@ -989,7 +989,6 @@ class TestPublish:
         dm.encode_vars(fake_large_dataset)
 
         # patch sample size to 16, size of input dataset
-        # mocker.patch.object(publish.Publish.test_nan_frequency, "__defaults__", (0.2, 16, 0.05))
         fake_large_dataset.attrs["expected_nan_frequency"] = 0.1
         dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
         data_shape = numpy.shape(fake_large_dataset.data)
