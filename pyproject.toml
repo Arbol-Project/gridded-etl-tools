@@ -42,7 +42,7 @@ dependencies = [
     "multiformats",
     "natsort",
     "nest-asyncio",
-    "numpy",
+    "numpy<2.0.0",
     "p_tqdm",
     "pandas",
     "psutil",
