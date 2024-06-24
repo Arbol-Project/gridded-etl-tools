@@ -1012,12 +1012,11 @@ class TestPublish:
         dm.pre_chunk_dataset = fake_large_dataset
         dm.pre_parse_quality_check(fake_large_dataset)
 
-        # # Check that it catches NaNs well below the threshold
+        # # Check that it passes NaNs well below the threshold
         partial_nan_array = generate_partial_nan_array(data_shape, 0.02)
         fake_large_dataset.data[:] = partial_nan_array
         dm.pre_chunk_dataset = fake_large_dataset
-        with pytest.raises(NanFrequencyMismatchError):
-            dm.pre_parse_quality_check(fake_large_dataset)
+        dm.pre_parse_quality_check(fake_large_dataset)
 
     @staticmethod
     def test_check_random_values_all_ok(manager_class, fake_original_dataset):

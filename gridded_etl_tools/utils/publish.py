@@ -521,7 +521,7 @@ class Publish(Transform):
                 raise IndexError("Dataset does not contain contiguous time data")
 
         # VALUES CHECK
-        # Check 100 values for NAs and extreme values
+        # Check 100 values for unanticipated NaNs and extreme values
         self.check_random_values(dataset.copy())
 
         # ENCODING CHECK
@@ -534,7 +534,7 @@ class Publish(Transform):
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
         # NAN CHECK
-        # Use a binomial test to check whether the percentage of NaN values roughly matches
+        # Use a binomial test to check whether the percentage of NaN values matches
         # the anticipated percentage within the dataset, based on historical precedent
         # Test a maximum of 10 time periods # NOTE this is arbitrary
         for _ in range(min(len(self.pre_chunk_dataset[self.time_dim]), 10)):
@@ -608,20 +608,22 @@ class Publish(Transform):
         float
             The p-value from the binomial test.
         """
-        # Flatten the array
-        flat_array = np.ravel(data_array.values)
-
         # Select N random values
+        flat_array = np.ravel(data_array.values)  # necessary for random selection
         random_values = np.random.choice(flat_array, sample_size, replace=False)
         nan_count = np.isnan(random_values).sum()
 
         # Perform the binomial test
-        test_result = binomtest(k=nan_count, n=sample_size, p=expected_nan_frequency, alternative="two-sided")
-        # Determine if we reject the null hypothesis
+        test_result = binomtest(k=nan_count, n=sample_size, p=expected_nan_frequency, alternative="greater")
+        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
         reject_null = test_result.pvalue < alpha
 
         if reject_null:
-            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, test_result.pvalue)
+            raise NanFrequencyMismatchError(
+                observed_frequency=nan_count / sample_size,
+                expected_frequency=expected_nan_frequency,
+                p_value=test_result.pvalue,
+            )
 
     def update_quality_check(
         self,
