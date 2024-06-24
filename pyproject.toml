@@ -42,6 +42,7 @@ dependencies = [
     "multiformats",
     "natsort",
     "nest-asyncio",
+    "netcdf4<1.7.1",
     "numpy<2.0.0",
     "p_tqdm",
     "pandas",
