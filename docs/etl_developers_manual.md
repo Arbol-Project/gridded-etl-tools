@@ -223,7 +223,7 @@ Each gridded ETL can be divided into 5 stages which live under 3 separate functi
   * Update local input
 * etl.transform()
   * Processing data
-* etl.parse()
+* etl.parse(ds)
   * Parsing (and metadata preparation)
   * Subclass definition
 
