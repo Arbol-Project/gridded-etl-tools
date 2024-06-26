@@ -166,6 +166,14 @@ class TestAttributes:
         assert not manager_class.preliminary_lag_in_days
 
     @staticmethod
+    def test_expected_nan_frequency(manager_class):
+        assert manager_class.expected_nan_frequency == 0
+
+    @staticmethod
+    def test_nan_frequency_std(manager_class):
+        assert manager_class.nan_frequency_std == 0
+
+    @staticmethod
     def test_open_dataset_kwargs(manager_class):
         assert manager_class.open_dataset_kwargs == {}
 

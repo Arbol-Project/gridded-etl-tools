@@ -948,18 +948,22 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(fake_original_dataset)
+        dm.check_nan_frequency = mock.Mock()
         dm.pre_parse_quality_check(fake_original_dataset)
 
         dm.check_random_values.assert_called_once_with(fake_original_dataset)
+        dm.check_nan_frequency.assert_called_once()
 
     @staticmethod
     def test_preparse_quality_check_short_dataset(manager_class, single_time_instant_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(single_time_instant_dataset)
+        dm.check_nan_frequency = mock.Mock()
         dm.pre_parse_quality_check(single_time_instant_dataset)
 
         dm.check_random_values.assert_called_once_with(single_time_instant_dataset)
+        dm.check_nan_frequency.assert_called_once()
 
     @staticmethod
     def test_preparse_quality_check_noncontiguous_time(manager_class, fake_original_dataset):
@@ -967,6 +971,7 @@ class TestPublish:
         dataset = fake_original_dataset.drop_sel(time=drop_times)
         dm = manager_class()
         dm.check_random_values = mock.Mock()
+        dm.check_nan_frequency = mock.Mock()
         dm.encode_vars(dataset)
 
         with pytest.raises(IndexError):
@@ -977,6 +982,7 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(fake_original_dataset)
+        dm.check_nan_frequency = mock.Mock()
         fake_original_dataset.data.encoding["dtype"] = "thewrongtype"
 
         with pytest.raises(TypeError):
@@ -990,6 +996,7 @@ class TestPublish:
 
         # patch sample size to 16, size of input dataset
         fake_large_dataset.attrs["expected_nan_frequency"] = 0.1
+        fake_large_dataset.attrs["nan_frequency_std"] = 0.01
         dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
         data_shape = numpy.shape(fake_large_dataset.data)
 

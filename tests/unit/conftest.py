@@ -212,6 +212,8 @@ class DummyManager(DummyManagerBase):
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
     final_lag_in_days = 3
+    expected_nan_frequency = 0.2
+    nan_frequency_std = 0.025
 
     def get_session(self):
         self.session = DummySession()

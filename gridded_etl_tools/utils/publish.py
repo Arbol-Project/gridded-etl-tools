@@ -531,19 +531,12 @@ class Publish(Transform):
                 f"Dtype for data variable {self.data_var()} is "
                 f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
             )
-        self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
         # NAN CHECK
-        # Use a binomial test to check whether the percentage of NaN values matches
-        # the anticipated percentage within the dataset, based on historical precedent
-        # Test a maximum of 10 time periods # NOTE this is arbitrary
-        for _ in range(min(len(self.pre_chunk_dataset[self.time_dim]), 10)):
-            time_value = self.get_random_coords(self.pre_chunk_dataset)["time"]
-            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
-            # this will raise an error if the binomial test fails, otherwise passes silently
-            self.test_nan_frequency(
-                data_array=selected_array, expected_nan_frequency=self.store.dataset().attrs["expected_nan_frequency"]
-            )
+        if not self.skip_pre_parse_nan_check and not self.rebuild_requested:
+            self.check_nan_frequency()
+
+        self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
     def check_random_values(self, dataset: xr.Dataset, checks: int = 100):
         """
@@ -581,11 +574,28 @@ class Publish(Transform):
                             f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
 
+    def check_nan_frequency(self):
+        """
+        Use a binomial test to check whether the percentage of NaN values matches
+        the anticipated percentage within the dataset, based on the observed ratio of NaNs in historical
+        data up until now
+
+        Test a maximum of 10 time periods in the update dataset # NOTE this is arbitrary
+        """
+        expected_nan_frequency = (
+            self.store.dataset().attrs["expected_nan_frequency"] + self.store.dataset().attrs["nan_frequency_std"]
+        )
+        for _ in range(min(len(self.pre_chunk_dataset[self.time_dim]), 10)):
+            time_value = self.get_random_coords(self.pre_chunk_dataset)["time"]
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
+            # this will raise an error if the binomial test fails, otherwise passes silently
+            self.test_nan_frequency(data_array=selected_array, expected_nan_frequency=expected_nan_frequency)
+
     def test_nan_frequency(
         self,
         data_array: xr.DataArray,
         expected_nan_frequency: float = 0.2,
-        sample_size: int = 500,
+        sample_size: int = 1000,
         alpha: float = 0.05,
     ):
         """
