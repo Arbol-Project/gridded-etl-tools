@@ -1489,10 +1489,10 @@ class TestPublish:
         dm = manager_class()
         dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
         orig_dataset = single_time_instant_dataset
-        orig_dataset[dm.data_var()] = orig_dataset[dm.data_var()].squeeze()
+        orig_dataset[dm.data_var] = orig_dataset[dm.data_var].squeeze()
         dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
-        assert "time" in dataset[dm.data_var()].dims
+        assert "time" in dataset[dm.data_var].dims
 
         dm.rename_data_variable.assert_called_once_with(orig_dataset)
 

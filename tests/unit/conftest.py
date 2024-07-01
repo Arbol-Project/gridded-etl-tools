@@ -176,9 +176,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         if set_key_dims:
             self.set_key_dims()
 
-    @classmethod
-    def data_var(self):
-        return "data"
+    data_var = "data"
 
     @property
     def data_var_dtype(self):

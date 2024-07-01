@@ -524,10 +524,10 @@ class Publish(Transform):
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
-        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
+        if not dataset[self.data_var].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(
-                f"Dtype for data variable {self.data_var()} is "
-                f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+                f"Dtype for data variable {self.data_var} is "
+                f"{dataset[self.data_var].dtype} when it should be {self.data_var_dtype}"
             )
 
         # NAN CHECK
@@ -558,13 +558,13 @@ class Publish(Transform):
             }
             dataset = dataset.assign_coords(**orig_coords)
         for random_coords in itertools.islice(shuffled_coords(dataset), checks):
-            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
+            random_val = self.pre_chunk_dataset[self.data_var].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
             # Check extreme values if they are defined
             if not np.isnan(random_val):
-                unit = dataset[self.data_var()].encoding["units"]
+                unit = dataset[self.data_var].encoding["units"]
                 if unit in self.EXTREME_VALUES_BY_UNIT.keys():
                     limit_vals = self.EXTREME_VALUES_BY_UNIT[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
@@ -594,7 +594,7 @@ class Publish(Transform):
             )
         for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
             time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
-            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var]
             self.test_nan_frequency(
                 data_array=selected_array,
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
@@ -913,8 +913,8 @@ class Publish(Transform):
         # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
+        orig_val = orig_ds[self.data_var].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=0.0001).values
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -1021,8 +1021,8 @@ class Publish(Transform):
                 ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
-                ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
+            if time_dim in ds.dims and time_dim not in ds[self.data_var].dims:
+                ds[self.data_var] = ds[self.data_var].expand_dims(time_dim)
 
         return ds
 

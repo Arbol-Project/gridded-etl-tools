@@ -218,7 +218,7 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(
             latitude=lat,
             longitude=lon,
@@ -278,7 +278,7 @@ def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_in
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
         .values
     )

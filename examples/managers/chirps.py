@@ -96,11 +96,8 @@ class CHIRPS(DatasetManager):
 
     time_resolution = DatasetManager.SPAN_DAILY
     """Increment size along the "time" coordinate axis"""
-
-    @classmethod
-    def data_var(self) -> str:
-        """Name of the relevant data variable in the original dataset"""
-        return "precip"
+    
+    data_var = "precip"
 
     standard_name = "precipitation_amount"
 
@@ -274,8 +271,8 @@ class CHIRPS(DatasetManager):
         ]
         for key in keys_to_remove:
             dataset.attrs.pop(key, None)
-            dataset[self.data_var()].attrs.pop(key, None)
-            dataset[self.data_var()].encoding.pop(key, None)
+            dataset[self.data_var].attrs.pop(key, None)
+            dataset[self.data_var].encoding.pop(key, None)
 
 
 class CHIRPSFinal(CHIRPS, ABC):
