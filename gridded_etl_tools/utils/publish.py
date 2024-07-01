@@ -497,7 +497,7 @@ class Publish(Transform):
 
     def pre_parse_quality_check(self, dataset: xr.Dataset):
         """
-        Function containing quality checks applicable to all datasets we parse, initial or update
+        Guard against corrupted source data by applying quality checks to all datasets we parse, initial or update
         Intended to be run on a dataset prior to parsing.
 
         If successful passes without comment. If unsuccessful raises a descriptive error message.
@@ -511,11 +511,9 @@ class Publish(Transform):
         start_checking = time.perf_counter()
         # TIME CHECK
         # Aggressively assert that the time dimension of the data is in the anticipated order.
-        # Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operation
+        # Only valid if the dataset's time dimension has 2 or more values with which to calculate the delta
         times = dataset[self.time_dim].values
         if len(times) >= 2:
-            # Check is only valid if we have 2 or more values with which to calculate the delta
             expected_delta = times[1] - times[0]
             if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise IndexError("Dataset does not contain contiguous time data")
@@ -533,7 +531,8 @@ class Publish(Transform):
             )
 
         # NAN CHECK
-        if not self.skip_pre_parse_nan_check and not self.rebuild_requested:
+        # Check that the % of NaN values approximately matches the historical average. Not applicable on first run.
+        if self.store.has_existing and not self.skip_pre_parse_nan_check and not self.rebuild_requested:
             self.check_nan_frequency()
 
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
@@ -577,61 +576,107 @@ class Publish(Transform):
     def check_nan_frequency(self):
         """
         Use a binomial test to check whether the percentage of NaN values matches
-        the anticipated percentage within the dataset, based on the observed ratio of NaNs in historical
-        data up until now
+        the anticipated percentage within the dataset, based on the observed ratio of NaNs in historical data
 
-        Test a maximum of 10 time periods in the update dataset # NOTE this is arbitrary
+        Tests every time period in the update dataset
+
+        Raises
+        ------
+        AttributeError
+            Inform ETL operator that the expected_nan_frequency and `nan_frequency_std` fields
+            used by the binomial test are missing from the production dataset.
         """
-        expected_nan_frequency = (
-            self.store.dataset().attrs["expected_nan_frequency"] + self.store.dataset().attrs["nan_frequency_std"]
-        )
-        for _ in range(min(len(self.pre_chunk_dataset[self.time_dim]), 10)):
-            time_value = self.get_random_coords(self.pre_chunk_dataset)["time"]
+        if "expected_nan_frequency" not in self.pre_chunk_dataset.attrs:
+            raise AttributeError(
+                "Update dataset is missing the `expected_nan_frequency` field in its attributes. "
+                "Please calculate and populate this field and the `nan_frequency_std` fields manually "
+                "to enable NaN quality checks during updates."
+            )
+        for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
+            time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
             selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
-            # this will raise an error if the binomial test fails, otherwise passes silently
-            self.test_nan_frequency(data_array=selected_array, expected_nan_frequency=expected_nan_frequency)
+            self.test_nan_frequency(
+                data_array=selected_array,
+                expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
+                nan_frequency_std=self.pre_chunk_dataset.attrs["nan_frequency_std"],
+            )
 
     def test_nan_frequency(
         self,
         data_array: xr.DataArray,
-        expected_nan_frequency: float = 0.2,
+        expected_nan_frequency: float,
+        nan_frequency_std: float,
         sample_size: int = 1000,
-        alpha: float = 0.05,
+        alpha: float = 0.01,
     ):
         """
         Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
         using a binomial test
+
+        This will raise an error if the binomial test fails, otherwise passes silently
 
         Parameters
         ----------
         data_array : xr.DataArray
             The Xarray DataArray to test.
         expected_frequency : float
-            The expected frequency of NaNs (default is 0.2).
+            The expected frequency of NaNs
+        nan_frequency_std : float
+            The observed standard deviation of the expected frequency across a range of samples.
+            Used to adjust the frequency for binomial tests
+        sample_size : int
+            The number of sample values to randomly extract from the selected time series
+            of the update dataset
         alpha : float
             The significance level for the hypothesis test (default is 0.05).
 
         Returns
-        ----------
+        -------
         bool
             True if the observed frequency matches the expected frequency, False otherwise.
         float
             The p-value from the binomial test.
+
+        Raises
+        ------
+        NanFrequencyMismatchError
+            An error indicating the observed frequency of NaNs does not correpsond
+            with the observed frequency in historical dataset, even allowing for a margin
+            of error defined by the standard deviation of sample-based estimates of that
+            historical frequency
         """
         # Select N random values
         flat_array = np.ravel(data_array.values)  # necessary for random selection
         random_values = np.random.choice(flat_array, sample_size, replace=False)
         nan_count = np.isnan(random_values).sum()
 
-        # Perform the binomial test
-        test_result = binomtest(k=nan_count, n=sample_size, p=expected_nan_frequency, alternative="greater")
         # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
-        reject_null = test_result.pvalue < alpha
-
-        if reject_null:
+        # for the expected frequency + the standard deviation
+        test_result = binomtest(
+            k=nan_count,
+            n=sample_size,
+            p=expected_nan_frequency + nan_frequency_std,
+            alternative="greater",
+        )
+        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
             raise NanFrequencyMismatchError(
                 observed_frequency=nan_count / sample_size,
-                expected_frequency=expected_nan_frequency,
+                expected_frequency=expected_nan_frequency + nan_frequency_std,
+                p_value=test_result.pvalue,
+            )
+
+        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
+        # for the expected frequency - the standard deviation
+        test_result = binomtest(
+            k=nan_count,
+            n=sample_size,
+            p=expected_nan_frequency - nan_frequency_std,
+            alternative="less",
+        )
+        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
+            raise NanFrequencyMismatchError(
+                observed_frequency=nan_count / sample_size,
+                expected_frequency=expected_nan_frequency - nan_frequency_std,
                 p_value=test_result.pvalue,
             )
 
