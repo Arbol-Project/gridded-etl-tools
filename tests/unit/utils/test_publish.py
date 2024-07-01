@@ -13,6 +13,28 @@ import xarray as xr
 import pytest
 
 from gridded_etl_tools.utils import publish, store
+from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
+
+
+def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
+
+    # Calculate the number of NaNs and floats
+    total_elements = numpy.prod(shape)
+    num_nans = int(total_elements * percent_nan)
+    num_floats = total_elements - num_nans
+
+    # Generate them
+    random_floats = numpy.random.random(num_floats)
+    nans = numpy.full(num_nans, numpy.nan)
+
+    # Combine them and shuffle them around
+    combined_array = numpy.concatenate((random_floats, nans))
+    numpy.random.shuffle(combined_array)
+
+    # Reshape the array to the desired shape
+    final_array = combined_array.reshape(shape)
+
+    return final_array
 
 
 class fake_vmem(dict):
@@ -926,18 +948,26 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(fake_original_dataset)
+        dm.check_nan_frequency = mock.Mock()
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
         dm.pre_parse_quality_check(fake_original_dataset)
 
         dm.check_random_values.assert_called_once_with(fake_original_dataset)
+        dm.check_nan_frequency.assert_called_once()
 
     @staticmethod
     def test_preparse_quality_check_short_dataset(manager_class, single_time_instant_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(single_time_instant_dataset)
+        dm.check_nan_frequency = mock.Mock()
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
         dm.pre_parse_quality_check(single_time_instant_dataset)
 
         dm.check_random_values.assert_called_once_with(single_time_instant_dataset)
+        dm.check_nan_frequency.assert_called_once()
 
     @staticmethod
     def test_preparse_quality_check_noncontiguous_time(manager_class, fake_original_dataset):
@@ -945,6 +975,7 @@ class TestPublish:
         dataset = fake_original_dataset.drop_sel(time=drop_times)
         dm = manager_class()
         dm.check_random_values = mock.Mock()
+        dm.check_nan_frequency = mock.Mock()
         dm.encode_vars(dataset)
 
         with pytest.raises(IndexError):
@@ -955,10 +986,76 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.encode_vars(fake_original_dataset)
+        dm.check_nan_frequency = mock.Mock()
         fake_original_dataset.data.encoding["dtype"] = "thewrongtype"
 
         with pytest.raises(TypeError):
             dm.pre_parse_quality_check(fake_original_dataset)
+
+    @staticmethod
+    def test_preparse_quality_check_nan_binomial(mocker, manager_class, fake_large_dataset):
+        dm = manager_class()
+        dm.check_random_values = mock.Mock()
+        dm.encode_vars(fake_large_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        # patch sample size to 16, size of input dataset
+        fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
+        fake_large_dataset.attrs["nan_frequency_std"] = 0.02
+        dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
+        data_shape = numpy.shape(fake_large_dataset.data)
+
+        # Check that it catches all NaNs
+        fake_large_dataset.data[:] = numpy.nan
+        dm.pre_chunk_dataset = fake_large_dataset
+        with pytest.raises(NanFrequencyMismatchError):
+            dm.pre_parse_quality_check(fake_large_dataset)
+
+        # Check that it catches some NaNs
+        partial_nan_array = generate_partial_nan_array(data_shape, 0.5)
+        fake_large_dataset.data[:] = partial_nan_array
+        dm.pre_chunk_dataset = fake_large_dataset
+        with pytest.raises(NanFrequencyMismatchError):
+            dm.pre_parse_quality_check(fake_large_dataset)
+
+        # Check that it passes NaNs at or near the threeshold
+        partial_nan_array = generate_partial_nan_array(data_shape, 0.2)
+        fake_large_dataset.data[:] = partial_nan_array
+        dm.pre_chunk_dataset = fake_large_dataset
+        dm.pre_parse_quality_check(fake_large_dataset)
+
+        # # Check that it passes NaNs below the threshold
+        partial_nan_array = generate_partial_nan_array(data_shape, 0)
+        fake_large_dataset.data[:] = partial_nan_array
+        dm.pre_chunk_dataset = fake_large_dataset
+        with pytest.raises(NanFrequencyMismatchError):
+            dm.pre_parse_quality_check(fake_large_dataset)
+
+    @staticmethod
+    def test_preparse_quality_check_nan_binomial_no_existing(manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.check_random_values = mock.Mock()
+        dm.encode_vars(fake_original_dataset)
+        dm.check_nan_frequency = mock.Mock()
+        dm.store = mock.Mock(spec=store.Local, has_existing=False)
+        dm.pre_parse_quality_check(fake_original_dataset)
+
+        dm.check_random_values.assert_called_once_with(fake_original_dataset)
+        dm.check_nan_frequency.assert_not_called()
+
+    @staticmethod
+    def test_preparse_quality_check_nan_binomial_skip_check(manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.check_random_values = mock.Mock()
+        dm.encode_vars(fake_original_dataset)
+        dm.skip_pre_parse_nan_check = True
+        dm.check_nan_frequency = mock.Mock()
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        dm.pre_parse_quality_check(fake_original_dataset)
+
+        dm.check_random_values.assert_called_once_with(fake_original_dataset)
+        dm.check_nan_frequency.assert_not_called()
 
     @staticmethod
     def test_check_random_values_all_ok(manager_class, fake_original_dataset):

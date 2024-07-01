@@ -67,6 +67,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dask_cpu_mem_target_ratio: float = 4 / 32,
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
+        skip_pre_parse_nan_check: bool = False,
         skip_post_parse_qc: bool = False,
         skip_post_parse_api_check: bool = False,
         encryption_key: str = None,
@@ -154,6 +155,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.dry_run = dry_run
         self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
+        self.skip_pre_parse_nan_check = skip_pre_parse_nan_check
         self.skip_post_parse_qc = skip_post_parse_qc
         self.skip_post_parse_api_check = skip_post_parse_api_check
 
