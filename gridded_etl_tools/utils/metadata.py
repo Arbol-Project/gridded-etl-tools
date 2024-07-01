@@ -398,7 +398,7 @@ class Metadata(Convenience, IPFS):
         all_md = {
             **dataset.attrs,
             **dataset.encoding,
-            **dataset[self.data_var()].encoding,
+            **dataset[self.data_var].encoding,
         }
         rename_dict = {
             "preferred_chunks": "Zarr chunk size",
@@ -612,7 +612,7 @@ class Metadata(Convenience, IPFS):
         """
         data_var = first(dataset.data_vars)
         try:
-            return dataset.rename_vars({data_var: self.data_var()})
+            return dataset.rename_vars({data_var: self.data_var})
         except ValueError:
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             return dataset
@@ -630,14 +630,14 @@ class Metadata(Convenience, IPFS):
         # Encode fields for the data variable in the main encoding dict and the data var's own encoding dict (for
         # thoroughness)
         dataset.encoding = {
-            self.data_var(): {
+            self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
                 "missing_value": self.missing_value,
             }
         }
-        dataset[self.data_var()].encoding.update(
+        dataset[self.data_var].encoding.update(
             {
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
@@ -684,7 +684,7 @@ class Metadata(Convenience, IPFS):
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:
-            encoding = dataset[self.data_var()].encoding
+            encoding = dataset[self.data_var].encoding
             filters = encoding.get("filters")
             if not filters:
                 encoding["filters"] = filters = []
@@ -776,8 +776,8 @@ class Metadata(Convenience, IPFS):
             dataset[coord].encoding.pop("_FillValue", None)
             dataset[coord].encoding.pop("missing_value", None)
             dataset[coord].encoding["compressor"] = compressor
-        dataset[self.data_var()].encoding.pop("filters", None)
-        dataset[self.data_var()].encoding["compressor"] = compressor
+        dataset[self.data_var].encoding.pop("filters", None)
+        dataset[self.data_var].encoding["compressor"] = compressor
 
     def suppress_invalid_attributes(self, dataset: xr.Dataset):
         """

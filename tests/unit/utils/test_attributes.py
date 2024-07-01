@@ -170,10 +170,6 @@ class TestAttributes:
         assert manager_class.expected_nan_frequency == 0.2
 
     @staticmethod
-    def test_nan_frequency_std(manager_class):
-        assert manager_class.nan_frequency_std == 0.025
-
-    @staticmethod
     def test_open_dataset_kwargs(manager_class):
         assert manager_class.open_dataset_kwargs == {}
 

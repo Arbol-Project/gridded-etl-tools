@@ -228,7 +228,7 @@ def test_reformat_orig_ds_time_dim_not_in_data_var(mocker, manager_class, initia
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_dim_in_data_var)
     raw_ds = dm.raw_file_to_dataset(random.choice(original_files))
     orig_ds = dm.reformat_orig_ds(raw_ds, "irrelevant/path")
-    assert "time" in orig_ds[dm.data_var()].dims
+    assert "time" in orig_ds[dm.data_var].dims
 
 
 def test_check_values(mocker, manager_class, initial_input_path, appended_input_path):

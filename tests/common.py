@@ -257,7 +257,7 @@ def original_ds_normal(self, *args, **kwargs):
 
 def original_ds_bad_data(self, *args, **kwargs):
     orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
-    orig_ds[self.data_var()][:] = 1234567
+    orig_ds[self.data_var][:] = 1234567
     return orig_ds
 
 
@@ -273,7 +273,7 @@ def original_ds_no_time_at_all(self, *args, **kwargs):
 
 def original_ds_no_time_dim_in_data_var(self, *args, **kwargs):
     orig_ds = original_raw_file_to_dataset(self, *args, **kwargs)
-    orig_ds[self.data_var()] = orig_ds[self.data_var()].squeeze()
+    orig_ds[self.data_var] = orig_ds[self.data_var].squeeze()
     return orig_ds
 
 
