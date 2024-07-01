@@ -52,6 +52,7 @@ dependencies = [
     "requests",
     "s3fs",
     "shapely",
+    "statsmodels",
     "tqdm",
     "xarray[complete]>=2023.9.0",
     "zarr>=2.16.1",

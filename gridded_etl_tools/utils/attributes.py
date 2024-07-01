@@ -305,17 +305,6 @@ class Attributes(ABC):
     of the dataaset in question
     """
 
-    nan_frequency_std: float = 0.0
-    """
-    Datasets contain NaN values in varying proportions depending on how the source provider encodes data.
-
-    Updates with unusual proportions of NaN values possibly represent possibly corrupted data
-    from the source provider and should be investigated manually.
-
-    This property encodes the standard deviation of the proportion of NaNs in a daily dataset, based on empirical study
-    of the dataaset in question
-    """
-
     @property
     def store(self) -> StoreInterface:
         """

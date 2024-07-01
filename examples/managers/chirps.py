@@ -81,7 +81,6 @@ class CHIRPS(DatasetManager):
             "final lag in days": self.final_lag_in_days,
             "preliminary lag in days": self.preliminary_lag_in_days,
             "expected_nan_frequency": self.expected_nan_frequency,
-            "nan_frequency_std": self.nan_frequency_std,
         }
 
         return static_metadata
@@ -323,8 +322,6 @@ class CHIRPSFinal05(CHIRPSFinal):
 
     expected_nan_frequency = 0.738
 
-    nan_frequency_std = 0.021
-
 
 class CHIRPSFinal25(CHIRPSFinal):
     """
@@ -362,8 +359,6 @@ class CHIRPSFinal25(CHIRPSFinal):
         return 0.25
 
     expected_nan_frequency = 0.72
-
-    nan_frequency_std = 0.015
 
 
 class CHIRPSPrelim05(CHIRPS):
@@ -405,5 +400,3 @@ class CHIRPSPrelim05(CHIRPS):
     preliminary_lag_in_days = 6
 
     expected_nan_frequency = 0.73872
-
-    nan_frequency_std = 0.019

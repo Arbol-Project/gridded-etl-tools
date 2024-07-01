@@ -9,7 +9,7 @@ import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
-from scipy.stats import binomtest
+from statsmodels.stats.proportion import proportion_confint
 
 import pandas as pd
 import numpy as np
@@ -583,13 +583,13 @@ class Publish(Transform):
         Raises
         ------
         AttributeError
-            Inform ETL operator that the expected_nan_frequency and `nan_frequency_std` fields
+            Inform ETL operator that the expected_nan_frequency field
             used by the binomial test are missing from the production dataset.
         """
         if "expected_nan_frequency" not in self.pre_chunk_dataset.attrs:
             raise AttributeError(
                 "Update dataset is missing the `expected_nan_frequency` field in its attributes. "
-                "Please calculate and populate this field and the `nan_frequency_std` fields manually "
+                "Please calculate and populate this field manually "
                 "to enable NaN quality checks during updates."
             )
         for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
@@ -598,16 +598,14 @@ class Publish(Transform):
             self.test_nan_frequency(
                 data_array=selected_array,
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
-                nan_frequency_std=self.pre_chunk_dataset.attrs["nan_frequency_std"],
             )
 
     def test_nan_frequency(
         self,
         data_array: xr.DataArray,
         expected_nan_frequency: float,
-        nan_frequency_std: float,
-        sample_size: int = 1000,
-        alpha: float = 0.01,
+        sample_size: int = 5000,
+        alpha: float = 0.001,
     ):
         """
         Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
@@ -621,14 +619,11 @@ class Publish(Transform):
             The Xarray DataArray to test.
         expected_frequency : float
             The expected frequency of NaNs
-        nan_frequency_std : float
-            The observed standard deviation of the expected frequency across a range of samples.
-            Used to adjust the frequency for binomial tests
         sample_size : int
             The number of sample values to randomly extract from the selected time series
             of the update dataset
         alpha : float
-            The significance level for the hypothesis test (default is 0.05).
+            The significance level for the hypothesis test (default is 0.001).
 
         Returns
         -------
@@ -647,38 +642,17 @@ class Publish(Transform):
         """
         # Select N random values
         flat_array = np.ravel(data_array.values)  # necessary for random selection
-        random_values = np.random.choice(flat_array, sample_size, replace=False)
+        if np.size(flat_array) < sample_size:
+            sample_size = np.prod(flat_array.shape)
+        random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
         nan_count = np.isnan(random_values).sum()
 
-        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
-        # for the expected frequency + the standard deviation
-        test_result = binomtest(
-            k=nan_count,
-            n=sample_size,
-            p=expected_nan_frequency + nan_frequency_std,
-            alternative="greater",
-        )
-        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
-            raise NanFrequencyMismatchError(
-                observed_frequency=nan_count / sample_size,
-                expected_frequency=expected_nan_frequency + nan_frequency_std,
-                p_value=test_result.pvalue,
-            )
+        # Calculate the confidence interval
+        lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
 
-        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
-        # for the expected frequency - the standard deviation
-        test_result = binomtest(
-            k=nan_count,
-            n=sample_size,
-            p=expected_nan_frequency - nan_frequency_std,
-            alternative="less",
-        )
-        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
-            raise NanFrequencyMismatchError(
-                observed_frequency=nan_count / sample_size,
-                expected_frequency=expected_nan_frequency - nan_frequency_std,
-                p_value=test_result.pvalue,
-            )
+        # Check if the expected frequency falls within the confidence interval
+        if not (lower_bound <= expected_nan_frequency <= upper_bound):
+            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
     def update_quality_check(
         self,
