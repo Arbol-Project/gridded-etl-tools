@@ -9,7 +9,7 @@ import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
-from scipy.stats import binomtest
+from statsmodels.stats.proportion import proportion_confint
 
 import pandas as pd
 import numpy as np
@@ -524,10 +524,10 @@ class Publish(Transform):
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
-        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
+        if not dataset[self.data_var].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(
-                f"Dtype for data variable {self.data_var()} is "
-                f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+                f"Dtype for data variable {self.data_var} is "
+                f"{dataset[self.data_var].dtype} when it should be {self.data_var_dtype}"
             )
 
         # NAN CHECK
@@ -558,13 +558,13 @@ class Publish(Transform):
             }
             dataset = dataset.assign_coords(**orig_coords)
         for random_coords in itertools.islice(shuffled_coords(dataset), checks):
-            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
+            random_val = self.pre_chunk_dataset[self.data_var].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
             # Check extreme values if they are defined
             if not np.isnan(random_val):
-                unit = dataset[self.data_var()].encoding["units"]
+                unit = dataset[self.data_var].encoding["units"]
                 if unit in self.EXTREME_VALUES_BY_UNIT.keys():
                     limit_vals = self.EXTREME_VALUES_BY_UNIT[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
@@ -583,31 +583,29 @@ class Publish(Transform):
         Raises
         ------
         AttributeError
-            Inform ETL operator that the expected_nan_frequency and `nan_frequency_std` fields
+            Inform ETL operator that the expected_nan_frequency field
             used by the binomial test are missing from the production dataset.
         """
         if "expected_nan_frequency" not in self.pre_chunk_dataset.attrs:
             raise AttributeError(
                 "Update dataset is missing the `expected_nan_frequency` field in its attributes. "
-                "Please calculate and populate this field and the `nan_frequency_std` fields manually "
+                "Please calculate and populate this field manually "
                 "to enable NaN quality checks during updates."
             )
         for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
             time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
-            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var()]
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var]
             self.test_nan_frequency(
                 data_array=selected_array,
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
-                nan_frequency_std=self.pre_chunk_dataset.attrs["nan_frequency_std"],
             )
 
     def test_nan_frequency(
         self,
         data_array: xr.DataArray,
         expected_nan_frequency: float,
-        nan_frequency_std: float,
-        sample_size: int = 1000,
-        alpha: float = 0.01,
+        sample_size: int = 5000,
+        alpha: float = 0.001,
     ):
         """
         Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
@@ -621,14 +619,11 @@ class Publish(Transform):
             The Xarray DataArray to test.
         expected_frequency : float
             The expected frequency of NaNs
-        nan_frequency_std : float
-            The observed standard deviation of the expected frequency across a range of samples.
-            Used to adjust the frequency for binomial tests
         sample_size : int
             The number of sample values to randomly extract from the selected time series
             of the update dataset
         alpha : float
-            The significance level for the hypothesis test (default is 0.05).
+            The significance level for the hypothesis test (default is 0.001).
 
         Returns
         -------
@@ -647,38 +642,17 @@ class Publish(Transform):
         """
         # Select N random values
         flat_array = np.ravel(data_array.values)  # necessary for random selection
-        random_values = np.random.choice(flat_array, sample_size, replace=False)
+        if np.size(flat_array) < sample_size:
+            sample_size = np.prod(flat_array.shape)
+        random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
         nan_count = np.isnan(random_values).sum()
 
-        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
-        # for the expected frequency + the standard deviation
-        test_result = binomtest(
-            k=nan_count,
-            n=sample_size,
-            p=expected_nan_frequency + nan_frequency_std,
-            alternative="greater",
-        )
-        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
-            raise NanFrequencyMismatchError(
-                observed_frequency=nan_count / sample_size,
-                expected_frequency=expected_nan_frequency + nan_frequency_std,
-                p_value=test_result.pvalue,
-            )
+        # Calculate the confidence interval
+        lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
 
-        # Determine if we reject the null hypothesis (that the NaN frequency matches expectations)
-        # for the expected frequency - the standard deviation
-        test_result = binomtest(
-            k=nan_count,
-            n=sample_size,
-            p=expected_nan_frequency - nan_frequency_std,
-            alternative="less",
-        )
-        if test_result.pvalue < alpha:  # a.k.a. if we reject null hypothesis
-            raise NanFrequencyMismatchError(
-                observed_frequency=nan_count / sample_size,
-                expected_frequency=expected_nan_frequency - nan_frequency_std,
-                p_value=test_result.pvalue,
-            )
+        # Check if the expected frequency falls within the confidence interval
+        if not (lower_bound <= expected_nan_frequency <= upper_bound):
+            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
     def update_quality_check(
         self,
@@ -939,8 +913,8 @@ class Publish(Transform):
         # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
+        orig_val = orig_ds[self.data_var].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=0.0001).values
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -1047,8 +1021,8 @@ class Publish(Transform):
                 ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
-                ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
+            if time_dim in ds.dims and time_dim not in ds[self.data_var].dims:
+                ds[self.data_var] = ds[self.data_var].expand_dims(time_dim)
 
         return ds
 

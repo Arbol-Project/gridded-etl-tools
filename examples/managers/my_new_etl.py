@@ -228,7 +228,7 @@ class MyNewETL(DatasetManager, ABC):
         # keys_to_remove = ["coordinates", "history","CDO","CDI"]
         # for key in keys_to_remove:
         #     dataset.attrs.pop(key, None)
-        #     dataset[self.data_var()].attrs.pop(key, None)
+        #     dataset[self.data_var].attrs.pop(key, None)
 
         # It is important to note the encoding of a dataset in particular if compression is enabled
         # if zlib or other compression is enabled this will subvert IPFS de-duplication if the dataset
@@ -357,12 +357,7 @@ class MyNewETLTempMin(MyNewETLTemp):
     def relative_path(self) -> pathlib.Path:
         return super().relative_path() / "min"
 
-    @classmethod
-    def data_var(cls) -> str:
-        """
-        Name of the column in the original data
-        """
-        return "tmin"
+    data_var = "tmin"
 
     @property
     def standard_name(self) -> str:

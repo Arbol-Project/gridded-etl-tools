@@ -573,26 +573,6 @@ class TestPublish:
         dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
         assert dm.dataset_hash is None
 
-    # @staticmethod
-    # def test_update_zarr(manager_class):
-    #     dm = manager_class()
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
-    #     publish_dataset = mock.Mock()
-    #     dm.prepare_update_times = mock.Mock()
-    #     dm.update_quality_check = mock.Mock()
-    #     dm.insert_into_dataset = mock.Mock()
-    #     dm.append_to_dataset = mock.Mock()
-
-    #     original_dataset = dm.store.dataset.return_value
-    #     dm.prepare_update_times.return_value = (insert_times, append_times) = ([object()], [object()])
-    #     dm.update_zarr(publish_dataset)
-
-    #     dm.store.dataset.assert_called_once_with()
-    #     dm.transformed_dataset.assert_called_once_with()
-    #     dm.set_key_dims.assert_called_once_with()
-    #     dm.prepare_update_times.assert_called_once_with(original_dataset, publish_dataset)
-    #     dm.update_quality_check.assert_called_once_with(original_dataset, insert_times, append_times)
-
     @staticmethod
     def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
         dm = manager_class()
@@ -1001,7 +981,6 @@ class TestPublish:
 
         # patch sample size to 16, size of input dataset
         fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
-        fake_large_dataset.attrs["nan_frequency_std"] = 0.02
         dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
         data_shape = numpy.shape(fake_large_dataset.data)
 
@@ -1510,10 +1489,10 @@ class TestPublish:
         dm = manager_class()
         dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
         orig_dataset = single_time_instant_dataset
-        orig_dataset[dm.data_var()] = orig_dataset[dm.data_var()].squeeze()
+        orig_dataset[dm.data_var] = orig_dataset[dm.data_var].squeeze()
         dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
-        assert "time" in dataset[dm.data_var()].dims
+        assert "time" in dataset[dm.data_var].dims
 
         dm.rename_data_variable.assert_called_once_with(orig_dataset)
 
