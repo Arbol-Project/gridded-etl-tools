@@ -1011,6 +1011,19 @@ class TestPublish:
             dm.pre_parse_quality_check(fake_large_dataset)
 
     @staticmethod
+    def test_preparse_quality_check_nan_binomial_small_array(mocker, manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.check_random_values = mock.Mock()
+        dm.encode_vars(fake_original_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        # patch sample size to 16, size of input dataset
+        fake_original_dataset.attrs["expected_nan_frequency"] = 1
+        fake_original_dataset.data[:] = numpy.nan
+        dm.pre_chunk_dataset = fake_original_dataset
+        dm.pre_parse_quality_check(fake_original_dataset)
+
+    @staticmethod
     def test_preparse_quality_check_nan_binomial_no_existing(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
@@ -1035,6 +1048,18 @@ class TestPublish:
 
         dm.check_random_values.assert_called_once_with(fake_original_dataset)
         dm.check_nan_frequency.assert_not_called()
+
+    @staticmethod
+    def test_preparse_quality_check_no_frequency_attribute(mocker, manager_class, fake_original_dataset):
+        dm = manager_class()
+        dm.check_random_values = mock.Mock()
+        dm.encode_vars(fake_original_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        # raise AttributeError if expected_nan_frequency attribute not present
+        dm.pre_chunk_dataset = fake_original_dataset
+        with pytest.raises(AttributeError):
+            dm.pre_parse_quality_check(fake_original_dataset)
 
     @staticmethod
     def test_check_random_values_all_ok(manager_class, fake_original_dataset):

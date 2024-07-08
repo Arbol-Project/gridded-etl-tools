@@ -96,7 +96,7 @@ class CHIRPS(DatasetManager):
 
     time_resolution = DatasetManager.SPAN_DAILY
     """Increment size along the "time" coordinate axis"""
-    
+
     data_var = "precip"
 
     standard_name = "precipitation_amount"
