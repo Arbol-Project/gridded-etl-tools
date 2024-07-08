@@ -408,7 +408,7 @@ class Convenience(Attributes):
         if not hasattr(self, "time_dim"):
             self.set_key_dims()
         dataset = self.store.dataset()
-        time_delta = dataset[self.time_dim].values[-1] - dataset[self.time_dim].values[-2]
+        time_delta = dataset[self.time_dim].values[1] - dataset[self.time_dim].values[0]
         return self.numpydate_to_py(dataset[self.time_dim].values[-1] + time_delta)
 
     def get_next_date_as_date_range(self) -> tuple[datetime.datetime, datetime.datetime]:

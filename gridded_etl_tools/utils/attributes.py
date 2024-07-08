@@ -227,7 +227,7 @@ class Attributes(ABC):
 
     Defaults to "observation".
 
-    Ensembles and hindcasts are necessarily forecasts and semantically r be understood
+    Ensembles and hindcasts are necessarily forecasts and semantically should be understood
     to provide (more elaborated) forecast data with 5 and 6 dimensions. Accordingly, "forecast"
     should be understood to specify 4 dimensional forecast data w/out ensembles or hindcasts.
     """
