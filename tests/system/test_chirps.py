@@ -19,7 +19,6 @@ from ..common import (
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
-    run_etl,
 )
 
 
@@ -219,7 +218,7 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(
             latitude=lat,
             longitude=lon,
@@ -256,7 +255,7 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
     assert len(list(input_nc4s)) == 32
 
 
-def test_append_only(manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -266,6 +265,8 @@ def test_append_only(manager_class, heads_path, test_chunks, appended_input_path
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
+    # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
+    manager.expected_nan_frequency = 0
     # run ETL
     manager.transform_data_on_disk()
     publish_dataset = manager.transform_dataset_in_memory()
@@ -277,7 +278,7 @@ def test_append_only(manager_class, heads_path, test_chunks, appended_input_path
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
         .values
     )
@@ -338,6 +339,8 @@ def test_misaligned_zarr_dask_chunks_regression(
     """
     # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
     manager = manager_class(custom_input_path=initial_smaller_input_path, store="ipld")
+    # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
+    manager.expected_nan_frequency = 0.02
     # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
     if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
         mocker.patch(
@@ -349,4 +352,14 @@ def test_misaligned_zarr_dask_chunks_regression(
     manager.parse(publish_dataset)
     manager.publish_metadata()
     # Test an append on this curtailed dataset
-    run_etl(manager_class, input_path=appended_input_path, store="ipld")
+    # run_etl(manager_class, input_path=appended_input_path, store="ipld")
+
+    # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
+    manager = manager_class(custom_input_path=appended_input_path, store="ipld")
+    # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
+    manager.expected_nan_frequency = 0.02
+    # run the ETL
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
+    manager.publish_metadata()

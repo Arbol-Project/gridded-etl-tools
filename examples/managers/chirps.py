@@ -80,6 +80,7 @@ class CHIRPS(DatasetManager):
             "unit of measurement": self.unit_of_measurement,
             "final lag in days": self.final_lag_in_days,
             "preliminary lag in days": self.preliminary_lag_in_days,
+            "expected_nan_frequency": self.expected_nan_frequency,
         }
 
         return static_metadata
@@ -96,35 +97,20 @@ class CHIRPS(DatasetManager):
     time_resolution = DatasetManager.SPAN_DAILY
     """Increment size along the "time" coordinate axis"""
 
-    @classmethod
-    def data_var(self) -> str:
-        """Name of the relevant data variable in the original dataset"""
-        return "precip"
+    data_var = "precip"
 
-    @property
-    def standard_name(self):
-        """Short form name, as per the Climate and Forecasting Metadata Convention"""
-        return "precipitation_amount"
+    standard_name = "precipitation_amount"
 
-    @property
-    def long_name(self):
-        """Long form name, as per the Climate and Forecasting Metadata Convention"""
-        return "Precipitation"
+    long_name = "Precipitation"
 
-    @property
-    def tags(self):
-        """Tags for data to enable filtering"""
-        return ["Precipitation"]
+    tags = ["Precipitation"]
+    """Tags for data in dClimate"""
 
-    @property
-    def unit_of_measurement(self):
-        """Unit of measurement for the component key (data variable)"""
-        return "mm"
+    unit_of_measurement = "mm"
+    """Unit of measurement for the component key (data variable)"""
 
-    @property
-    def dataset_start_date(self):
-        """First date in dataset. Used to populate corresponding encoding and metadata."""
-        return datetime.datetime(1981, 1, 1, 0)
+    dataset_start_date = datetime.datetime(1981, 1, 1, 0)
+    """First date in dataset. Used to populate corresponding encoding and metadata."""
 
     has_nans: bool = True
     """If True, disable quality checks for NaN values to prevent wrongful flags"""
@@ -135,18 +121,14 @@ class CHIRPS(DatasetManager):
     Cannot be empty/None or Kerchunk will fail, so use -9999 if no NoData value actually exists in the dataset.
     """
 
-    @property
-    def dataset_download_url(self) -> str:
-        """URL to download location of the dataset. May be an FTP site, API base URL, or otherwise."""
-        return "ftp.chc.ucsb.edu"
+    dataset_download_url = "ftp.chc.ucsb.edu"
+    """URL to download location of the dataset. May be an FTP site, API base URL, or otherwise."""
 
-    @property
-    def file_type(self) -> str:
-        """
-        File type of raw data. Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray
-        operations.
-        """
-        return "NetCDF"
+    file_type = "NetCDF"
+    """
+    File type of raw data.
+    Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray operations.
+    """
 
     protocol = "file"
     """
@@ -166,10 +148,8 @@ class CHIRPS(DatasetManager):
     other relevant dimension
     """
 
-    @property
-    def bbox_rounding_value(self) -> int:
-        """Value to round bbox values by"""
-        return 3
+    bbox_rounding_value = 3
+    """Value to round bbox values by"""
 
     def extract(self, *, date_range: tuple[datetime.datetime, datetime.datetime] | None = None, **kwargs) -> bool:
         """
@@ -291,8 +271,8 @@ class CHIRPS(DatasetManager):
         ]
         for key in keys_to_remove:
             dataset.attrs.pop(key, None)
-            dataset[self.data_var()].attrs.pop(key, None)
-            dataset[self.data_var()].encoding.pop(key, None)
+            dataset[self.data_var].attrs.pop(key, None)
+            dataset[self.data_var].encoding.pop(key, None)
 
 
 class CHIRPSFinal(CHIRPS, ABC):
@@ -337,6 +317,8 @@ class CHIRPSFinal05(CHIRPSFinal):
         """Increment size along the latitude/longitude coordinate axis"""
         return 0.05
 
+    expected_nan_frequency = 0.738
+
 
 class CHIRPSFinal25(CHIRPSFinal):
     """
@@ -372,6 +354,8 @@ class CHIRPSFinal25(CHIRPSFinal):
     def spatial_resolution(self) -> float:
         """Increment size along the latitude/longitude coordinate axis"""
         return 0.25
+
+    expected_nan_frequency = 0.72
 
 
 class CHIRPSPrelim05(CHIRPS):
@@ -411,3 +395,5 @@ class CHIRPSPrelim05(CHIRPS):
     final_lag_in_days = 30
 
     preliminary_lag_in_days = 6
+
+    expected_nan_frequency = 0.73872

@@ -37,6 +37,22 @@ def fake_original_dataset():
 
 
 @pytest.fixture
+def fake_large_dataset():
+    time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
+    latitude = xr.DataArray(np.arange(1, 1001), dims="latitude", coords={"latitude": np.arange(1, 1001)})
+    longitude = xr.DataArray(np.arange(1, 1001), dims="longitude", coords={"longitude": np.arange(1, 1001)})
+    data = xr.DataArray(
+        np.random.randn(138, 1000, 1000),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
 def forecast_dataset():
     time = xr.DataArray(
         np.array(original_times), dims="forecast_reference_time", coords={"forecast_reference_time": np.arange(138)}
@@ -160,9 +176,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         if set_key_dims:
             self.set_key_dims()
 
-    @classmethod
-    def data_var(self):
-        return "data"
+    data_var = "data"
 
     @property
     def data_var_dtype(self):
@@ -196,6 +210,7 @@ class DummyManager(DummyManagerBase):
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
     final_lag_in_days = 3
+    expected_nan_frequency = 0.2
 
     def get_session(self):
         self.session = DummySession()
