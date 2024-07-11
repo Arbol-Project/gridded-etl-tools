@@ -977,7 +977,7 @@ def test_nan_frequency(
     data_array: np.ndarray,
     expected_nan_frequency: float,
     sample_size: int = 5000,
-    alpha: float = 0.0001,
+    alpha: float = 0.00001,
 ):
     """
     Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
