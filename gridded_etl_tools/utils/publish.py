@@ -594,65 +594,11 @@ class Publish(Transform):
             )
         for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
             time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
-            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var]
-            self.test_nan_frequency(
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var].values
+            test_nan_frequency(
                 data_array=selected_array,
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
             )
-
-    def test_nan_frequency(
-        self,
-        data_array: xr.DataArray,
-        expected_nan_frequency: float,
-        sample_size: int = 5000,
-        alpha: float = 0.001,
-    ):
-        """
-        Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
-        using a binomial test
-
-        This will raise an error if the binomial test fails, otherwise passes silently
-
-        Parameters
-        ----------
-        data_array : xr.DataArray
-            The Xarray DataArray to test.
-        expected_frequency : float
-            The expected frequency of NaNs
-        sample_size : int
-            The number of sample values to randomly extract from the selected time series
-            of the update dataset
-        alpha : float
-            The significance level for the hypothesis test (default is 0.001).
-
-        Returns
-        -------
-        bool
-            True if the observed frequency matches the expected frequency, False otherwise.
-        float
-            The p-value from the binomial test.
-
-        Raises
-        ------
-        NanFrequencyMismatchError
-            An error indicating the observed frequency of NaNs does not correpsond
-            with the observed frequency in historical dataset, even allowing for a margin
-            of error defined by the standard deviation of sample-based estimates of that
-            historical frequency
-        """
-        # Select N random values
-        flat_array = np.ravel(data_array.values)  # necessary for random selection
-        if np.size(flat_array) < sample_size:
-            sample_size = np.prod(flat_array.shape)
-        random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
-        nan_count = np.isnan(random_values).sum()
-
-        # Calculate the confidence interval
-        lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
-
-        # Check if the expected frequency falls within the confidence interval
-        if not (lower_bound <= expected_nan_frequency <= upper_bound):
-            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
     def update_quality_check(
         self,
@@ -1025,6 +971,60 @@ class Publish(Transform):
                 ds[self.data_var] = ds[self.data_var].expand_dims(time_dim)
 
         return ds
+
+
+def test_nan_frequency(
+    data_array: np.ndarray,
+    expected_nan_frequency: float,
+    sample_size: int = 5000,
+    alpha: float = 0.00001,
+):
+    """
+    Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
+    using a binomial test
+
+    This will raise an error if the binomial test fails, otherwise passes silently
+
+    Parameters
+    ----------
+    data_array : np.ndarray
+        The numpy array to test.
+    expected_frequency : float
+        The expected frequency of NaNs
+    sample_size : int
+        The number of sample values to randomly extract from the selected time series
+        of the update dataset
+    alpha : float
+        The significance level for the hypothesis test (default is 0.001).
+
+    Returns
+    -------
+    bool
+        True if the observed frequency matches the expected frequency, False otherwise.
+    float
+        The p-value from the binomial test.
+
+    Raises
+    ------
+    NanFrequencyMismatchError
+        An error indicating the observed frequency of NaNs does not correpsond
+        with the observed frequency in historical dataset, even allowing for a margin
+        of error defined by the standard deviation of sample-based estimates of that
+        historical frequency
+    """
+    # Select N random values
+    flat_array = np.ravel(data_array)  # necessary for random selection
+    if np.size(flat_array) < sample_size:
+        sample_size = np.prod(flat_array.shape)
+    random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
+    nan_count = np.isnan(random_values).sum()
+
+    # Calculate the confidence interval
+    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
+
+    # Check if the expected frequency falls within the confidence interval
+    if not (lower_bound <= expected_nan_frequency <= upper_bound):
+        raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:
