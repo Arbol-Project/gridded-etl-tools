@@ -592,13 +592,22 @@ class Publish(Transform):
                 "Please calculate and populate this field manually "
                 "to enable NaN quality checks during updates."
             )
+        exceptions = 0
         for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
             time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
             selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var].values
-            test_nan_frequency(
-                data_array=selected_array,
-                expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
-            )
+            try:
+                test_nan_frequency(
+                    data_array=selected_array,
+                    expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
+                    time_value=time_value,
+                )
+            except NanFrequencyMismatchError as e:
+                self.info(e)
+                exceptions += 1
+
+        if exceptions >= 1:
+            raise ValueError(f"{exceptions} NaN error(s) encountered, exiting script")
 
     def update_quality_check(
         self,
@@ -976,6 +985,7 @@ class Publish(Transform):
 def test_nan_frequency(
     data_array: np.ndarray,
     expected_nan_frequency: float,
+    time_value: np.datetime64,
     sample_size: int = 5000,
     alpha: float = 0.00001,
 ):
@@ -991,6 +1001,8 @@ def test_nan_frequency(
         The numpy array to test.
     expected_frequency : float
         The expected frequency of NaNs
+    time_value: np.datetime64
+        The time value associated with this test, for tracing any exceptions encountered
     sample_size : int
         The number of sample values to randomly extract from the selected time series
         of the update dataset
@@ -1024,7 +1036,9 @@ def test_nan_frequency(
 
     # Check if the expected frequency falls within the confidence interval
     if not (lower_bound <= expected_nan_frequency <= upper_bound):
-        raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
+        raise NanFrequencyMismatchError(
+            nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound, alpha, time_value
+        )
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:

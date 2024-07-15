@@ -215,6 +215,7 @@ class Transform(Metadata, Convenience):
                 raise ValueError(f"Invalid value for file_type. Expected 'NetCDF' or 'GRIB', got {self.file_type}")
         except OSError as e:
             raise ValueError(f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}")
+
         return scanned_zarr_json
 
     def remote_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
@@ -287,6 +288,7 @@ class Transform(Metadata, Convenience):
         local_file_path = self.file_path_from_zarr_json_attrs(
             scanned_zarr_json=scanned_zarr_json, local_file_path=local_file_path
         )
+
         with open(local_file_path, "w") as file:
             json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
             self.info(f"Wrote local JSON to {local_file_path}")
