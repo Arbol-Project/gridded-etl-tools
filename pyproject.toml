@@ -43,6 +43,7 @@ dependencies = [
     "natsort",
     "nest-asyncio",
     "netcdf4<1.7.1",
+    "numcodecs>=0.13.0",
     "numpy<2.0.0",
     "p_tqdm",
     "pandas",
