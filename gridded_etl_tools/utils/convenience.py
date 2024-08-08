@@ -306,7 +306,7 @@ class Convenience(Attributes):
         return start, end
 
     def get_date_range_from_file(
-        self, path: str, backend_kwargs: dict = None
+        self, path: str, backend_kwargs: dict = None, kwargs: dict = None
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Open file and return the start and end date of the data. The dimension name used to store dates should be
@@ -318,14 +318,15 @@ class Convenience(Attributes):
             Path to the input dataset file on disk
         backend_kwargs : dict, optional
             Backend arguments for the xr.open_dataset() method
+        kwargs : dict, optional
+            A dictionary of any additional kwargs that are specific to open_dataset, not the backend
 
         Returns
         -------
         tuple
             A tuple of datetime.datetime objects defining the start and end date of a file's time dimension
-
         """
-        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
+        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs, **kwargs)
         return self.get_date_range_from_dataset(dataset)
 
     def date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
