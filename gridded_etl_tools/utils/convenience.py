@@ -306,7 +306,7 @@ class Convenience(Attributes):
         return start, end
 
     def get_date_range_from_file(
-        self, path: str, backend_kwargs: dict = None, kwargs: dict = None
+        self, path: str, backend_kwargs: dict = None, **kwargs
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Open file and return the start and end date of the data. The dimension name used to store dates should be
@@ -371,7 +371,7 @@ class Convenience(Attributes):
             datetime.datetime.strptime(date_range[1], parse_string),
         )
 
-    def get_newest_file_date_range(self) -> datetime.datetime:
+    def get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
         """
         Return the date range of the newest local file
 
@@ -381,7 +381,7 @@ class Convenience(Attributes):
             The start and end date of the newest local file
 
         """
-        return self.get_date_range_from_file(list(self.input_files())[-1])
+        return self.get_date_range_from_file(list(self.input_files())[-1], **kwargs)
 
     @property
     def next_date(self) -> datetime.datetime:
