@@ -294,12 +294,13 @@ class TestConvenience:
         xr.open_dataset.return_value = fake_original_dataset
 
         dm = manager_class()
-        assert dm.get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}) == (
+        kwargs = {"engine": "Rolls Royce"}
+        assert dm.get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}, **kwargs) == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
 
-        xr.open_dataset.assert_called_once_with("some/arbitrary/path", backend_kwargs={"foo": "bar"})
+        xr.open_dataset.assert_called_once_with("some/arbitrary/path", backend_kwargs={"foo": "bar"}, **kwargs)
 
     @staticmethod
     def test_date_range_to_string(manager_class):
@@ -326,12 +327,12 @@ class TestConvenience:
 
         dm = manager_class()
         dm.input_files = Mock(return_value=("notthisone", "thisone"))
-        assert dm.get_newest_file_date_range() == (
+        assert dm.get_newest_file_date_range(engine="Rolls Royce") == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
 
-        xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None)
+        xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None, engine="Rolls Royce")
 
     @staticmethod
     def test_next_date(manager_class, fake_original_dataset):
