@@ -181,7 +181,7 @@ Even with an hourly dataset we encode IPFS chunks of one day each, since ERA5 da
 
 **PRISM**
 
-PRISM is a daily dataset which only begins in 1991 and therefore has a much smaller time dimension of approximately 15,000 datetimes.
+PRISM is a daily dataset which only begins in 1981 and therefore has a much smaller time dimension of approximately 15,000 datetimes.
 
 The smaller time dimension means we can afford to make time chunks smaller relative to latitude/longitude without badly compromising the performance of queries over the full time range. As a result, queries for large areas with PRISM will perform better (quicker) relative to ERA5.
 
