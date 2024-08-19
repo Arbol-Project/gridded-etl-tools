@@ -325,7 +325,7 @@ Metadata specific to the dataset is processed within its manager and appended to
 
 Metadata creation and updates should adopt the following logic to avoid unanticipated points of failure with the population of metadata:
 
-* To the extent possible, metadata common to all subclasses of a datasets -- spatial extent, provider description, etc. -- should be declared in a `static_metadata` property at the top of manager.
+* To the extent possible, metadata common to all subclasses of datasets -- spatial extent, provider description, etc. -- should be declared in a `static_metadata` property at the top of manager.
 * Metadata which varies by subclass -- spatial resolution, unit of measurement, etc. -- should be declared as properties of that subclass and then populated w/in `static_metadata` by calls of those properties.
 * Dynamically generated metadata -- e.g. the data range or finalization date -- should be populated in `populate_metadata` (if dependent on ETL operations) or `set_zarr_metadata` (if dependent on the dataset) under `parse`. An example of the former might be the latest update time for a dataset, which is found during retrieval; an example of the latter might be to remove properties encoded in each file by the provider.
 * Metadata should never be edited within `extract` or its helper methods. If reference to previous metadata or dataset properties is needed, read in the existing STAC metadata via `load_stac_metadata`.
