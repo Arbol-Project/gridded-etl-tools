@@ -135,11 +135,8 @@ class HTTPExtractor(Extractor):
         html = page.content.decode("utf-8")
         tree = etree.parse(StringIO(html), parser=etree.HTMLParser())
         refs = tree.xpath("//a")
-        return [
-            link
-            for link in set([link.get("href", "") for link in refs])
-            if "https" not in link and "mailto" not in link
-        ]
+        href_links = set([link.get("href", "") for link in refs])
+        return [link for link in href_links if "https" not in link and "mailto" not in link]
 
 
 class S3Extractor(Extractor):
