@@ -2,6 +2,7 @@ import pytest
 import time
 import ftplib
 import pathlib
+from lxml.etree import Element, ElementTree
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
@@ -86,6 +87,33 @@ class TestHTTPExtractor:
         extractor.request(**kwargs)
         dm.get_session.assert_not_called()
         dm.session.get.assert_called_once_with(rfp)
+
+    @staticmethod
+    def test_get_hrefs(mocker, manager_class):
+        elements_data = [
+            ("a", [("href", "purple-coffee")]),
+            ("a", [("href", "sour-avocadoes")]),
+            ("a", [("href", "https://boring-normal-foods.tasty")]),
+            ("a", [("href", "mailto:vladimir-putin@farmers-only.com")]),
+        ]
+        root = Element("root")
+        for tag, attributes in elements_data:
+            child = Element(tag, dict(attributes))
+            root.append(child)
+        tree = ElementTree(root)
+
+        # mocks
+        dm = manager_class()
+        dm.session = Mock()
+        dm.session.get.return_value = Mock()
+        etree = mocker.patch("gridded_etl_tools.utils.extractor.etree")
+        mocker.patch("gridded_etl_tools.utils.extractor.StringIO")
+        etree.parse.return_value = tree
+
+        # test
+        extractor = HTTPExtractor(dm)
+        hrefs = sorted(extractor.get_hrefs("https://bizarre-foods.reference"))
+        assert hrefs == sorted(["sour-avocadoes", "purple-coffee"])
 
 
 class TestS3Extractor:

@@ -20,6 +20,8 @@ import re
 import time
 import logging
 
+from io import StringIO
+from lxml import etree
 
 log = logging.getLogger("extraction_logs")
 
@@ -47,7 +49,6 @@ class Extractor(ABC):
         if not batch:
             log.info("No jobs submitted for downloading, exiting ETL.")
             return False
-
         with ThreadPool(self._concurrency_limit) as pool:
             results = pool.map(self._request_helper, batch)
             all_successful = all(results)
@@ -115,6 +116,30 @@ class HTTPExtractor(Extractor):
         with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
             outfile.write(self.dm.session.get(remote_file_path).content)
         return True
+
+    def get_hrefs(self, url: str) -> list[str]:
+        """Get a list of links from a given URL
+
+        Parameters
+        ----------
+        url : str
+            A URL to scrape links from
+
+        Returns
+        -------
+        list[str]
+            A list of links, in string format, from the specified URL
+        """
+        self.dm.info("Getting links from: " + url)
+        page = self.dm.session.get(url, timeout=10)
+        html = page.content.decode("utf-8")
+        tree = etree.parse(StringIO(html), parser=etree.HTMLParser())
+        refs = tree.xpath("//a")
+        return [
+            link
+            for link in set([link.get("href", "") for link in refs])
+            if "https" not in link and "mailto" not in link
+        ]
 
 
 class S3Extractor(Extractor):
