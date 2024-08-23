@@ -19,9 +19,9 @@ import ftplib
 import re
 import time
 import logging
+import requests
 
-from io import StringIO
-from lxml import etree
+from bs4 import BeautifulSoup
 
 log = logging.getLogger("extraction_logs")
 
@@ -116,27 +116,6 @@ class HTTPExtractor(Extractor):
         with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
             outfile.write(self.dm.session.get(remote_file_path).content)
         return True
-
-    def get_hrefs(self, url: str) -> list[str]:
-        """Get a list of links from a given URL
-
-        Parameters
-        ----------
-        url : str
-            A URL to scrape links from
-
-        Returns
-        -------
-        list[str]
-            A list of links, in string format, from the specified URL
-        """
-        self.dm.info("Getting links from: " + url)
-        page = self.dm.session.get(url, timeout=10)
-        html = page.content.decode("utf-8")
-        tree = etree.parse(StringIO(html), parser=etree.HTMLParser())
-        refs = tree.xpath("//a")
-        href_links = set([link.get("href", "") for link in refs])
-        return [link for link in href_links if "https" not in link and "mailto" not in link]
 
 
 class S3Extractor(Extractor):
@@ -418,3 +397,35 @@ class FTPExtractor(Extractor):
             List of paths to files in the current working directory matching the pattern
         """
         return list(self.find(pattern))
+
+
+def get_hrefs(session: requests.Session, url: str, filters: tuple[str]) -> tuple[str]:
+    """
+    Get a list of links from a given URL.
+
+    Parameters
+    ----------
+    session : requests.Session
+        An existing session object to make requests.
+    url : str
+        A URL to scrape links from.
+    filters : tuple[str]
+        A list of string filters. For each filter, excludes links that start with that filter
+
+    Returns
+    -------
+    tuple[str]
+        A list of links, in string format, from the specified URL.
+    """
+    print(f"Getting links from: {url}")
+    response = session.get(url, timeout=10)
+    response.raise_for_status()  # Raises an exception for 4xx/5xx errors
+
+    soup = BeautifulSoup(response.content, "html.parser")
+    href_links = set(link.get("href") for link in soup.find_all("a", href=True))
+
+    # Apply filters sequentially
+    for filter in filters:
+        href_links = [link for link in href_links if not link.startswith(filter)]
+
+    return href_links

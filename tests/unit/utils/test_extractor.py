@@ -2,10 +2,9 @@ import pytest
 import time
 import ftplib
 import pathlib
-from lxml.etree import Element, ElementTree
 
 from unittest.mock import Mock
-from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
+from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor, get_hrefs
 from .test_convenience import DummyFtpClient
 
 
@@ -14,6 +13,26 @@ class ConcreteExtractor(Extractor):
         """
         Make base class instantiable
         """
+
+
+@staticmethod
+def test_get_hrefs(mocker, manager_class):
+    example_links_soup = """<a class="example" href="purple-coffee" id="Link1">Purple coffee<</a>,
+        <a class="example" href="sour-avocadoes" id="Link2"><Sour avocadoes</a>,
+        <a class="example" href="https://boring-normal-foods.tasty" id="Link1"><Other stuff/a>,
+        <a class="example" href="mailto:vladimir-putin@farmers-only.com" id="Link1"><Lonely hearts</a>,"""
+
+    # mocks
+    dm = manager_class()
+    dm.session = Mock()
+    response = dm.session.get.return_value
+    response.content = example_links_soup
+
+    # test
+    hrefs = sorted(
+        get_hrefs(session=dm.session, url="https://bizarre-foods.reference", filters=["https://", "mailto:"])
+    )
+    assert hrefs == sorted(["sour-avocadoes", "purple-coffee"])
 
 
 class TestExtractor:
@@ -87,33 +106,6 @@ class TestHTTPExtractor:
         extractor.request(**kwargs)
         dm.get_session.assert_not_called()
         dm.session.get.assert_called_once_with(rfp)
-
-    @staticmethod
-    def test_get_hrefs(mocker, manager_class):
-        elements_data = [
-            ("a", [("href", "purple-coffee")]),
-            ("a", [("href", "sour-avocadoes")]),
-            ("a", [("href", "https://boring-normal-foods.tasty")]),
-            ("a", [("href", "mailto:vladimir-putin@farmers-only.com")]),
-        ]
-        root = Element("root")
-        for tag, attributes in elements_data:
-            child = Element(tag, dict(attributes))
-            root.append(child)
-        tree = ElementTree(root)
-
-        # mocks
-        dm = manager_class()
-        dm.session = Mock()
-        dm.session.get.return_value = Mock()
-        etree = mocker.patch("gridded_etl_tools.utils.extractor.etree")
-        mocker.patch("gridded_etl_tools.utils.extractor.StringIO")
-        etree.parse.return_value = tree
-
-        # test
-        extractor = HTTPExtractor(dm)
-        hrefs = sorted(extractor.get_hrefs("https://bizarre-foods.reference"))
-        assert hrefs == sorted(["sour-avocadoes", "purple-coffee"])
 
 
 class TestS3Extractor:
