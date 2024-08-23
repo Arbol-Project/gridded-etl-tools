@@ -32,6 +32,7 @@ readme = "README.md"
 keywords = ["Climate", "Zarr", "ETL", "IPFS"]
 requires-python = ">=3.10"
 dependencies = [
+    "bs4",
     "cfgrib",
     "dag-cbor==0.2.2",
     "dask[array,diagnostics,distributed]",
@@ -39,7 +40,6 @@ dependencies = [
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
     "kerchunk",
-    "lxml",
     "multiformats",
     "natsort",
     "nest-asyncio",
