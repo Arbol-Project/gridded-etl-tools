@@ -2,9 +2,12 @@ import pytest
 import time
 import ftplib
 import pathlib
+import responses
+import requests
+import re
 
 from unittest.mock import Mock
-from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor, get_hrefs
+from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
 from .test_convenience import DummyFtpClient
 
 
@@ -13,26 +16,6 @@ class ConcreteExtractor(Extractor):
         """
         Make base class instantiable
         """
-
-
-@staticmethod
-def test_get_hrefs(mocker, manager_class):
-    example_links_soup = """<a class="example" href="purple-coffee" id="Link1">Purple coffee<</a>,
-        <a class="example" href="sour-avocadoes" id="Link2"><Sour avocadoes</a>,
-        <a class="example" href="https://boring-normal-foods.tasty" id="Link1"><Other stuff/a>,
-        <a class="example" href="mailto:vladimir-putin@farmers-only.com" id="Link1"><Lonely hearts</a>,"""
-
-    # mocks
-    dm = manager_class()
-    dm.session = Mock()
-    response = dm.session.get.return_value
-    response.content = example_links_soup
-
-    # test
-    hrefs = sorted(
-        get_hrefs(session=dm.session, url="https://bizarre-foods.reference", filters=["https://", "mailto:"])
-    )
-    assert hrefs == sorted(["sour-avocadoes", "purple-coffee"])
 
 
 class TestExtractor:
@@ -55,8 +38,29 @@ class TestExtractor:
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         extractor.request = Mock(return_value=True)
+
+        # Mappings
         result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
+        extractor.request.assert_any_call(one=1, two=2)
+        extractor.request.assert_any_call(one=3, two=4)
+        extractor.request.assert_any_call(one=5, two=6)
+
+        # Sequences
+        result = extractor.pool(batch=[[1, 2], [3, 4], [5, 6]])
+        assert extractor.request.call_count == 6
+        extractor.request.assert_any_call(1, 2)
+        extractor.request.assert_any_call(3, 4)
+        extractor.request.assert_any_call(5, 6)
+
+        # Scalars
+        result = extractor.pool(batch=[1, 2, 3, 4])
+        assert extractor.request.call_count == 10
+        extractor.request.assert_any_call(1)
+        extractor.request.assert_any_call(2)
+        extractor.request.assert_any_call(3)
+        extractor.request.assert_any_call(4)
+
         assert result is True
 
     def test_pool_request_failure(self):
@@ -68,44 +72,132 @@ class TestExtractor:
         assert result is False
 
 
+# Mock data for testing HTTP extraction
+
+government_website = "https://bizarre-foods.reference/farmland/yield.html"
+
+government_website_broken = "https://bizarre-foods.reference/broken/link"
+
+crops = b"""<a class="example" href="purple-coffee" id="Link1">Purple coffee<</a>,
+    <a class="example" href="sour-avocadoes" id="Link2"><Sour avocadoes</a>,
+    <a class="example" href="happy/juice.data" id="Link2"><Happy Juice</a>,
+    <a class="example" href="/deforestation_techniques.html" id="Link2">Learn from the pros</a>,
+    <a class="example" href="https://boring-normal-foods.tasty" id="Link1"><Other stuff</a>,
+    <a class="example" href="mailto:vladimir-putin@farmers-only.com" id="Link1"><Lonely hearts</a>,"""
+
+happy_juice = b"\xe2\x98\xba\xf0\x9f\xa7\x83"
+purple_coffee = b"\xf0\x9f\x9f\xaa\xe2\x98\x95"
+sour_avocadoes = b"\xf0\x9f\x8d\x8b\xf0\x9f\xa5\x91"
+
+
+# Requests for mock URLs defined in this fixture will be successfully requested when this fixture is passed to a
+# function and the `@responses.activate` header is used.
+@pytest.fixture
+def mocked_responses():
+
+    with responses.RequestsMock() as rsps:
+
+        # To test successful requests
+        responses.get(government_website, body=crops, status=200)
+
+        # To test unsuccessful requests
+        responses.get(government_website_broken, status=500)
+
+        # To test downloading data
+        responses.get("https://bizarre-foods.reference/farmland/sour-avocadoes", body=sour_avocadoes, status=200)
+        responses.get("https://bizarre-foods.reference/farmland/purple-coffee", body=purple_coffee, status=200)
+        responses.get("https://bizarre-foods.reference/farmland/happy/juice.data", body=happy_juice, status=200)
+
+        yield rsps
+
+
 class TestHTTPExtractor:
 
     @staticmethod
-    def test_http_request_no_existing_session(manager_class, tmp_path):
-        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
-        dm = manager_class()
-        dm.get_session = Mock(side_effect=dm.get_session)
+    def test_member_assignments(manager_class):
+        with HTTPExtractor(manager_class(), 4, 5, 0.5) as extractor:
+            assert extractor._concurrency_limit == 4
+            assert extractor.retries == 5
+            assert extractor.backoff_factor == 0.5
 
-        extractor = HTTPExtractor(dm)
-        dm.local_input_path = Mock(return_value=tmp_path)
-        dm.session.get = Mock(side_effect=dm.session.get)
-
-        rfp = "https://remote/sand/depo/castle1.json"
-        lfp = "castle1.json"
-        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
-
-        extractor.request(**kwargs)
-        dm.get_session.assert_called_once()
-        dm.session.get.assert_called_once_with(rfp)
-
+    # Test a request that gets the mocked responses. This will write a file to a temporary location using pytest's
+    # `tmp_path` fixture.
     @staticmethod
-    def test_http_request_session_already_exists(manager_class, tmp_path, session_obj):
-        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
-        dm = manager_class()
-        dm.session = session_obj
-        dm.get_session = Mock(side_effect=dm.get_session)
+    @responses.activate
+    def test_requests(manager_class, mocked_responses, tmp_path):
+        tmp_path.mkdir(exist_ok=True)
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            extractor.dm.local_input_path = Mock(return_value=tmp_path)
+            extractor.request(government_website)
+            assert (tmp_path / "yield.html").read_bytes() == crops
 
-        extractor = HTTPExtractor(dm)
-        dm.local_input_path = Mock(return_value=tmp_path)
-        dm.session.get = Mock(side_effect=dm.session.get)
+            # Test writing to a non-default location
+            extractor.request(government_website, tmp_path / "automated_insurance.data")
+            assert (tmp_path / "automated_insurance.data").read_bytes() == crops
 
-        rfp = "https://remote/sand/depo/castle1.json"
-        lfp = "castle1.json"
-        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
+    # Test that a 500 error fails with a RetryError exception
+    @staticmethod
+    @responses.activate
+    def test_server_error_request(manager_class, mocked_responses):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            with pytest.raises(requests.exceptions.RetryError):
+                extractor.request(government_website_broken)
 
-        extractor.request(**kwargs)
-        dm.get_session.assert_not_called()
-        dm.session.get.assert_called_once_with(rfp)
+    # Test that making requests outside of a context manager fails
+    @staticmethod
+    def test_missing_context_manager(manager_class):
+        extractor = HTTPExtractor(manager_class(), 4, 3, 0.1)
+        with pytest.raises(RuntimeError):
+            extractor.request(government_website)
+        with pytest.raises(RuntimeError):
+            extractor.get_links(government_website)
+
+    # Test link scraping and filtering
+    @staticmethod
+    @responses.activate
+    def test_get_links(manager_class, mocked_responses, tmp_path):
+
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+
+            # Get all links
+            links = extractor.get_links(government_website)
+            assert links == set(
+                [
+                    "https://bizarre-foods.reference/farmland/sour-avocadoes",
+                    "https://bizarre-foods.reference/farmland/purple-coffee",
+                    "https://bizarre-foods.reference/farmland/happy/juice.data",
+                    "https://bizarre-foods.reference/deforestation_techniques.html",
+                    "https://boring-normal-foods.tasty",
+                    "mailto:vladimir-putin@farmers-only.com",
+                ]
+            )
+
+            # Get links that match a regular expression
+            links = extractor.get_links(government_website, re.compile("[a-z]+-[a-z]+-[a-z]+"))
+            assert links == set(["https://boring-normal-foods.tasty"])
+
+            # Remove links matching specific prefixes using a separately defined function
+            def filter_out_prefixes(href):
+                return not href.startswith("https://") and not href.startswith("mailto:") and not href.startswith("/")
+
+            links = extractor.get_links(government_website, filter_out_prefixes)
+            assert links == set(
+                [
+                    "https://bizarre-foods.reference/farmland/sour-avocadoes",
+                    "https://bizarre-foods.reference/farmland/purple-coffee",
+                    "https://bizarre-foods.reference/farmland/happy/juice.data",
+                ]
+            )
+
+            # Download the content of the last request
+            tmp_path.mkdir(exist_ok=True)
+            extractor.dm.local_input_path = Mock(return_value=tmp_path)
+            extractor.pool(links)
+
+            # Check the files
+            (tmp_path / "sour-avocadoes").read_bytes().decode() == "🍋🥑"
+            (tmp_path / "purple-coffee").read_bytes().decode() == "🟪☕"
+            (tmp_path / "juice.data").read_bytes().decode() == "☺🧃"
 
 
 class TestS3Extractor:

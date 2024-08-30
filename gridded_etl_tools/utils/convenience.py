@@ -27,12 +27,12 @@ class Convenience(Attributes):
     # BASE DIRECTORIES
 
     def root_directory(self, refresh: bool = False):
-        if refresh or not hasattr(
-            self, "_root_directory"
-        ):  # ensure this is only calculated one time, at the beginning of the script
-            self._root_directory = (
-                pathlib.Path.cwd()
-            )  # Paths are relative to the working directory of the ETL manager, *not* the scripts
+        # ensure this is only calculated one time, at the beginning of the script
+        if refresh or not hasattr(self, "_root_directory"):
+
+            # Paths are relative to the working directory of the ETL manager, *not* the scripts
+            self._root_directory = pathlib.Path.cwd()
+
         return self._root_directory
 
     @property
