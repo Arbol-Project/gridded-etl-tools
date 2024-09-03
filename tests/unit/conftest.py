@@ -1,7 +1,6 @@
 import datetime
 import json
 import pathlib
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -143,11 +142,6 @@ def manager_class():
     return DummyManager
 
 
-@pytest.fixture
-def session_obj():
-    return DummySession
-
-
 def unimplemented(*args, **kwargs):  # pragma NO COVER
     raise NotImplementedError
 
@@ -194,14 +188,6 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         return self._static_metadata
 
 
-class DummySession:
-
-    def get(self, *args, **kwargs):
-        return_object = Mock()
-        return_object.content = b"get it while the gettins good"
-        return return_object
-
-
 class DummyManager(DummyManagerBase):
     collection_name = "Vintage Guitars"
     concat_dimensions = ["z", "zz"]
@@ -211,9 +197,6 @@ class DummyManager(DummyManagerBase):
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
-
-    def get_session(self):
-        self.session = DummySession()
 
 
 # Set up overcomplicated mro for testing get_subclass(es)
