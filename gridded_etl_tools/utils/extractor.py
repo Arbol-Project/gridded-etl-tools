@@ -105,7 +105,6 @@ class Extractor(ABC):
         bool
             True if the request was successful, False otherwise.
         """
-        print(arg)
         if isinstance(arg, collections.abc.Mapping):
             return self.request(**arg)
         elif isinstance(arg, list) or isinstance(arg, tuple) or isinstance(arg, set):
