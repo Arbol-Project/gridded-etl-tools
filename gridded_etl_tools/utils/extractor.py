@@ -248,7 +248,7 @@ class HTTPExtractor(Extractor):
     def request(self, remote_file_path: str, destination_path: pathlib.Path | None = None) -> bool:
         """
         Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
-        given, the file will be saved to `self.dm.local_input_path()` with the same name it has on the server.
+        given, the file will be saved to the working directory with the same name it has on the server.
 
         An active session is required to make the request, so this must be called from within a context manager for this
         object.
@@ -278,8 +278,9 @@ class HTTPExtractor(Extractor):
             destination_path = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
 
         # Open the remote file, and write it locally
-        with open(self.dm.local_input_path() / destination_path, "wb") as outfile:
-            outfile.write(self.session.get(remote_file_path).content)
+        content = self.session.get(remote_file_path).content
+        with open(destination_path, "wb") as outfile:
+            outfile.write(content)
 
         # If no exceptions were raised, the file was downloaded successfully
         return True

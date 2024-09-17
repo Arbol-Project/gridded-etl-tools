@@ -5,6 +5,7 @@ import pathlib
 import responses
 import requests
 import re
+import os
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
@@ -127,13 +128,19 @@ class TestHTTPExtractor:
     def test_requests(manager_class, mocked_responses, tmp_path):
         tmp_path.mkdir(exist_ok=True)
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-            extractor.dm.local_input_path = Mock(return_value=tmp_path)
-            extractor.request(government_website)
-            assert (tmp_path / "yield.html").read_bytes() == crops
-
-            # Test writing to a non-default location
+            # Test writing by passing the destination explicitly
             extractor.request(government_website, tmp_path / "automated_insurance.data")
             assert (tmp_path / "automated_insurance.data").read_bytes() == crops
+
+            # Change into a temp directory to test the default write location. The try/finally ensures that the original
+            # directory is always returned to. In Python 3.11, there is a better alternative in contextlib.chdir.
+            original_working_dir = os.getcwd()
+            try:
+                os.chdir(tmp_path)
+                extractor.request(government_website)
+            finally:
+                os.chdir(original_working_dir)
+            assert (tmp_path / "yield.html").read_bytes() == crops
 
     # Test that a 500 error fails with a RetryError exception
     @staticmethod
@@ -189,10 +196,16 @@ class TestHTTPExtractor:
                 ]
             )
 
-            # Download the content of the last request
+            # Download the content of the last request, using a temp directory as the working directory. The
+            # try/finally ensures that the original directory is always returned to. In Python 3.11, there is a better
+            # alternative in contextlib.chdir.
             tmp_path.mkdir(exist_ok=True)
-            extractor.dm.local_input_path = Mock(return_value=tmp_path)
-            extractor.pool(links)
+            original_working_dir = os.getcwd()
+            try:
+                os.chdir(tmp_path)
+                extractor.pool(links)
+            finally:
+                os.chdir(original_working_dir)
 
             # Check the files
             (tmp_path / "sour-avocadoes").read_bytes().decode() == "🍋🥑"
