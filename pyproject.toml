@@ -32,6 +32,7 @@ readme = "README.md"
 keywords = ["Climate", "Zarr", "ETL", "IPFS"]
 requires-python = ">=3.10"
 dependencies = [
+    "beautifulsoup4",
     "cfgrib",
     "dag-cbor==0.2.2",
     "dask[array,diagnostics,distributed]",
@@ -66,6 +67,7 @@ testing = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "responses"
 ]
 dev = [
     "black",
@@ -95,4 +97,4 @@ namespaces = false
 [tool.flake8]
 # flake8 and black disagree on E203, E701, and W503
 ignore = ["E203", "E701", "W503"]
-max-line-length = 119
+max-line-length = 120
