@@ -250,6 +250,10 @@ class HTTPExtractor(Extractor):
         Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
         given, the file will be saved to the working directory with the same name it has on the server.
 
+        If an existing directory is given as the destination path, the file will be written to the given directory with
+        the same file name as on the server. If a destination path is given and is not a directory, the file will be
+        written to the given path.
+
         An active session is required to make the request, so this must be called from within a context manager for this
         object.
 
@@ -273,9 +277,16 @@ class HTTPExtractor(Extractor):
 
         log.info(f"Downloading {remote_file_path}")
 
-        if destination_path is None:
+        # Build a dynamic path if a full destination path hasn't been given
+        if destination_path is None or destination_path.is_dir():
+
             # Extract the file name from the end of the URL
-            destination_path = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+            file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+
+            if destination_path is None:
+                destination_path = file_name
+            else:
+                destination_path /= file_name
 
         # Open the remote file, and write it locally
         content = self.session.get(remote_file_path).content

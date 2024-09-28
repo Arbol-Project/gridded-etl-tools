@@ -142,6 +142,12 @@ class TestHTTPExtractor:
                 os.chdir(original_working_dir)
             assert (tmp_path / "yield.html").read_bytes() == crops
 
+            # Test writing to an existing directory
+            research_folder = tmp_path / "research"
+            research_folder.mkdir(exist_ok=True)
+            extractor.request(government_website, research_folder)
+            assert (research_folder / "yield.html").read_bytes() == crops
+
     # Test that a 500 error fails with a RetryError exception
     @staticmethod
     @responses.activate
