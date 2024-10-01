@@ -128,7 +128,8 @@ class TestHTTPExtractor:
     def test_requests(manager_class, mocked_responses, tmp_path):
         tmp_path.mkdir(exist_ok=True)
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-            # Test writing by passing the destination explicitly
+
+            # Test writing to a given file path
             extractor.request(government_website, tmp_path / "automated_insurance.data")
             assert (tmp_path / "automated_insurance.data").read_bytes() == crops
 
@@ -217,6 +218,32 @@ class TestHTTPExtractor:
             (tmp_path / "sour-avocadoes").read_bytes().decode() == "🍋🥑"
             (tmp_path / "purple-coffee").read_bytes().decode() == "🟪☕"
             (tmp_path / "juice.data").read_bytes().decode() == "☺🧃"
+
+    # Use OrderedRegistry to create a series of only failed responses, and a series of failed responses followed
+    # by a successful response
+    @staticmethod
+    @responses.activate(registry=responses.registries.OrderedRegistry)
+    def test_extract_http_retries(manager_class, tmp_path):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 6):
+                results.append(responses.get("https://good.data", status=500))
+            with pytest.raises(requests.exceptions.RetryError):
+                extractor.get_links("https://good.data")
+            for index, result in enumerate(results):
+                if index < 4:
+                    assert result.call_count == 1
+                else:
+                    assert result.call_count == 0
+        responses.reset()
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 3):
+                results.append(responses.get("https://good.data", status=500))
+            results.append(responses.get("https://good.data", status=200))
+            assert extractor.request("https://good.data", tmp_path / pathlib.Path("stonks.jpeg"))
+            for result in results:
+                assert result.call_count == 1
 
 
 class TestS3Extractor:
