@@ -1,8 +1,5 @@
-import os
 import pathlib
 import datetime
-import re
-import ftplib
 import io
 import json
 import random
@@ -115,7 +112,7 @@ class Convenience(Attributes):
             Files from `self.local_input_path()`
 
         """
-        root = pathlib.Path(self.local_input_path)
+        root = pathlib.Path(self.local_input_path())
         for entry in natsort.natsorted(pathlib.Path(root).iterdir()):
             if not entry.name.startswith(".") and not entry.name.endswith(".idx") and entry.is_file():
                 yield pathlib.Path(root / entry.name)

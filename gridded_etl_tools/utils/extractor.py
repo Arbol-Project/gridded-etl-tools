@@ -31,7 +31,6 @@ log = logging.getLogger("extraction_logs")
 
 
 class Extractor(ABC):
-
     def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
         """
         Create an instance of `Extrator`. `Extractor` is an abstract base class, so this should not be called directly.
@@ -292,7 +291,6 @@ class HTTPExtractor(Extractor):
 
         # Build a dynamic path if a full destination path hasn't been given
         if destination_path is None or destination_path.is_dir():
-
             # Extract the file name from the end of the URL
             file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
 

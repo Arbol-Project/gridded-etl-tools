@@ -20,7 +20,6 @@ class ConcreteExtractor(Extractor):
 
 
 class TestExtractor:
-
     @staticmethod
     def test_init():
         dm = Mock()
@@ -95,9 +94,7 @@ sour_avocadoes = b"\xf0\x9f\x8d\x8b\xf0\x9f\xa5\x91"
 # function and the `@responses.activate` header is used.
 @pytest.fixture
 def mocked_responses():
-
     with responses.RequestsMock() as rsps:
-
         # To test successful requests
         responses.get(government_website, body=crops, status=200)
 
@@ -113,7 +110,6 @@ def mocked_responses():
 
 
 class TestHTTPExtractor:
-
     @staticmethod
     def test_member_assignments(manager_class):
         with HTTPExtractor(manager_class(), 4, 5, 0.5) as extractor:
@@ -128,7 +124,6 @@ class TestHTTPExtractor:
     def test_requests(manager_class, mocked_responses, tmp_path):
         tmp_path.mkdir(exist_ok=True)
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-
             # Test writing to a given file path
             extractor.request(government_website, tmp_path / "automated_insurance.data")
             assert (tmp_path / "automated_insurance.data").read_bytes() == crops
@@ -170,9 +165,7 @@ class TestHTTPExtractor:
     @staticmethod
     @responses.activate
     def test_get_links(manager_class, mocked_responses, tmp_path):
-
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-
             # Get all links
             links = extractor.get_links(government_website)
             assert links == set(
@@ -247,7 +240,6 @@ class TestHTTPExtractor:
 
 
 class TestS3Extractor:
-
     @staticmethod
     def test_s3_request(manager_class):
         extractor = S3Extractor(manager_class())
