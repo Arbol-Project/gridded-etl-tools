@@ -45,9 +45,6 @@ class DummyFtpClient:
         filename = command[5:]
         write(self.files[filename]["contents"])
 
-    def size(self, filename):
-        return len(self.files[filename]["contents"])
-
     def pwd(self):
         if self.contexts == 0:
             raise ftplib.error_perm
