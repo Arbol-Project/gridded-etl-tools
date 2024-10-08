@@ -1308,7 +1308,7 @@ class TestMetadata:
     @staticmethod
     def test_merge_in_outside_metadata_not_ipld(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
+        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
         dataset = fake_original_dataset
         dataset.attrs = {"foo": "bar"}
@@ -1333,7 +1333,7 @@ class TestMetadata:
     @staticmethod
     def test_merge_in_outside_metadata_not_ipld_no_previous_dataset(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
+        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
         dataset = fake_original_dataset
         dataset.attrs = {"foo": "bar"}
@@ -1357,7 +1357,7 @@ class TestMetadata:
     @staticmethod
     def test_merge_in_outside_metadata_ipld_no_existing_created(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
+        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
 
         dataset = fake_original_dataset
@@ -1409,7 +1409,7 @@ class TestMetadata:
     @staticmethod
     def test_merge_in_outside_metadata_ipld_stac_timeout(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
+        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
 
         dataset = fake_original_dataset
