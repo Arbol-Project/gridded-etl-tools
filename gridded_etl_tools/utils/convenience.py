@@ -1,12 +1,9 @@
-import os
 import pathlib
 import datetime
-import re
-import ftplib
 import io
 import json
 import random
-from typing import Any
+from typing import Any, Iterator
 
 from dateutil.parser import parse as parse_date
 import deprecation
@@ -105,14 +102,14 @@ class Convenience(Attributes):
         """
         return pathlib.Path(".")
 
-    def input_files(self) -> list[pathlib.Path]:
+    def input_files(self) -> Iterator[pathlib.Path]:
         """
-        Iterator for iterating through the list of local input files
+        Iterate over the listing of local input files
 
         Returns
         -------
-        list
-            List of input files from `self.local_input_path()`
+        Generator[pathlib.Path]
+            Files from `self.local_input_path()`
 
         """
         root = pathlib.Path(self.local_input_path())
@@ -438,78 +435,6 @@ class Convenience(Attributes):
                 "programmatically. Please locate the date manually."
             )
         return (self.next_date, self.next_date)
-
-    # FTP
-
-    def sync_ftp_files(
-        self,
-        server: str,
-        directory_path: str,
-        file_match_pattern: str,
-        include_size_check: bool = False,
-    ):
-        """
-        Connect to `server` (currently only supports anonymous login), change to `directory_path`, pull new and updated
-        files that match `file_match_pattern` in that directory into `self.local_input_path()`. Store a list of newly
-        downloaded files in a member variable.
-
-        Parameters
-        ----------
-        server : str
-            The URL of the FTP server to check
-        directory_path: str
-            The path to the directory holding the desired FTP files on the server
-        file_match_pattern : str
-            A regex string to match file names (in directory_path) against
-        include_size_check : bool, optional
-            Switch to check (or not) the size of files against a maximum. Defaults to False.
-
-        """
-        # Login to remote FTP server
-        with ftplib.FTP(server) as ftp:
-            self.info("checking {}:{} for files that match {}".format(server, directory_path, file_match_pattern))
-            ftp.login()
-            ftp.cwd(directory_path)
-            # Loop through directory listing
-            for file_name in ftp.nlst():
-                if re.match(file_match_pattern, file_name):
-                    # path on our local filesystem
-                    local_file_path = pathlib.Path(self.local_input_path()) / file_name
-                    modification_timestamp = ftp.sendcmd("MDTM {}".format(file_name))[4:].strip()
-                    modification_time = datetime.datetime.strptime(modification_timestamp, "%Y%m%d%H%M%S")
-                    # Retrieve this file unless we find conditions not to
-                    retrieve = True
-                    # Compare to local file of same name
-                    if local_file_path.exists():
-                        local_file_attributes = os.stat(local_file_path)
-                        local_file_mtime = datetime.datetime.fromtimestamp(local_file_attributes.st_mtime)
-                        local_file_size = local_file_attributes.st_size
-                        # Set to binary transfer mode
-                        ftp.sendcmd("TYPE I")
-                        remote_file_size = ftp.size(file_name)
-                        if modification_time <= local_file_mtime and (
-                            not include_size_check or remote_file_size == local_file_size
-                        ):
-                            self.debug("local file {} does not need updating".format(local_file_path))
-                            retrieve = False
-                        elif modification_time > local_file_mtime:
-                            self.debug(
-                                "file {} local modification time {} less than remote modification time {}".format(
-                                    local_file_path,
-                                    local_file_mtime.strftime("%Y/%m/%d"),
-                                    modification_time.strftime("%Y/%m/%d"),
-                                )
-                            )
-                        else:
-                            self.debug("mismatch between local and remote size for file {}".format(local_file_path))
-                    else:
-                        self.debug("new remote file found {}".format(file_name))
-                    # Write this file locally
-                    if retrieve:
-                        self.new_files.append(self.local_input_path() / file_name)
-                        self.info("downloading remote file {} to {}".format(file_name, local_file_path))
-                        with open(local_file_path, "wb") as fp:
-                            ftp.retrbinary("RETR {}".format(file_name), fp.write)
 
     # ETC
 

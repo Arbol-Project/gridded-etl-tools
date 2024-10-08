@@ -20,7 +20,6 @@ class ConcreteExtractor(Extractor):
 
 
 class TestExtractor:
-
     @staticmethod
     def test_init():
         dm = Mock()
@@ -95,9 +94,7 @@ sour_avocadoes = b"\xf0\x9f\x8d\x8b\xf0\x9f\xa5\x91"
 # function and the `@responses.activate` header is used.
 @pytest.fixture
 def mocked_responses():
-
     with responses.RequestsMock() as rsps:
-
         # To test successful requests
         responses.get(government_website, body=crops, status=200)
 
@@ -113,7 +110,6 @@ def mocked_responses():
 
 
 class TestHTTPExtractor:
-
     @staticmethod
     def test_member_assignments(manager_class):
         with HTTPExtractor(manager_class(), 4, 5, 0.5) as extractor:
@@ -128,7 +124,7 @@ class TestHTTPExtractor:
     def test_requests(manager_class, mocked_responses, tmp_path):
         tmp_path.mkdir(exist_ok=True)
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-            # Test writing by passing the destination explicitly
+            # Test writing to a given file path
             extractor.request(government_website, tmp_path / "automated_insurance.data")
             assert (tmp_path / "automated_insurance.data").read_bytes() == crops
 
@@ -141,6 +137,12 @@ class TestHTTPExtractor:
             finally:
                 os.chdir(original_working_dir)
             assert (tmp_path / "yield.html").read_bytes() == crops
+
+            # Test writing to an existing directory
+            research_folder = tmp_path / "research"
+            research_folder.mkdir(exist_ok=True)
+            extractor.request(government_website, research_folder)
+            assert (research_folder / "yield.html").read_bytes() == crops
 
     # Test that a 500 error fails with a RetryError exception
     @staticmethod
@@ -163,9 +165,7 @@ class TestHTTPExtractor:
     @staticmethod
     @responses.activate
     def test_get_links(manager_class, mocked_responses, tmp_path):
-
         with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
-
             # Get all links
             links = extractor.get_links(government_website)
             assert links == set(
@@ -212,9 +212,34 @@ class TestHTTPExtractor:
             (tmp_path / "purple-coffee").read_bytes().decode() == "🟪☕"
             (tmp_path / "juice.data").read_bytes().decode() == "☺🧃"
 
+    # Use OrderedRegistry to create a series of only failed responses, and a series of failed responses followed
+    # by a successful response
+    @staticmethod
+    @responses.activate(registry=responses.registries.OrderedRegistry)
+    def test_extract_http_retries(manager_class, tmp_path):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 6):
+                results.append(responses.get("https://good.data", status=500))
+            with pytest.raises(requests.exceptions.RetryError):
+                extractor.get_links("https://good.data")
+            for index, result in enumerate(results):
+                if index < 4:
+                    assert result.call_count == 1
+                else:
+                    assert result.call_count == 0
+        responses.reset()
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 3):
+                results.append(responses.get("https://good.data", status=500))
+            results.append(responses.get("https://good.data", status=200))
+            assert extractor.request("https://good.data", tmp_path / pathlib.Path("stonks.jpeg"))
+            for result in results:
+                assert result.call_count == 1
+
 
 class TestS3Extractor:
-
     @staticmethod
     def test_s3_request(manager_class):
         extractor = S3Extractor(manager_class())

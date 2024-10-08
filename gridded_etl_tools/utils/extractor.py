@@ -31,7 +31,6 @@ log = logging.getLogger("extraction_logs")
 
 
 class Extractor(ABC):
-
     def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
         """
         Create an instance of `Extrator`. `Extractor` is an abstract base class, so this should not be called directly.
@@ -146,11 +145,15 @@ class HTTPExtractor(Extractor):
         self,
         dm: dataset_manager.DatasetManager,
         concurrency_limit: int = 8,
-        retries: int = 10,
-        backoff_factor: float = 10.0,
+        retries: int = 8,
+        backoff_factor: float = 1.0,
     ):
         """
         Create a new HTTPExtractor object for a given dataset manager.
+
+        The `retries` and `backoff_factor` parameters are used to control how failed requests are retried automatically.
+        By default, the request is retried 8 times, waiting 1 second, 2 seconds, 4 seconds, and finally 128 seconds
+        between each request if the request continues to fail.
 
         Parameters
         ----------
@@ -225,6 +228,13 @@ class HTTPExtractor(Extractor):
         -------
         set[str]
             A list of links, in string format, from the specified URL.
+
+        Raises
+        ------
+        RuntimeError
+            If the object has not opened a session
+        RetryError
+            If the requests could not be completed after all retries
         """
         if not hasattr(self, "session"):
             raise RuntimeError(
@@ -250,6 +260,10 @@ class HTTPExtractor(Extractor):
         Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
         given, the file will be saved to the working directory with the same name it has on the server.
 
+        If an existing directory is given as the destination path, the file will be written to the given directory with
+        the same file name as on the server. If a destination path is given and is not a directory, the file will be
+        written to the given path.
+
         An active session is required to make the request, so this must be called from within a context manager for this
         object.
 
@@ -264,6 +278,8 @@ class HTTPExtractor(Extractor):
         ------
         RuntimeError
             If this is not run from within a context manager
+        RetryError
+            If the requests could not be completed after all retries
         """
         if not hasattr(self, "session"):
             raise RuntimeError(
@@ -273,14 +289,21 @@ class HTTPExtractor(Extractor):
 
         log.info(f"Downloading {remote_file_path}")
 
-        if destination_path is None:
+        # Build a dynamic path if a full destination path hasn't been given
+        if destination_path is None or destination_path.is_dir():
             # Extract the file name from the end of the URL
-            destination_path = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+            file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+
+            if destination_path is None:
+                destination_path = file_name
+            else:
+                destination_path /= file_name
 
         # Open the remote file, and write it locally
-        content = self.session.get(remote_file_path).content
+        response = self.session.get(remote_file_path)
+        response.raise_for_status()
         with open(destination_path, "wb") as outfile:
-            outfile.write(content)
+            outfile.write(response.content)
 
         # If no exceptions were raised, the file was downloaded successfully
         return True

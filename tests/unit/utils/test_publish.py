@@ -17,7 +17,6 @@ from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
 def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
-
     # Calculate the number of NaNs and floats
     total_elements = numpy.prod(shape)
     num_nans = int(total_elements * percent_nan)
@@ -1399,7 +1398,6 @@ class TestPublish:
 
     @staticmethod
     def test_filter_search_space(manager_class, hindcast_dataset):
-
         timestamps = numpy.arange(
             numpy.datetime64("2021-10-16T00:00:00.000000000"),
             numpy.datetime64("2021-10-26T00:00:00.000000000"),
@@ -1536,7 +1534,6 @@ class TestPublish:
 
 
 class DummyDataset(UserDict):
-
     def __init__(self, *dims: tuple[tuple[str, list[float]]]):
         self.dims = tuple((dim for dim, _ in dims))
         super().__init__(((dim, mock.Mock(values=values))) for dim, values in dims)
