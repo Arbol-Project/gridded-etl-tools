@@ -1500,7 +1500,7 @@ class TestPublish:
     def test_reformat_orig_ds_no_time_at_all(manager_class, single_time_instant_dataset):
         dm = manager_class()
         dm.rename_data_variable = mock.Mock(return_value=single_time_instant_dataset)
-        orig_dataset = single_time_instant_dataset.squeeze().drop("time")
+        orig_dataset = single_time_instant_dataset.squeeze().drop_vars("time")
         dataset = dm.reformat_orig_ds(orig_dataset, "hi/mom.zarr")
 
         assert "time" in dataset

@@ -713,10 +713,9 @@ class Metadata(Convenience, IPFS):
         # Determine date to use for "created" field. On S3 and local, use current time. On IPLD, look for an existing
         # creation time.
         if stac_metadata and "created" in stac_metadata["properties"]:
-            created = stac_metadata["properties"]["created"]
+            dataset.attrs["created"] = stac_metadata["properties"]["created"]
         else:
-            created = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
-        dataset.attrs["created"] = created
+            dataset.attrs["created"] = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()[:-7] + "Z"
 
         # Write the date range. Use existing data if possible to get the original start date. Even though the date
         # range can be parsed by opening the Zarr, it can be faster to access directly through the Zarr's `.zmetadata`
