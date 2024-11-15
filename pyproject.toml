@@ -35,7 +35,7 @@ dependencies = [
     "beautifulsoup4",
     "cfgrib",
     "dag-cbor==0.2.2",
-    "dask[array,diagnostics,distributed]">=2024.8.0,
+    "dask[array,diagnostics,distributed]>=2024.8.0",
     "deprecation",
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
