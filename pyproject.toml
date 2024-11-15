@@ -55,7 +55,7 @@ dependencies = [
     "shapely",
     "statsmodels",
     "tqdm",
-    "xarray[complete]>=2024.3.0",
+    "xarray[complete]>=2023.9.0",
     "zarr>=2.16.1",
 ]
 
