@@ -36,6 +36,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     """
 
     SPAN_HOURLY = "hourly"
+    SPAN_THREE_HOURLY = "3hourly"
     SPAN_SIX_HOURLY = "6hourly"
     SPAN_DAILY = "daily"
     SPAN_WEEKLY = "weekly"
