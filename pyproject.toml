@@ -35,7 +35,7 @@ dependencies = [
     "beautifulsoup4",
     "cfgrib",
     "dag-cbor==0.2.2",
-    "dask[array,diagnostics,distributed]",
+    "dask[array,diagnostics,distributed]>=2024.8.0",
     "deprecation",
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
@@ -55,8 +55,8 @@ dependencies = [
     "shapely",
     "statsmodels",
     "tqdm",
-    "xarray[complete]>=2023.9.0",
-    "zarr>=2.16.1",
+    "xarray[complete]==2024.3.0",
+    "zarr>=2.18.3",
 ]
 
 [project.urls]
