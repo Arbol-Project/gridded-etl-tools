@@ -577,16 +577,14 @@ class Metadata(Convenience, IPFS):
         """
         # Rename data variable to desired name, if necessary.
         dataset = self.rename_data_variable(dataset)
-
         # Set all fields to uncompressed and remove filters leftover from input files
         self.remove_unwanted_fields(dataset)
-
+        # Consistently apply Blosc lz4 compression to all coordinates and the data variable
+        self.apply_compression(dataset)
         # Encode data types and missing value indicators for the data variable
         self.encode_vars(dataset)
-
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
-
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         self.suppress_invalid_attributes(dataset)
 
@@ -767,15 +765,21 @@ class Metadata(Convenience, IPFS):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = numcodecs.Blosc() if self.use_compression else None
-
         for coord in ["latitude", "longitude"]:
             dataset[coord].attrs.pop("chunks", None)
             dataset[coord].attrs.pop("preferred_chunks", None)
             dataset[coord].encoding.pop("_FillValue", None)
             dataset[coord].encoding.pop("missing_value", None)
-            dataset[coord].encoding["compressor"] = compressor
         dataset[self.data_var].encoding.pop("filters", None)
+
+    def apply_compression(self, dataset: xr.Dataset):
+        """
+        Compress all coordinate and data variables in the dataset.
+        """
+        compressor = numcodecs.Blosc() if self.use_compression else None
+
+        for coord in dataset.coords:
+            dataset[coord].encoding["compressor"] = compressor
         dataset[self.data_var].encoding["compressor"] = compressor
 
     def suppress_invalid_attributes(self, dataset: xr.Dataset):

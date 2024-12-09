@@ -112,6 +112,19 @@ class TestMetadata:
         assert dataset["data"].encoding["compressor"] is None
 
     @staticmethod
+    def test_apply_compression(manager_class, fake_original_dataset):
+        dataset = fake_original_dataset
+        for coord in dataset.coords:
+            dataset[coord].encoding = {}
+        dataset["data"].encoding = {}
+        md = manager_class(use_compression=True)
+        md.store = store.IPLD(md)
+        md.apply_compression(dataset)
+        for coord in dataset.coords:
+            assert dataset[coord].encoding["compressor"] == numcodecs.Blosc()
+        assert dataset["data"].encoding["compressor"] == numcodecs.Blosc()
+
+    @staticmethod
     def test_populate_metadata(manager_class):
         md = {"hi": "mom", "hello": "dad"}
         dm = manager_class(static_metadata={"hi": "mom", "hello": "dad"})
