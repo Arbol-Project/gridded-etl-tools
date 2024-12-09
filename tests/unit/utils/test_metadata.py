@@ -96,20 +96,34 @@ class TestMetadata:
     @staticmethod
     def test_remove_unwanted_fields_w_ipld_store(manager_class):
         dataset = mock.MagicMock()
-        dataset["data"].encoding = {}
+        dataset["data"].encoding = {"filters": "coffee"}
+        for coord in ["latitude", "longitude"]:
+            dataset[coord].encoding = {"chunks": "fudge"}
+            dataset[coord].encoding = {"preferred_chunks": "chocolate"}
+            dataset[coord].encoding["_FillValue"] = "pi"
+            dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class()
         md.store = store.IPLD(md)
         md.remove_unwanted_fields(dataset)
-        assert isinstance(dataset["data"].encoding["compressor"], numcodecs.Blosc)
+        assert dataset["data"].encoding == {}
+        assert dataset["latitude"].encoding == {}
+        assert dataset["longitude"].encoding == {}
 
     @staticmethod
     def test_remove_unwanted_fields_w_ipld_store_no_compression(manager_class):
         dataset = mock.MagicMock()
-        dataset["data"].encoding = {}
+        dataset["data"].encoding = {"filters": "coffee"}
+        for coord in ["latitude", "longitude"]:
+            dataset[coord].encoding = {"chunks": "fudge"}
+            dataset[coord].encoding = {"preferred_chunks": "chocolate"}
+            dataset[coord].encoding["_FillValue"] = "pi"
+            dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class(use_compression=False)
         md.store = store.IPLD(md)
         md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding["compressor"] is None
+        assert dataset["data"].encoding == {}
+        assert dataset["latitude"].encoding == {}
+        assert dataset["longitude"].encoding == {}
 
     @staticmethod
     def test_apply_compression(manager_class, fake_original_dataset):
@@ -1142,6 +1156,7 @@ class TestMetadata:
 
         md.remove_unwanted_fields = mock.Mock()
         md.encode_vars = mock.Mock()
+        md.apply_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
         md.suppress_invalid_attributes = mock.Mock()
 
