@@ -98,8 +98,8 @@ class TestMetadata:
         dataset = mock.MagicMock()
         dataset["data"].encoding = {"filters": "coffee"}
         for coord in ["latitude", "longitude"]:
-            dataset[coord].encoding = {"chunks": "fudge"}
-            dataset[coord].encoding = {"preferred_chunks": "chocolate"}
+            dataset[coord].attrs["chunks"] = "fudge"
+            dataset[coord].attrs["preferred_chunks"] = "chocolate"
             dataset[coord].encoding["_FillValue"] = "pi"
             dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class()
@@ -114,8 +114,8 @@ class TestMetadata:
         dataset = mock.MagicMock()
         dataset["data"].encoding = {"filters": "coffee"}
         for coord in ["latitude", "longitude"]:
-            dataset[coord].encoding = {"chunks": "fudge"}
-            dataset[coord].encoding = {"preferred_chunks": "chocolate"}
+            dataset[coord].attrs["chunks"] = "fudge"
+            dataset[coord].attrs["preferred_chunks"] = "chocolate"
             dataset[coord].encoding["_FillValue"] = "pi"
             dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class(use_compression=False)
