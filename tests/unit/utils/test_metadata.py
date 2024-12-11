@@ -1,12 +1,15 @@
 import datetime
 from unittest import mock
 
+import pathlib
 import pytest
 import numcodecs
 import numpy as np
+import xarray as xr
 from requests.exceptions import Timeout
 
 from gridded_etl_tools.utils import encryption, metadata, store
+from ...common import clean_up_input_paths
 
 
 @pytest.fixture
@@ -1460,3 +1463,41 @@ class TestMetadata:
             "update_is_append_only": True,
         }
         md.load_stac_metadata.assert_called_once_with()
+
+    @staticmethod
+    @pytest.fixture
+    def encoding_test_output():
+        """Fixture to create and cleanup output directory for encoding tests"""
+        output_path = pathlib.Path("./tests/unit/utils/output")
+        pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
+        yield output_path
+        clean_up_input_paths(output_path)
+
+    @staticmethod
+    def test_change_zarr_encoding(manager_class, fake_original_dataset, encoding_test_output):
+
+        # setup
+        dataset = fake_original_dataset
+        original_encoding = {"foo": "ling around", "_FillValue": 42, "missing_value": 42}
+
+        # Encode original metadata
+        for coord in list(dataset.coords) + ["data"]:
+            dataset[coord].encoding = original_encoding
+
+        # write dataset with encoding metadata in original state
+        dataset.to_zarr(encoding_test_output / "encoding_test.zarr", mode="w")
+
+        # Now re-open, change, and rewrite
+        dataset = xr.open_dataset(encoding_test_output / "encoding_test.zarr", engine="zarr")
+        for coord in list(dataset.coords) + ["data"]:
+            dataset[coord].encoding.update({"foo": "bar"})
+            dataset[coord].encoding.pop("missing_value", None)
+            dataset[coord].attrs.update({"version": 2})
+        dataset.to_zarr(encoding_test_output / "encoding_test.zarr", compute=False, mode="w")
+
+        # re-open Zarr on disk and check encoding MD has changed
+        dataset = xr.open_dataset(encoding_test_output / "encoding_test.zarr", engine="zarr")
+        for coord in list(dataset.coords) + ["data"]:
+            assert "foo" in dataset[coord].encoding and dataset[coord].encoding["foo"] == "bar"
+            assert "missing_value" not in dataset[coord].encoding
+            assert dataset[coord].attrs == {"version": 2}
