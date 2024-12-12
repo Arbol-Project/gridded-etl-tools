@@ -2,6 +2,7 @@ from enum import Enum
 import json
 import datetime
 import typing
+import zarr
 import shapely.geometry
 import numcodecs
 
@@ -796,6 +797,70 @@ class Metadata(Convenience, IPFS):
                 dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
             elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
+
+    def modify_array_encoding(
+        self,
+        target_array: str,
+        new_compression: numcodecs.abc.Codec | None = None,
+        new_fill_value: int | float | None = None,
+    ):
+        """
+        Modify the encoding of an array -- coordinate or data variable -- in the dataset's Zarr store.
+
+        Parameters
+        ----------
+        target_zarr_path : str
+            The path to the Zarr store
+        target_array : str
+            The name of the array to modify
+        new_compression : numcodecs.abc.Codec | None, optional
+            The new compressor to use, by default None
+        new_fill_value : int | float | None, optional
+            The new fill value to use, by default None
+        """
+        # Exit if no changes to the array encoding were specified
+        if not any([new_compression, new_fill_value]):
+            raise ValueError("No changes to the array encoding were specified")
+        # Exit if the target array is not a coordinate dimension;
+        # any changes to data variable would involve effectively re-writing the entire Zarr
+        # and should be handled with a re-parse
+        self.set_key_dims()
+        if target_array not in self.standard_dims:
+            raise ValueError(
+                f"Target array {target_array} is not in this dataset's"
+                f"list of coordinate dimensions: {self.standard_dims}"
+            )
+
+        # Open the Zarr store and get the old array
+        root = zarr.open_group(self.store.path, mode="r+")
+        old_array = root[target_array]
+        data = old_array[:]
+
+        array_kwargs = {
+            "shape": old_array.shape,
+            "chunks": old_array.chunks,
+            "dtype": old_array.dtype,
+            "compressor": old_array.compressor,
+            "fill_value": old_array.fill_value,
+            "order": old_array.order,
+        }
+        # Make changes to the array encoding (the .zarray file)
+        if new_compression is not None:
+            array_kwargs["compressor"] = new_compression
+        if new_fill_value is not None:
+            array_kwargs["fill_value"] = new_fill_value
+
+        # Preserve _ARRAY_DIMENSIONS in .zattrs
+        array_attrs = dict(old_array.attrs).copy()
+        if "_ARRAY_DIMENSIONS" not in array_attrs:
+            array_attrs["_ARRAY_DIMENSIONS"] = [target_array]
+
+        del root[target_array]
+        new_array = root.create_dataset(target_array, **array_kwargs)
+        new_array[:] = data
+        new_array.attrs.update(array_attrs)
+
+        zarr.consolidate_metadata(store=self.store.path)
 
 
 def first(i: typing.Iterable):
