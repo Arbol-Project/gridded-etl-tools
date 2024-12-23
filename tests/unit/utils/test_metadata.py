@@ -1,12 +1,20 @@
 import datetime
 from unittest import mock
 
+import pathlib
 import pytest
 import numcodecs
+import os
+import json
+import zarr
+import xarray as xr
 import numpy as np
+from time import sleep
+
 from requests.exceptions import Timeout
 
 from gridded_etl_tools.utils import encryption, metadata, store
+from ...common import clean_up_input_paths
 
 
 @pytest.fixture
@@ -96,20 +104,47 @@ class TestMetadata:
     @staticmethod
     def test_remove_unwanted_fields_w_ipld_store(manager_class):
         dataset = mock.MagicMock()
-        dataset["data"].encoding = {}
+        dataset["data"].encoding = {"filters": "coffee"}
+        for coord in ["latitude", "longitude"]:
+            dataset[coord].attrs["chunks"] = "fudge"
+            dataset[coord].attrs["preferred_chunks"] = "chocolate"
+            dataset[coord].encoding["_FillValue"] = "pi"
+            dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class()
         md.store = store.IPLD(md)
         md.remove_unwanted_fields(dataset)
-        assert isinstance(dataset["data"].encoding["compressor"], numcodecs.Blosc)
+        assert dataset["data"].encoding == {}
+        assert dataset["latitude"].encoding == {}
+        assert dataset["longitude"].encoding == {}
 
     @staticmethod
     def test_remove_unwanted_fields_w_ipld_store_no_compression(manager_class):
         dataset = mock.MagicMock()
-        dataset["data"].encoding = {}
+        dataset["data"].encoding = {"filters": "coffee"}
+        for coord in ["latitude", "longitude"]:
+            dataset[coord].attrs["chunks"] = "fudge"
+            dataset[coord].attrs["preferred_chunks"] = "chocolate"
+            dataset[coord].encoding["_FillValue"] = "pi"
+            dataset[coord].encoding["missing_value"] = "negative pi"
         md = manager_class(use_compression=False)
         md.store = store.IPLD(md)
         md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding["compressor"] is None
+        assert dataset["data"].encoding == {}
+        assert dataset["latitude"].encoding == {}
+        assert dataset["longitude"].encoding == {}
+
+    @staticmethod
+    def test_apply_compression(manager_class, fake_original_dataset):
+        dataset = fake_original_dataset
+        for coord in dataset.coords:
+            dataset[coord].encoding = {}
+        dataset["data"].encoding = {}
+        md = manager_class(use_compression=True)
+        md.store = store.IPLD(md)
+        md.apply_compression(dataset)
+        for coord in dataset.coords:
+            assert dataset[coord].encoding["compressor"] == numcodecs.Blosc()
+        assert dataset["data"].encoding["compressor"] == numcodecs.Blosc()
 
     @staticmethod
     def test_populate_metadata(manager_class):
@@ -1129,6 +1164,7 @@ class TestMetadata:
 
         md.remove_unwanted_fields = mock.Mock()
         md.encode_vars = mock.Mock()
+        md.apply_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
         md.suppress_invalid_attributes = mock.Mock()
 
@@ -1432,3 +1468,206 @@ class TestMetadata:
             "update_is_append_only": True,
         }
         md.load_stac_metadata.assert_called_once_with()
+
+    @staticmethod
+    @pytest.fixture
+    def encoding_test_output():
+        """Fixture to create and cleanup output directory for encoding tests"""
+        output_path = pathlib.Path("./tests/unit/utils/output")
+        pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
+        yield output_path
+        clean_up_input_paths(output_path)
+
+    # @staticmethod
+    # def test_change_zarr_encoding_xarray(fake_original_dataset, encoding_test_output):
+    #     """NOT WORKING, althought it really should"""
+
+    #     # Setup
+    #     zarr_path = encoding_test_output / "encoding_test.zarr"
+    #     dataset = fake_original_dataset
+    #     original_encoding = {
+    #         "foo": "ling around",
+    #         "_FillValue": 42,
+    #         "missing_value": 42,
+    #         "compressor": numcodecs.Blosc(),
+    #     }
+    #     new_compressor = numcodecs.Zstd()
+
+    #     # Encode original metadata
+    #     for coord in list(dataset.coords) + ["data"]:
+    #         dataset[coord].encoding = original_encoding
+
+    #     # write dataset with encoding metadata in original state
+    #     dataset.to_zarr(zarr_path, consolidated=True, mode="w")
+
+    #     # Now re-open, change, and rewrite
+    #     dataset = xr.open_dataset(zarr_path, consolidated=True, engine="zarr")
+    #     for coord in list(dataset.coords) + ["data"]:
+    #         dataset[coord].encoding["compressor"] = new_compressor
+    #         dataset[coord].encoding.update({"foo": "bar"})
+    #         dataset[coord].encoding.pop("missing_value", None)
+    #         dataset[coord].attrs.update({"version": 2})
+    #     dataset.to_zarr(zarr_path, consolidated=True, compute=False, mode="a")
+
+    #     # re-open Zarr on disk and check encoding MD has changed
+    #     dataset = xr.open_dataset(zarr_path, consolidated=True, engine="zarr")
+    #     for coord in list(dataset.coords) + ["data"]:
+    #         assert dataset[coord].encoding["compressor"].cname == "zstd"
+    #         assert "foo" in dataset[coord].encoding and dataset[coord].encoding["foo"] == "bar"
+    #         assert "missing_value" not in dataset[coord].encoding
+    #         assert dataset[coord].attrs == {"version": 2}
+
+    @staticmethod
+    def test_change_zarr_encoding_change_compression(manager_class, fake_original_dataset, encoding_test_output):
+        """Test modifying encoding of a single coordinate using zarr library directly"""
+
+        # Setup
+        dm = manager_class(store="local")
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+        type(dm.store).path = path_mock
+
+        dataset = fake_original_dataset
+        coordinate_to_change = "latitude"
+
+        # Write dataset to zarr
+        dataset.to_zarr(dm.store.path, mode="w")
+
+        # Record initial modification times of all arrays
+        root = zarr.open_group(dm.store.path, mode="r")
+        initial_mtimes = {
+            name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
+        }
+
+        # Get initial encoding for selected coordinate, xarray and zarr versions
+        initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
+        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+            initial_lat_encoding_zarr = json.load(f)
+
+        # Verify initial setup changes at both Zarr and Xarray level
+        assert initial_lat_encoding_xr["compressor"].cname == "lz4"
+        assert initial_lat_encoding_zarr["compressor"]["cname"] == "lz4"
+
+        # Wait a moment to ensure modification times would be different if files are touched
+        sleep(0.1)
+
+        # Modify the selected coordinate's encoding
+        new_compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=zarr.Blosc.SHUFFLE)
+        dm.modify_array_encoding(target_array=coordinate_to_change, new_compression=new_compressor)
+
+        # Get final modification times to show that only the selected coordinate was modified
+        root = zarr.open_group(dm.store.path, mode="r")
+        final_mtimes = {
+            name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
+        }
+
+        # Get final encoding for the selected coordinate, xarray and zarr versions
+        final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
+            coordinate_to_change
+        ].encoding.copy()
+        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+            final_lat_encoding_zarr = json.load(f)
+
+        # Verify selected coordinate, and only the selected coordinate, was modified
+        for name in root.array_keys():
+            if name == coordinate_to_change:
+                assert (
+                    final_mtimes[name] > initial_mtimes[name]
+                ), "Changed coordinate .zarray should have been modified"
+                assert root[name].compressor.cname == "zstd", "Changed coordinate should have new compression settings"
+            else:
+                assert final_mtimes[name] == initial_mtimes[name], f"{name} .zarray should not have been modified"
+                assert root[name].compressor.cname != "zstd", f"{name} compression should be unchanged"
+        # Check .zarray files just to be sure
+        assert final_lat_encoding_xr["compressor"].cname == "zstd", "Xarray should show new compression type"
+        assert final_lat_encoding_zarr["compressor"]["cname"] == "zstd", "Zarr should show new compression type"
+
+    @staticmethod
+    def test_change_zarr_encoding_remove_field(manager_class, fake_original_dataset, encoding_test_output):
+        """Test modifying encoding of a single coordinate using zarr library directly"""
+
+        # Setup
+        dm = manager_class(store="local")
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+        type(dm.store).path = path_mock
+
+        dataset = fake_original_dataset
+        coordinate_to_change = "latitude"
+
+        # Write dataset to zarr
+        dataset[coordinate_to_change].encoding.update({"missing_value": 42})
+        dataset.to_zarr(dm.store.path, mode="w")
+
+        # Record initial modification times of all arrays
+        root = zarr.open_group(dm.store.path, mode="r")
+
+        # Get initial encoding for selected coordinate, xarray and zarr versions
+        initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
+        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+            initial_lat_encoding_zarr = json.load(f)
+
+        # Verify initial setup changes at both Zarr and Xarray level
+        assert initial_lat_encoding_xr["compressor"].cname == "lz4"
+        assert initial_lat_encoding_zarr["compressor"]["cname"] == "lz4"
+
+        # Modify the selected coordinate's encoding
+        new_compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=zarr.Blosc.SHUFFLE)
+        dm.modify_array_encoding(target_array=coordinate_to_change, new_compression=new_compressor)
+
+        # Get final modification times to show that only the selected coordinate was modified
+        root = zarr.open_group(dm.store.path, mode="r")
+
+        # Get final encoding for the selected coordinate, xarray and zarr versions
+        final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
+            coordinate_to_change
+        ].encoding.copy()
+        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+            final_lat_encoding_zarr = json.load(f)
+
+        assert "missing_value" in initial_lat_encoding_xr, "Test setup should include missing_value in encoding"
+        assert "missing_value" not in final_lat_encoding_xr, "missing_value should have been removed"
+
+        # Verify only selected coordinate was modified
+        for name in root.array_keys():
+            if name == coordinate_to_change:
+                assert (
+                    "missing_value" not in final_lat_encoding_zarr
+                ), "missing_value should have been removed from encoding"
+
+    @staticmethod
+    def test_change_zarr_encoding_no_changes(manager_class, fake_original_dataset, encoding_test_output):
+        """Test modifying encoding of a single coordinate using zarr library directly"""
+
+        # Setup
+        dm = manager_class(store="local")
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+        type(dm.store).path = path_mock
+
+        coordinate_to_change = "latitude"
+
+        # Modify nothing
+        with pytest.raises(ValueError):
+            dm.modify_array_encoding(target_array=coordinate_to_change, new_compression=None, new_fill_value=None)
+
+    @staticmethod
+    def test_change_zarr_encoding_not_coordinate(manager_class, fake_original_dataset, encoding_test_output):
+        """Test modifying encoding of a single coordinate using zarr library directly"""
+
+        # Setup
+        dm = manager_class(store="local")
+        dm.standard_dims = ["latitude", "longitude", "time"]
+        dm.store = mock.Mock(spec=store.StoreInterface)
+
+        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+        type(dm.store).path = path_mock
+
+        coordinate_to_change = "precipitation"
+
+        # Pass a non-coordinate array name
+        with pytest.raises(ValueError):
+            dm.modify_array_encoding(target_array=coordinate_to_change, new_fill_value=999_999_999)
