@@ -17,6 +17,33 @@ from .store import IPLD
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
 
+XARRAY_ENCODING_FIELDS = [
+    "dtype",
+    "scale_factor",
+    "add_offset",
+    "_FillValue",
+    "missing_value",
+    "chunksizes",
+    "zlib",
+    "complevel",
+    "shuffle",
+    "fletcher32",
+    "contiguous",
+    "units",
+    "calendar",
+]
+
+ZARR_ENCODING_FIELDS = [
+    "chunks",
+    "compressor",
+    "filters",
+    "order",
+    "dtype",
+    "fill_value",
+    "object_codec",
+    "dimension_separator",
+]
+
 
 class StacType(Enum):
     ITEM = "datasets"
@@ -801,26 +828,37 @@ class Metadata(Convenience, IPFS):
     def modify_array_encoding(
         self,
         target_array: str,
-        new_compression: numcodecs.abc.Codec | None = None,
-        new_fill_value: int | float | None = None,
+        insert_key: dict | None = None,
+        remove_key: str | None = None,
     ):
         """
         Modify the encoding of an array -- coordinate or data variable -- in the dataset's Zarr store.
 
+        NOTE this function is intended for use "gardening" production Zarrs and should be used with caution.
+        It collides with some points of incongruity between Zarr and Xarray's encoding standards.
+        Most notably, Zarr does not support the `missing_value` field in the encoding dict, unlike Xarray,
+        which does for backwards compatibility with NetCDFs, although this functionality is now deprecated.
+        Also, Zarr will silently convert "_FillValue" to "fill_value" whereas Xarray will represent it as "_FillValue".
+
+        Handling all of this is messy -- so again, this function should be used with caution. Test first!
+
         Parameters
         ----------
-        target_zarr_path : str
-            The path to the Zarr store
         target_array : str
             The name of the array to modify
-        new_compression : numcodecs.abc.Codec | None, optional
-            The new compressor to use, by default None
-        new_fill_value : int | float | None, optional
-            The new fill value to use, by default None
+        insert_key : dict | None, optional
+            A key:value pair to insert into or update in the array encoding, by default None
+        remove_key : str | None, optional
+            A key to remove from the array encoding and attributes, by default None
         """
         # Exit if no changes to the array encoding were specified
-        if not any([new_compression, new_fill_value]):
+        if not any([insert_key, remove_key]):
             raise ValueError("No changes to the array encoding were specified")
+
+        # If the key does not match a valid encoding field, raise an error
+        if insert_key and list(insert_key.keys())[0] not in XARRAY_ENCODING_FIELDS + ZARR_ENCODING_FIELDS:
+            raise ValueError(f"Invalid key {insert_key} for array encoding")
+
         # Exit if the target array is not a coordinate dimension;
         # any changes to data variable would involve effectively re-writing the entire Zarr
         # and should be handled with a re-parse
@@ -844,17 +882,21 @@ class Metadata(Convenience, IPFS):
             "fill_value": old_array.fill_value,
             "order": old_array.order,
         }
-        # Make changes to the array encoding (the .zarray file)
-        if new_compression is not None:
-            array_kwargs["compressor"] = new_compression
-        if new_fill_value is not None:
-            array_kwargs["fill_value"] = new_fill_value
 
         # Preserve _ARRAY_DIMENSIONS in .zattrs
         array_attrs = dict(old_array.attrs).copy()
         if "_ARRAY_DIMENSIONS" not in array_attrs:
             array_attrs["_ARRAY_DIMENSIONS"] = [target_array]
 
+        # Make changes to the array encoding (the .zarray file)
+        if insert_key:
+            array_kwargs.update(insert_key)
+
+        # Make changes to the array attributes (the .zattrs file)
+        if remove_key:
+            array_attrs.pop(remove_key, None)
+
+        # Populate and consolidate changes
         del root[target_array]
         new_array = root.create_dataset(target_array, **array_kwargs)
         new_array[:] = data
