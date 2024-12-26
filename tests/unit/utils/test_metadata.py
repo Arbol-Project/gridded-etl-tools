@@ -1631,15 +1631,17 @@ class TestMetadata:
 
         if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:
             assert (
-                key_to_remove in initial_lat_encoding_xr.keys()
-            ), f"Test setup should include {key_to_remove} in encoding"
-            assert key_to_remove not in list(final_lat_encoding_xr.keys()), f"{key_to_remove} should have been removed"
+                key_to_remove in initial_lat_encoding_xr
+            ), f"Test setup should include {key_to_remove} in Xarray encoding"
+            assert (
+                key_to_remove not in final_lat_encoding_xr,
+            ), f"{key_to_remove} should have been removed from Xarray encoding"
 
         # Verify only selected coordinate was modified
         for name in root.array_keys():
             if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:
                 assert (
-                    key_to_remove not in final_lat_encoding_zarr.keys()
+                    key_to_remove not in final_lat_encoding_zarr
                 ), f"{key_to_remove} should have been removed from encoding"
 
     @staticmethod

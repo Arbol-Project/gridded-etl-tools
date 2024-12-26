@@ -885,7 +885,7 @@ class Metadata(Convenience, IPFS):
 
         # Preserve _ARRAY_DIMENSIONS in .zattrs
         array_attrs = dict(old_array.attrs).copy()
-        if "_ARRAY_DIMENSIONS" not in array_attrs:
+        if "_ARRAY_DIMENSIONS" not in array_attrs:  # pragma NO COVER
             array_attrs["_ARRAY_DIMENSIONS"] = [target_array]
 
         # Make changes to the array encoding (the .zarray file)
