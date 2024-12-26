@@ -857,7 +857,7 @@ class Metadata(Convenience, IPFS):
 
         # If the key does not match a valid encoding field, raise an error
         if insert_key and list(insert_key.keys())[0] not in XARRAY_ENCODING_FIELDS + ZARR_ENCODING_FIELDS:
-            raise ValueError(f"Invalid key {insert_key} for array encoding")
+            raise ValueError(f"Invalid key {list(insert_key.keys())[0]} for array encoding")
 
         # Exit if the target array is not a coordinate dimension;
         # any changes to data variable would involve effectively re-writing the entire Zarr
@@ -865,7 +865,7 @@ class Metadata(Convenience, IPFS):
         self.set_key_dims()
         if target_array not in self.standard_dims:
             raise ValueError(
-                f"Target array {target_array} is not in this dataset's"
+                f"Target array {target_array} is not in this dataset's "
                 f"list of coordinate dimensions: {self.standard_dims}"
             )
 

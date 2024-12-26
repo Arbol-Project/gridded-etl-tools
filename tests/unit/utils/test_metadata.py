@@ -1611,9 +1611,9 @@ class TestMetadata:
             initial_lat_encoding_zarr = json.load(f)
 
         # Verify initial setup changes at both Zarr and Xarray level
-        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:
+        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
             assert initial_lat_encoding_xr[key_to_remove] == 42
-        if key_to_remove in metadata.ZARR_ENCODING_FIELDS:
+        if key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
             assert initial_lat_encoding_zarr[key_to_remove] == 42
 
         # Modify the selected coordinate's encoding
@@ -1629,7 +1629,7 @@ class TestMetadata:
         with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
             final_lat_encoding_zarr = json.load(f)
 
-        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:
+        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
             assert (
                 key_to_remove in initial_lat_encoding_xr
             ), f"Test setup should include {key_to_remove} in Xarray encoding"
@@ -1639,7 +1639,7 @@ class TestMetadata:
 
         # Verify only selected coordinate was modified
         for name in root.array_keys():
-            if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:
+            if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
                 assert (
                     key_to_remove not in final_lat_encoding_zarr
                 ), f"{key_to_remove} should have been removed from encoding"
@@ -1658,7 +1658,7 @@ class TestMetadata:
         coordinate_to_change = "latitude"
 
         # Modify nothing
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="No changes to the array encoding were specified"):
             dm.modify_array_encoding(target_array=coordinate_to_change, insert_key=None, remove_key=None)
 
     @staticmethod
@@ -1667,21 +1667,29 @@ class TestMetadata:
 
         # Setup
         dm = manager_class(store="local")
-        dm.standard_dims = ["latitude", "longitude", "time"]
         dm.store = mock.Mock(spec=store.StoreInterface)
-
         path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
         type(dm.store).path = path_mock
 
-        coordinate_to_change = "precipitation"
-
         # Pass a non-coordinate array name
-        with pytest.raises(ValueError):
-            dm.modify_array_encoding(target_array=coordinate_to_change, insert_key={"fill_value": 999_999_999})
+        with pytest.raises(
+            ValueError, match="Target array precipitation is not in this dataset's list of coordinate dimensions"
+        ):
+            dm.modify_array_encoding(target_array="precipitation", insert_key={"fill_value": 999_999_999})
+
+        # Pass a standard coordinate name but now the standard dims are wrong
+        def mock_set_key_dims(self, *args, **kwargs):
+            self.standard_dims = ["non-standard", "other non-standard"]
+
+        dm.set_key_dims = mock.Mock(side_effect=mock_set_key_dims(dm))
+        with pytest.raises(
+            ValueError, match="Target array latitude is not in this dataset's list of coordinate dimensions"
+        ):
+            dm.modify_array_encoding(target_array="latitude", insert_key={"fill_value": 999_999_999})
 
     @staticmethod
-    def test_change_zarr_encoding_not_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-        """Test modifying encoding of a single coordinate using zarr library directly"""
+    def test_change_zarr_encoding_invalid_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
+        """Test specifying an invalid encoding field according to Xarray and Zarr standards"""
 
         # Setup
         dm = manager_class(store="local")
@@ -1694,5 +1702,5 @@ class TestMetadata:
         coordinate_to_change = "longitude"
 
         # Pass a non-encoding array name
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid key"):
             dm.modify_array_encoding(target_array=coordinate_to_change, insert_key={"fill_er_up_value": 999_999_999})
