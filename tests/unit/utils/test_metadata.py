@@ -1634,7 +1634,7 @@ class TestMetadata:
                 key_to_remove in initial_lat_encoding_xr
             ), f"Test setup should include {key_to_remove} in Xarray encoding"
             assert (
-                key_to_remove not in final_lat_encoding_xr,
+                key_to_remove not in final_lat_encoding_xr
             ), f"{key_to_remove} should have been removed from Xarray encoding"
 
         # Verify only selected coordinate was modified
