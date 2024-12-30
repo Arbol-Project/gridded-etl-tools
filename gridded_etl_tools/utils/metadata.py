@@ -608,7 +608,7 @@ class Metadata(Convenience, IPFS):
         # Set all fields to uncompressed and remove filters leftover from input files
         self.remove_unwanted_fields(dataset)
         # Consistently apply Blosc lz4 compression to all coordinates and the data variable
-        self.apply_compression(dataset)
+        self.set_initial_compression(dataset)
         # Encode data types and missing value indicators for the data variable
         self.encode_vars(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
@@ -800,15 +800,22 @@ class Metadata(Convenience, IPFS):
             dataset[coord].encoding.pop("missing_value", None)
         dataset[self.data_var].encoding.pop("filters", None)
 
-    def apply_compression(self, dataset: xr.Dataset):
+    def set_initial_compression(self, dataset: xr.Dataset):
         """
-        Compress all coordinate and data variables in the dataset.
+        If the dataset is new and uses compression, compress all coordinate and data variables in the dataset.
+        Does nothing if the dataset is not new; use `update_array_encoding` to change compression in this case.
+
+        Parameters
+        ----------
+        dataset : xarray.Dataset
+            The dataset being published, pre-metadata update
         """
         compressor = numcodecs.Blosc() if self.use_compression else None
 
-        for coord in dataset.coords:
-            dataset[coord].encoding["compressor"] = compressor
-        dataset[self.data_var].encoding["compressor"] = compressor
+        if not self.store.has_existing:
+            for coord in dataset.coords:
+                dataset[coord].encoding["compressor"] = compressor
+            dataset[self.data_var].encoding["compressor"] = compressor
 
     def suppress_invalid_attributes(self, dataset: xr.Dataset):
         """
@@ -825,10 +832,44 @@ class Metadata(Convenience, IPFS):
             elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
 
-    def modify_array_encoding(
+    def update_array_encoding(
         self,
         target_array: str,
-        insert_key: dict | None = None,
+        update_key: dict,
+    ):
+        """
+        Update an array encoding field in the dataset's Zarr store.
+
+        Parameters
+        ----------
+        target_array : str
+            The name of the array to modify
+        update_key : dict
+            A key:value pair to insert into or update in the array encoding
+        """
+        self._modify_array_encoding(target_array, update_key=update_key, remove_key=None)
+
+    def remove_array_encoding(
+        self,
+        target_array: str,
+        remove_key: str,
+    ):
+        """
+        Remove an array encoding field from the dataset's Zarr store.
+
+        Parameters
+        ----------
+        target_array : str
+            The name of the array to modify
+        remove_key : str
+            The key to remove from the array encoding
+        """
+        self._modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
+
+    def _modify_array_encoding(
+        self,
+        target_array: str,
+        update_key: dict | None = None,
         remove_key: str | None = None,
     ):
         """
@@ -846,18 +887,18 @@ class Metadata(Convenience, IPFS):
         ----------
         target_array : str
             The name of the array to modify
-        insert_key : dict | None, optional
+        update_key : dict | None, optional
             A key:value pair to insert into or update in the array encoding, by default None
         remove_key : str | None, optional
             A key to remove from the array encoding and attributes, by default None
         """
         # Exit if no changes to the array encoding were specified
-        if not any([insert_key, remove_key]):
+        if not any([update_key, remove_key]):
             raise ValueError("No changes to the array encoding were specified")
 
         # If the key does not match a valid encoding field, raise an error
-        if insert_key and list(insert_key.keys())[0] not in XARRAY_ENCODING_FIELDS + ZARR_ENCODING_FIELDS:
-            raise ValueError(f"Invalid key {list(insert_key.keys())[0]} for array encoding")
+        if update_key and list(update_key.keys())[0] not in XARRAY_ENCODING_FIELDS + ZARR_ENCODING_FIELDS:
+            raise ValueError(f"Invalid key {list(update_key.keys())[0]} for array encoding")
 
         # Exit if the target array is not a coordinate dimension;
         # any changes to data variable would involve effectively re-writing the entire Zarr
@@ -889,8 +930,8 @@ class Metadata(Convenience, IPFS):
             array_attrs["_ARRAY_DIMENSIONS"] = [target_array]
 
         # Make changes to the array encoding (the .zarray file)
-        if insert_key:
-            array_kwargs.update(insert_key)
+        if update_key:
+            array_kwargs.update(update_key)
 
         # Make changes to the array attributes (the .zattrs file)
         if remove_key:
