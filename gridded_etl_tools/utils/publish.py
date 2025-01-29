@@ -278,6 +278,7 @@ class Publish(Transform):
         """
         original_dataset = self.store.dataset()
         self.info(f"Original dataset\n{original_dataset}")
+        self.info(f"Unfiltered new data\n{publish_dataset}")
         # Create a list of any datetimes to insert and/or append
         insert_times, append_times = self.prepare_update_times(original_dataset, publish_dataset)
         # First check that the data is not obviously wrong
