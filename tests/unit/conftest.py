@@ -214,6 +214,12 @@ class George(John, Paul):
 
 class Ringo(George):
     dataset_name = "Ringo"
+    time_resolution = dataset_manager.DatasetManager.SPAN_HOURLY
+
+
+class RingoDaily(DummyManager):
+    dataset_name = "Ringo"
+    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
 
 
 original_times = np.array(
