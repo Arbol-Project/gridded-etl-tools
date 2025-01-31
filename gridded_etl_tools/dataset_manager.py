@@ -395,7 +395,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str) -> type:
+    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -412,6 +412,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         for source in cls.get_subclasses():
             if source.dataset_name == name:
+                if time_resolution and source.time_resolution != time_resolution:
+                    continue
                 return source
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")
