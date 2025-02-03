@@ -35,6 +35,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     .05 data
     """
 
+    SPAN_HALF_HOURLY = "half_hourly"
     SPAN_HOURLY = "hourly"
     SPAN_THREE_HOURLY = "3hourly"
     SPAN_SIX_HOURLY = "6hourly"
