@@ -412,7 +412,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if source.dataset_name == name:
+            if hasattr(source, "dataset_name") and source.dataset_name == name:
                 if time_resolution and source.time_resolution != time_resolution:
                     continue
                 return source
