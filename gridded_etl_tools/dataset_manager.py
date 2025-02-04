@@ -10,6 +10,7 @@ import logging
 import multiprocessing
 import multiprocessing.pool
 import sys
+import inspect
 import xarray as xr
 
 import psutil
@@ -412,7 +413,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if hasattr(source, "dataset_name") and source.dataset_name == name:
+            if not inspect.isabstract(source) and source.dataset_name == name:
                 if time_resolution and source.time_resolution != time_resolution:
                     continue
                 return source
