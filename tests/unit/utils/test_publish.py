@@ -54,7 +54,6 @@ class TestPublish:
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
-        dm.dataset_hash = "QmHiMom!"
         dm.dask_configuration = mock.Mock()
         dm.store = mock.Mock(spec=store.IPLD, has_existing=False)
         dm.update_zarr = mock.Mock()
@@ -531,46 +530,20 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_write_initial_zarr_ipld(manager_class):
-        class DummyHash:
-            def __str__(self):
-                return "QmHiMom"
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.to_zarr = mock.Mock()
-        dm.dataset_hash = None
-        publish_dataset = mock.Mock()
-        publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = DummyHash()
-
-        dm.write_initial_zarr(publish_dataset)
-
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
-        assert dm.dataset_hash == "QmHiMom"
-
-    @staticmethod
     def test_write_initial_zarr_not_ipld(manager_class):
-        class DummyHash: ...
 
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.to_zarr = mock.Mock()
-        dm.dataset_hash = None
         publish_dataset = mock.Mock()
         publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
 
         mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = DummyHash()
 
         dm.write_initial_zarr(publish_dataset)
 
         dm.store.mapper.assert_called_once_with(set_root=False)
         dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
-        assert dm.dataset_hash is None
 
     @staticmethod
     def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
@@ -668,55 +641,8 @@ class TestPublish:
         dm.append_to_dataset.assert_not_called()
 
     @staticmethod
-    def test_insert_into_dataset_ipld(manager_class):
-        dm = manager_class()
-        dm.dataset_hash = "browns"
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.prep_update_dataset = mock.Mock()
-        dm.calculate_update_time_ranges = mock.Mock()
-        dm.to_zarr = mock.Mock()
-
-        original_dataset = object()
-        update_dataset = object()
-        insert_times = object()
-
-        slice1 = mock.Mock()
-        slice2 = mock.Mock()
-        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
-        insert_dataset.attrs = {}
-        insert_dataset.sel.side_effect = [slice1, slice2]
-
-        dm.calculate_update_time_ranges.return_value = (
-            (("breakfast", "second breakfast"), ("dusk", "dawn")),
-            (("the shire", "mordor"), ("vegas", "atlantic city")),
-        )
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
-        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
-
-        dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
-        dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
-
-        insert_dataset.sel.assert_has_calls(
-            [mock.call(time=slice("breakfast", "second breakfast")), mock.call(time=slice("dusk", "dawn"))]
-        )
-        dm.to_zarr.assert_has_calls(
-            [
-                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
-            ]
-        )
-
-        assert insert_dataset.attrs == {"update_is_append_only": False}
-        assert dm.dataset_hash == "42"
-
-    @staticmethod
     def test_insert_into_dataset_not_ipld_dry_run(manager_class):
         dm = manager_class()
-        dm.dataset_hash = "browns"
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
@@ -758,40 +684,10 @@ class TestPublish:
         )
 
         assert insert_dataset.attrs == {"update_is_append_only": False}
-        assert dm.dataset_hash == "browns"
-
-    @staticmethod
-    def test_append_to_dataset_ipld(manager_class):
-        dm = manager_class()
-        dm.dataset_hash = "browns"
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.prep_update_dataset = mock.Mock()
-        dm.calculate_update_time_ranges = mock.Mock()
-        dm.to_zarr = mock.Mock()
-
-        update_dataset = object()
-        insert_times = object()
-
-        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
-        append_dataset.attrs = {}
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
-        dm.append_to_dataset(update_dataset, insert_times)
-
-        dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
-
-        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
-
-        assert append_dataset.attrs == {"update_is_append_only": True}
-        assert dm.dataset_hash == "42"
 
     @staticmethod
     def test_append_to_dataset_not_ipld_dry_run(manager_class):
         dm = manager_class()
-        dm.dataset_hash = "browns"
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
@@ -815,7 +711,6 @@ class TestPublish:
         dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
 
         assert append_dataset.attrs == {"update_is_append_only": True}
-        assert dm.dataset_hash == "browns"
 
     @staticmethod
     def test_prep_update_dataset(manager_class, fake_complex_update_dataset):

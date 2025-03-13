@@ -850,21 +850,6 @@ class TestTransform:
         dm.postprocess_zarr.assert_called_once_with(dataset)
 
     @staticmethod
-    def test_zarr_hash_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
-        dataset = xr.open_zarr.return_value
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        mapper = dm.store.mapper.return_value
-
-        assert dm.zarr_hash_to_dataset("QmHiMom") is dataset
-
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        mapper.set_root.assert_called_once_with("QmHiMom")
-        xr.open_zarr.assert_called_once_with(mapper)
-
-    @staticmethod
     def test_zarr_json_to_dataset(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value

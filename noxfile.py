@@ -52,8 +52,6 @@ def blacken(session):
 
 @nox.session(py=DEFAULT_INTERPRETER)
 def system(session):
-    if not check_kubo():
-        session.skip("No IPFS server running")
 
     session.install("-e", ".[testing]")
     session.run(
@@ -73,13 +71,3 @@ def run_black(session, check=False):
         args.append("--check")
     args.extend(["noxfile.py", CODE, "tests", "examples"])
     session.run(*args)
-
-
-def check_kubo():
-    """Check whether Kubo IPFS server is running locally.
-
-    Required for System tests.
-    """
-    result = subprocess.run(["ipfs", "id"], capture_output=True, check=True)
-    result = json.loads(result.stdout)
-    return bool(result["Addresses"])

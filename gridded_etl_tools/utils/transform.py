@@ -370,8 +370,8 @@ class Transform(Metadata, Convenience):
 
     @classmethod
     def postprocess_kerchunk(
-        cls, out_zarr: Union[zarr._storage.store.BaseStore, MutableMapping]
-    ) -> Union[zarr._storage.store.BaseStore, MutableMapping]:
+        cls, out_zarr: zarr.storage.FsspecStore
+    ) -> zarr.storage.FsspecStore:
         """
         Class method to modify the in-memory Zarr created by Kerchunk for each file
         using Zarr methods. Useful where manipulating individual files via the reference dictionary in
@@ -537,25 +537,6 @@ class Transform(Metadata, Convenience):
     ################################
 
     # LOAD RAW DATA TO IN-MEMORY DATASET
-
-    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
-        """
-        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
-
-        Parameters
-        ----------
-        ipfs_hash : str
-            The CID of the dataset
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            Object representing the dataset described by the CID at `self.latest_hash()`
-        """
-        mapper = self.store.mapper(set_root=False)
-        mapper.set_root(ipfs_hash)
-        dataset = xr.open_zarr(mapper)
-        return dataset
 
     def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
         """

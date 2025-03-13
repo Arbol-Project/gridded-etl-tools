@@ -56,7 +56,7 @@ The CHIRPS U.S. precipitation dataset is of medium size and can be run in a few 
 
     import datetime
     from examples.managers.chirps import CHIRPSFinal25
-    etl = CHIRPSFinal25(store='ipld')
+    etl = CHIRPSFinal25(store='s3')
 
 Now run the `extract` to download all the files for this dataset. We're going to use the **date_range** parameter to only download files for 2021 and 2022 so this example goes quickly. Note that you can skip this step if you already have your files!
 
@@ -75,17 +75,17 @@ Now run the `transform` method to read all the files and transform them into a s
 
 #### Retrieving your dataset
 
-How you find and retrieve the Zarr you just created will depend on the store used. Because we specified the IPLD store above, the output text from our ETL will specify the IPFS hash associated with the final Zarr.
+How you find and retrieve the Zarr you just created will depend on the store used. Because we specified the S3 store above, the output text from our ETL will specify the S3 path
 
-    INFO     <chirps_final_25> IPFS hash is bafyreibx5i7ovu2ed2qyh2ajezfsxvufjbihwscur5hkue4zol6fcwefjq
+    INFO     <chirps_final_25> Zarr created at s3://zarr-dev/datasets/chirps_final_25-daily.zarr/
 
-This hash can be used to open the dataset in an interactive session using `xarray` and `ipldstore` in tandem. These were installed during the virtual environment setup
+This path can be used to open the dataset in an interactive session using `xarray` (and under the hood `s3fs`).
 
 ```python
-    import xarray, ipldstore
-    mapper = ipldstore.get_ipfs_mapper()
-    mapper.set_root("bafyreibx5i7ovu2ed2qyh2ajezfsxvufjbihwscur5hkue4zol6fcwefjq") # replace with your hash
-    xarray.open_zarr(mapper, consolidated=False)
+    import xarray
+    from gridded_etl_managers.chirps import CHIRPSFinal25 as chirps_f25
+    etl = chirps_f05(s3_bucket_name="zarr-dev", store="s3", **input_kwargs)
+    xarray.open_zarr(store=etl.store.path, consolidated=False)
     <xarray.Dataset>
     Dimensions:    (latitude: 120, longitude: 300, time: 5736)
     Coordinates:
@@ -97,7 +97,7 @@ This hash can be used to open the dataset in an interactive session using `xarra
     ...
 ```
 
-Note that the IPFS hash for a dataset can be found at any time by consulting the `assets->zmetadata->href->'/'` field in its STAC metadata. This includes previous iterations of your dataset -- just roll back to the associated STAC metadata.
+Note that the S3 path for a dataset can be found at any time by consulting the `self.store.path` property.
 
 #### Further information 
 

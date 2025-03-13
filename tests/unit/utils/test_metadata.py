@@ -799,89 +799,6 @@ class TestMetadata:
         dm.update_stac_collection.assert_called_once_with(fake_original_dataset)
 
     @staticmethod
-    def test_create_stac_item_ipld(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
-        dt_mock.timezone = datetime.timezone
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
-        dm.create_stac_item(fake_original_dataset)
-
-        dm.register_stac_item.assert_called_once_with(
-            {
-                "stac_version": "1.0.0",
-                "type": "Feature",
-                "id": "DummyManager",
-                "collection": "Vintage Guitars",
-                "links": [],
-                "assets": {
-                    "zmetadata": {
-                        "title": "DummyManager",
-                        "type": "application/json",
-                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
-                        "dataset by Xarray",
-                        "roles": ["metadata", "zarr-consolidated-metadata"],
-                        "href": {"/": "QmThisOneHere"},
-                    }
-                },
-                "bbox": [100.0, 10.0, 130.0, 40.0],
-                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
-                "[100.0, 10.0], [130.0, 10.0]]]}",
-                "properties": {
-                    "array_size": {"latitude": 4, "longitude": 4, "time": 138},
-                    "start_datetime": "2021-09-16T00:00:00Z",
-                    "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
-                },
-            }
-        )
-
-    @staticmethod
-    def test_create_stac_item_ipld_forecast(manager_class, forecast_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
-        dt_mock.timezone = datetime.timezone
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
-        dm.time_dim = "forecast_reference_time"
-        dm.create_stac_item(forecast_dataset)
-
-        dm.register_stac_item.assert_called_once_with(
-            {
-                "stac_version": "1.0.0",
-                "type": "Feature",
-                "id": "DummyManager",
-                "collection": "Vintage Guitars",
-                "links": [],
-                "assets": {
-                    "zmetadata": {
-                        "title": "DummyManager",
-                        "type": "application/json",
-                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
-                        "dataset by Xarray",
-                        "roles": ["metadata", "zarr-consolidated-metadata"],
-                        "href": {"/": "QmThisOneHere"},
-                    }
-                },
-                "bbox": [100.0, 10.0, 130.0, 40.0],
-                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
-                "[100.0, 10.0], [130.0, 10.0]]]}",
-                "properties": {
-                    "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
-                    "start_datetime": "2021-09-16T00:00:00Z",
-                    "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
-                },
-            }
-        )
-
-    @staticmethod
     def test_create_stac_item_not_ipld(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
@@ -890,7 +807,6 @@ class TestMetadata:
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
         dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
         dm.create_stac_item(fake_original_dataset)
 
         dm.register_stac_item.assert_called_once_with(
@@ -951,151 +867,6 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_register_stac_item_ipld(manager_class):
-        stac_collection = {
-            "title": "War and Peace",
-            "links": [],
-        }
-        stac_item = {
-            "Look": "I'm",
-            "a": "stac item",
-            "links": [],
-            "assets": {"zmetadata": {"title": "Asset and Peace"}},
-        }
-
-        md = manager_class()
-        md.publish_stac = mock.Mock()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.retrieve_stac = mock.Mock(side_effect=[(stac_collection, "/path/to/stac/collection"), Timeout])
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
-
-        md.register_stac_item(stac_item)
-
-        md.publish_stac.assert_has_calls(
-            [
-                mock.call(
-                    "DummyManager-daily",
-                    {
-                        "Look": "I'm",
-                        "a": "stac item",
-                        "links": [
-                            {
-                                "rel": "parent",
-                                "href": "/path/to/stac/collection",
-                                "type": "application/geo+json",
-                                "title": "War and Peace",
-                            },
-                            {
-                                "rel": "self",
-                                "href": "/path/to/new/item",
-                                "type": "application/geo+json",
-                                "title": "DummyManager metadata",
-                            },
-                        ],
-                        "assets": {"zmetadata": {"title": "Asset and Peace"}},
-                    },
-                    metadata.StacType.ITEM,
-                ),
-                mock.call(
-                    "Vintage Guitars",
-                    {
-                        "title": "War and Peace",
-                        "links": [
-                            {
-                                "rel": "item",
-                                "href": "/path/to/new/item",
-                                "type": "application/json",
-                                "title": "Asset and Peace",
-                            }
-                        ],
-                    },
-                    metadata.StacType.COLLECTION,
-                ),
-            ]
-        )
-        md.retrieve_stac.assert_has_calls(
-            [
-                mock.call("Vintage Guitars", metadata.StacType.COLLECTION),
-                mock.call("DummyManager-daily", metadata.StacType.ITEM),
-            ]
-        )
-        md.get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
-        md.ipns_resolve.assert_not_called()
-
-    @staticmethod
-    def test_register_stac_item_already_exists_ipld(manager_class):
-        stac_collection = {
-            "title": "War and Peace",
-            "links": [{"rel": "lol"}, {"rel": "item", "title": "Asset and Peace", "href": "/old/path/to/item"}],
-        }
-        old_stac_cid = mock.Mock(
-            spec=("set",), set=mock.Mock(return_value=mock.MagicMock(__str__=mock.Mock(return_value="QmOldStacItem")))
-        )
-        old_stac_item = {
-            "Look": "I'm",
-            "the old": "stac item",
-            "assets": {"zmetadata": {"title": "Asset and Peace", "href": old_stac_cid}},
-        }
-        stac_item = {
-            "Look": "I'm",
-            "a": "stac item",
-            "links": [],
-            "assets": {"zmetadata": {"title": "Asset and Peace"}},
-        }
-
-        md = manager_class()
-        md.publish_stac = mock.Mock()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.retrieve_stac = mock.Mock(
-            side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
-        )
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
-
-        md.register_stac_item(stac_item)
-
-        md.publish_stac.assert_called_once_with(
-            "DummyManager-daily",
-            {
-                "Look": "I'm",
-                "a": "stac item",
-                "links": [
-                    {
-                        "rel": "parent",
-                        "href": "/path/to/stac/collection",
-                        "type": "application/geo+json",
-                        "title": "War and Peace",
-                    },
-                    {
-                        "rel": "prev",
-                        "href": "QmOldStacItem",
-                        "metadata href": {"/": "QmSomeHash"},
-                        "type": "application/geo+json",
-                        "title": "Asset and Peace",
-                    },
-                    {
-                        "rel": "self",
-                        "href": "/path/to/stac/item",
-                        "type": "application/geo+json",
-                        "title": "DummyManager metadata",
-                    },
-                ],
-                "assets": {"zmetadata": {"title": "Asset and Peace"}},
-            },
-            metadata.StacType.ITEM,
-        )
-        md.retrieve_stac.assert_has_calls(
-            [
-                mock.call("Vintage Guitars", metadata.StacType.COLLECTION),
-                mock.call("DummyManager-daily", metadata.StacType.ITEM),
-            ]
-        )
-        md.get_href.assert_not_called()
-        md.ipns_resolve.assert_called_once_with("DummyManager-daily")
-        old_stac_cid.set.assert_called_once_with(base="base32")
-
-    @staticmethod
     def test_register_stac_item_already_exists_not_ipld(manager_class):
         stac_collection = {
             "title": "War and Peace",
@@ -1120,7 +891,6 @@ class TestMetadata:
             side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
         )
         md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
 
         md.register_stac_item(stac_item)
 

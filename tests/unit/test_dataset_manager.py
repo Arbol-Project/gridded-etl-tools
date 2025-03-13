@@ -42,10 +42,8 @@ class TestDatasetManager:
         dm = manager_class(
             requested_dask_chunks="requested_dask_chunks",
             requested_zarr_chunks="requested_zarr_chunks",
-            requested_ipfs_chunker="chunky chunker",
             rebuild_requested=True,
             custom_output_path="output/over/here",
-            custom_latest_hash="omghash!",
             custom_input_path="input/over/here",
             console_log=False,
             global_log_level=logging.WARN,
@@ -60,10 +58,8 @@ class TestDatasetManager:
 
         assert dm.requested_dask_chunks == "requested_dask_chunks"
         assert dm.requested_zarr_chunks == "requested_zarr_chunks"
-        assert dm.requested_ipfs_chunker == "chunky chunker"
         assert dm.rebuild_requested is True
         assert dm.custom_output_path == "output/over/here"
-        assert dm.latest_hash() == "omghash!"
         dm.log_to_console.assert_not_called()
         dataset_manager.logging.getLogger.return_value.setLevel.assert_called_once_with(logging.WARN)
         assert dm.allow_overwrite is True

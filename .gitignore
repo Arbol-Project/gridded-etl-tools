@@ -28,6 +28,7 @@ dask-worker-space/
 mypy.ini
 
 # Tests temp data
+temp/
 tests/local_*/
 tests/etc/local_*/
 tests/etc/heads.json

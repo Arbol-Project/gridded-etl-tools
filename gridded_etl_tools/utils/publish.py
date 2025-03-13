@@ -17,7 +17,6 @@ import xarray as xr
 
 from dask.distributed import Client, LocalCluster
 
-from .store import IPLD
 from .transform import Transform
 from .errors import NanFrequencyMismatchError
 
@@ -35,12 +34,12 @@ class Publish(Transform):
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
-        If the store is IPLD or S3, an existing Zarr will be searched for to be opened and appended to by default. This
+        If the store is S3, an existing Zarr will be searched for to be opened and appended to by default. This
         can be overridden to force writing the entire input data to a new Zarr by setting
         `Convenience.rebuild_requested` to `True`. If existing data is found, `DatasetManager.allow_overwrite` must
         also be `True`.
 
-        This is the core function for writing data (to disk, S3, or IPLD) and should be standard for
+        This is the core function for writing data (to disk or S3) and should be standard for
         all ETLs. Modify the child methods it calls or the dask configuration settings to resolve any performance or
         parsing issues.
 
@@ -60,17 +59,14 @@ class Publish(Transform):
             threads_per_worker=self.dask_num_threads,
             n_workers=self.dask_num_workers,
         ) as cluster:
-            # IPLD objects can't pickle successfully in Dask distributed schedulers so we remove the distributed client
-            # in these cases
-            with Client(cluster) if not isinstance(self.store, IPLD) else nullcontext():
+            with Client(cluster):
                 self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
                 try:
                     # Attempt to find an existing Zarr, using the appropriate method for the store. If there is
                     # existing data and there is no rebuild requested, start an update. If there is no existing data,
                     # start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
-                    # has been set, write a new Zarr, overwriting (or in the case of IPLD, not using) any existing
-                    # data. If rebuild is requested and there is existing data, but allow overwrite is not set, do not
-                    # start parsing and issue a warning.
+                    # has been set, write a new Zarr, overwriting any existing data. If rebuild is requested and there is
+                    # existing data, but allow overwrite is not set, do not start parsing and issue a warning.
                     if self.store.has_existing and not self.rebuild_requested:
                         self.info(f"Updating existing data at {self.store}")
                         self.update_zarr(publish_dataset)
@@ -91,9 +87,6 @@ class Publish(Transform):
                     cluster.close()
                 except KeyboardInterrupt:
                     self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
-
-        if hasattr(self, "dataset_hash") and self.dataset_hash and not self.dry_run:
-            self.info("Published dataset's IPFS hash is " + str(self.dataset_hash))
 
         self.info("Parse run successful")
 
@@ -150,34 +143,30 @@ class Publish(Transform):
             self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
-            # Don't use update-in-progress metadata flag on IPLD or on a dataset that doesn't have existing data stored
-            if not isinstance(self.store, IPLD):
-                # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
-                # a Zarr is opened during writing, there will be indicators that show the data is being edited.
-                self.info("Writing metadata before writing data to indicate write is in progress.")
-                if self.store.has_existing:
-                    update_attrs = {
-                        "update_in_progress": True,
-                        "update_is_append_only": dataset.get("update_is_append_only"),
-                        "initial_parse": False,
-                    }
-                    self.store.write_metadata_only(update_attrs=update_attrs)
-                    dataset.attrs.update(update_attrs)
-                else:
-                    dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
-                # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
-                post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
+            # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
+            # a Zarr is opened during writing, there will be indicators that show the data is being edited.
+            self.info("Writing metadata before writing data to indicate write is in progress.")
+            if self.store.has_existing:
+                update_attrs = {
+                    "update_in_progress": True,
+                    "update_is_append_only": dataset.get("update_is_append_only"),
+                    "initial_parse": False,
+                }
+                self.store.write_metadata_only(update_attrs=update_attrs)
+                dataset.attrs.update(update_attrs)
+            else:
+                dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
+            # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
+            post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
             dataset.to_zarr(*args, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
-            # Don't use update-in-progress metadata flag on IPLD
-            if not isinstance(self.store, IPLD):
-                # Indicate in metadata that update is complete.
-                self.info("Writing metadata after writing data to indicate write is finished.")
-                self.store.write_metadata_only(update_attrs=post_parse_attrs)
+            # Indicate in metadata that update is complete.
+            self.info("Writing metadata after writing data to indicate write is finished.")
+            self.store.write_metadata_only(update_attrs=post_parse_attrs)
 
     def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
@@ -221,9 +210,6 @@ class Publish(Transform):
         dask.config.set({"distributed.worker.memory.spill": self.dask_worker_mem_spill})
         dask.config.set({"distributed.worker.memory.pause": self.dask_worker_mem_pause})
         dask.config.set({"distributed.worker.memory.terminate": self.dask_worker_mem_terminate})
-        # IPLD should use the threads scheduler to work around pickling issues with IPLD objects like CIDs
-        if isinstance(self.store, IPLD):
-            dask.config.set({"scheduler": "threads"})
 
         # OTHER USEFUL SETTINGS, USE IF ENCOUNTERING PROBLEMS WITH PARSES
         # default distributed scheduler does not allocate memory correctly for some parses
@@ -239,8 +225,7 @@ class Publish(Transform):
 
     def write_initial_zarr(self, publish_dataset: xr.Dataset):
         """
-        Writes the first iteration of zarr for the dataset to the store specified at initialization. If the store is
-        `IPLD`, does some additional metadata processing
+        Writes the first iteration of zarr for the dataset to the store specified at initialization.
 
         Parameters
         ----------
@@ -254,11 +239,8 @@ class Publish(Transform):
         self.pre_chunk_dataset = publish_dataset.copy()
         publish_dataset = publish_dataset.chunk(self.requested_dask_chunks)
         self.info(f"Chunks after rechunk are {publish_dataset.chunks}")
-        # Now write
-        mapper = self.store.mapper(set_root=False)
-        self.to_zarr(publish_dataset, mapper, consolidated=True, mode="w")
-        if isinstance(self.store, IPLD):
-            self.dataset_hash = str(mapper.freeze())
+        # Now write 
+        self.to_zarr(publish_dataset, store=self.store.path, consolidated=True, mode="w")
 
     # UPDATES
 
@@ -267,9 +249,6 @@ class Publish(Transform):
         Update discrete regions of an N-D dataset saved to disk as a Zarr. Trigger insert and/or append
         operations based on the presence of valid records for either. If updates span multiple date ranges,
         push separate updates to each region.
-
-        If the IPLD store is in use, after updating the dataset, this function updates
-        the corresponding STAC Item and summaries in the parent STAC Collection.
 
         Parameters
         ----------
@@ -288,7 +267,7 @@ class Publish(Transform):
             if not self.allow_overwrite:
                 self.warn(
                     "Not inserting records despite historical data detected. 'allow_overwrite'"
-                    "flag has not been set and store is not IPLD"
+                    "flag has not been set."
                 )
             else:
                 self.insert_into_dataset(original_dataset, publish_dataset, insert_times)
@@ -347,8 +326,6 @@ class Publish(Transform):
         insert_times : list
             Datetimes corresponding to existing records to be replaced in the original dataset
         """
-        mapper = self.store.mapper()
-
         insert_dataset = self.prep_update_dataset(update_dataset, insert_times)
         date_ranges, regions = self.calculate_update_time_ranges(original_dataset, insert_dataset)
         for dates, region in zip(date_ranges, regions):
@@ -357,7 +334,7 @@ class Publish(Transform):
             self.info("Indicating the dataset is not appending data only.")
             self.to_zarr(
                 insert_slice.drop_vars(self._standard_dims_except(self.time_dim)),
-                mapper,
+                store=self.store.path,
                 region={self.time_dim: slice(*region)},
             )
 
@@ -366,9 +343,6 @@ class Publish(Transform):
                 f"Inserted records for {len(insert_dataset[self.time_dim].values)} times from {len(regions)} date "
                 "range(s) to original zarr"
             )
-        # In the case of IPLD, store the hash for later use
-        if isinstance(self.store, IPLD):
-            self.dataset_hash = str(mapper.freeze())
 
     def append_to_dataset(self, update_dataset: xr.Dataset, append_times: list):
         """
@@ -382,19 +356,15 @@ class Publish(Transform):
             Datetimes corresponding to all new records to append to the original dataset
         """
         append_dataset = self.prep_update_dataset(update_dataset, append_times)
-        mapper = self.store.mapper()
 
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
 
-        self.to_zarr(append_dataset, mapper, consolidated=True, append_dim=self.time_dim)
+        self.to_zarr(append_dataset, store=self.store.path, consolidated=True, append_dim=self.time_dim)
 
         if not self.dry_run:
             self.info(f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr")
-        # In the case of IPLD, store the hash for later use
-        if isinstance(self.store, IPLD):
-            self.dataset_hash = str(mapper.freeze())
 
     def prep_update_dataset(self, update_dataset: xr.Dataset, time_filter_vals: list) -> xr.Dataset:
         """

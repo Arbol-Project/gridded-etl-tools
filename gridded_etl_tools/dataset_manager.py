@@ -17,11 +17,10 @@ import psutil
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.publish import Publish
-from .utils.ipfs import IPFS
-from .utils.store import Local, IPLD, S3
+from .utils.store import Local, S3
 
 
-class DatasetManager(Logging, Publish, ABC, IPFS):
+class DatasetManager(Logging, Publish, ABC):
     """
     This is a base class for data parsers. It is intended to be inherited and implemented by child classes specific to
     each data source.
@@ -55,14 +54,12 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         requested_ipfs_chunker=None,
         rebuild_requested=False,
         custom_output_path=None,
-        custom_latest_hash=None,
         custom_input_path=None,
         console_log=True,
         global_log_level=logging.DEBUG,
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
-        ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
@@ -83,15 +80,11 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         Parameters
         ----------
-        ipfs_host : str, optional
-            The address of the IPFS HTTP API to use for IPFS operations
         rebuild_requested : bool, optional
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all
             available data from beginning to end.
         custom_output_path : str, optional
             Overrides the default path returned by `StoreInterface.path` for Local and S3 stores.
-        custom_latest_hash : str, optional
-            Overrides the default hash lookup defined in `IPFS.latest_hash`
         custom_input_path : str, optional
             A path to use for input files
         console_log : bool, optional
@@ -101,7 +94,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all
             logging statements will be generated and then logging handlers can decide what to do with them.
         store : str | None
-            A string indicating the type of filestore to use (one of, "local", "ipld" or "s3"). A corresponding store
+            A string indicating the type of filestore to use (one of, "local" or "s3"). A corresponding store
             object will be initialized. If `None`, the store is left unset and the default store interface defined in
             `Attributes.store` (local) is returned when the property is accessed. If using S3, the environment
             variables `AWS_ACCESS_KEY_ID`and `AWS_SECRET_ACCESS_KEY` must be specified in the ~/.aws/credentials file
@@ -111,8 +104,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date
             will fail with a warning message.
-        ipfs_host : str
-            The URL of the IPFS host
         dask_dashboard_address : str
             The desired URL of the dask dashboard
         dask_worker_memory_target : float
@@ -144,12 +135,10 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             Run the dataset manager all the way through but never write anything via `to_zarr`.
             Intended for development purposes
         """
-        # call IPFS init
-        super().__init__(host=ipfs_host)
+        super().__init__()
         # Set member variable defaults
         self.new_files = []
         self.custom_output_path = custom_output_path
-        self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
 
@@ -162,19 +151,16 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.skip_post_parse_api_check = skip_post_parse_api_check
 
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than
-        # "local", "ipld", or "s3" is passed, raise a `ValueError`.
+        # "local" or "s3" is passed, raise a `ValueError`.
         if store is None or store == "local":
             self.store = Local(self)
-        elif store == "ipld":
-            self.store = IPLD(self)
         elif store == "s3":
             self.store = S3(self, s3_bucket_name)
         else:
-            raise ValueError("Store must be one of 'local', 'ipld', or 's3'")
+            raise ValueError("Store must be one of 'local' or 's3'")
 
         # Assign the allow overwrite flag. The value should always be either `True` or `False`.
-        # Always allow overwrites if IPLD for backwards compatibility
-        self.allow_overwrite = allow_overwrite or isinstance(self.store, IPLD)
+        self.allow_overwrite = allow_overwrite
 
         # Print log statements to console by default
         if console_log:
@@ -192,7 +178,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # set chunk sizes (usually specified in the ETL manager class init)
         self.requested_dask_chunks = requested_dask_chunks
         self.requested_zarr_chunks = requested_zarr_chunks
-        self.requested_ipfs_chunker = requested_ipfs_chunker
 
         # set the dask dashboard address. Defaults to 127.0.0.1:8787 so it's only findable on the local machine
         self.dask_dashboard_address = dask_dashboard_address
