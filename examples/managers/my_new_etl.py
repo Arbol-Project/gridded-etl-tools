@@ -20,13 +20,12 @@ class MyNewETL(DatasetManager, ABC):
         *args,
         requested_dask_chunks={"time": 1769, "latitude": 24, "longitude": -1},
         requested_zarr_chunks={"time": 1769, "latitude": 24, "longitude": 24},
-        requested_ipfs_chunker="size-2304",
         **kwargs,
     ):
         """
         Initialize a new ETL object with appropriate chunking parameters.
         """
-        super().__init__(requested_dask_chunks, requested_zarr_chunks, requested_ipfs_chunker, *args, **kwargs)
+        super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         self.standard_dims = ["latitude", "longitude", "time"]
 
     @property
@@ -215,7 +214,7 @@ class MyNewETL(DatasetManager, ABC):
         Extends existing class method to create attributes or encoding specific to dataset being converted. Dunction
         and its sub-methods provide a stepwise process for fixing encoding issues and getting the metadata just right.
 
-        :param xr.Dataset dataset: The dataset prepared for parsing to IPLD
+        :param xr.Dataset dataset: The dataset prepared for parsing
         """
         dataset = super().set_zarr_metadata(dataset)
         # Some example considerations for setting metadata below

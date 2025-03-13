@@ -73,11 +73,6 @@ class TestDatasetManager:
         assert isinstance(dm.store, store.Local)
 
     @staticmethod
-    def test_constructor_ipld_store(manager_class):
-        dm = manager_class(store="ipld")
-        assert isinstance(dm.store, dataset_manager.IPLD)
-
-    @staticmethod
     def test_constructor_s3_store(manager_class):
         dm = manager_class(store="s3", s3_bucket_name="mop water")
         assert isinstance(dm.store, dataset_manager.S3)
@@ -170,7 +165,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_new_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=False)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=False)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -181,7 +176,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=False)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -192,7 +187,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=True)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -203,7 +198,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial_but_overwrite_not_allowed(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=False)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         with pytest.raises(RuntimeError):

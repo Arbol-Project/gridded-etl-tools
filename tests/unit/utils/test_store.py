@@ -254,10 +254,8 @@ class TestS3:
 
     @staticmethod
     def test_write_metadata_only(tmpdir):
-        with open(tmpdir / ".zmetadata", "w") as f:
-            json.dump({"metadata": {".zattrs": {"meta": "data"}}}, f)
-        with open(tmpdir / ".zattrs", "w") as f:
-            json.dump({"attr": "ibute"}, f)
+        with open(tmpdir / "zarr.json", "w") as f:
+            json.dump({"attributes": {"meta": "data"}}, f)
 
         store = store_module.S3(mock.Mock(custom_output_path=tmpdir), "bucket")
         store.fs = mock.Mock()
@@ -268,11 +266,8 @@ class TestS3:
 
         store.fs.assert_called_once_with()
 
-        with open(tmpdir / ".zmetadata") as f:
-            assert json.load(f) == {"metadata": {".zattrs": {"meta": "data", "new": "value"}}}
-
-        with open(tmpdir / ".zattrs") as f:
-            assert json.load(f) == {"attr": "ibute", "new": "value"}
+        with open(tmpdir / "zarr.json") as f:
+            assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
 
 
 class TestLocal:
@@ -426,16 +421,11 @@ class TestLocal:
 
     @staticmethod
     def test_write_metadata_only(tmpdir):
-        with open(tmpdir / ".zmetadata", "w") as f:
-            json.dump({"metadata": {".zattrs": {"meta": "data"}}}, f)
-        with open(tmpdir / ".zattrs", "w") as f:
-            json.dump({"attr": "ibute"}, f)
+        with open(tmpdir / "zarr.json", "w") as f:
+            json.dump({"attributes": {"meta": "data"}}, f)
 
         store = store_module.Local(mock.Mock(custom_output_path=tmpdir))
         store.write_metadata_only({"new": "value"})
 
-        with open(tmpdir / ".zmetadata") as f:
-            assert json.load(f) == {"metadata": {".zattrs": {"meta": "data", "new": "value"}}}
-
-        with open(tmpdir / ".zattrs") as f:
-            assert json.load(f) == {"attr": "ibute", "new": "value"}
+        with open(tmpdir / "zarr.json") as f:
+            assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}

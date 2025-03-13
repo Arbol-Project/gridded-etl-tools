@@ -25,7 +25,6 @@ class CHIRPS(DatasetManager):
         # 0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
         requested_dask_chunks={"time": 200, "latitude": 25, "longitude": -1},  # 144 MB
         requested_zarr_chunks={"time": 200, "latitude": 25, "longitude": 50},  # 1 MB
-        requested_ipfs_chunker="size-5000",
         **kwargs,
     ):
         """
@@ -33,7 +32,7 @@ class CHIRPS(DatasetManager):
 
         0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
         """
-        super().__init__(requested_dask_chunks, requested_zarr_chunks, requested_ipfs_chunker, *args, **kwargs)
+        super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         self.standard_dims = ["latitude", "longitude", "time"]
 
     @property
@@ -333,7 +332,6 @@ class CHIRPSFinal25(CHIRPSFinal):
         chunks = dict(
             requested_dask_chunks={"time": 500, "latitude": 40, "longitude": -1},  # 115 MB
             requested_zarr_chunks={"time": 500, "latitude": 40, "longitude": 40},  # 3.2 MB
-            requested_ipfs_chunker="size-6400",
         )
         kwargs.update(chunks)
         kwargs["console_log"] = False

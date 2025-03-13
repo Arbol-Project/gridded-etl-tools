@@ -102,38 +102,6 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_remove_unwanted_fields_w_ipld_store(manager_class):
-        dataset = mock.MagicMock()
-        dataset["data"].encoding = {"filters": "coffee"}
-        for coord in ["latitude", "longitude"]:
-            dataset[coord].attrs["chunks"] = "fudge"
-            dataset[coord].attrs["preferred_chunks"] = "chocolate"
-            dataset[coord].encoding["_FillValue"] = "pi"
-            dataset[coord].encoding["missing_value"] = "negative pi"
-        md = manager_class()
-        md.store = store.IPLD(md)
-        md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding == {}
-        assert dataset["latitude"].encoding == {}
-        assert dataset["longitude"].encoding == {}
-
-    @staticmethod
-    def test_remove_unwanted_fields_w_ipld_store_no_compression(manager_class):
-        dataset = mock.MagicMock()
-        dataset["data"].encoding = {"filters": "coffee"}
-        for coord in ["latitude", "longitude"]:
-            dataset[coord].attrs["chunks"] = "fudge"
-            dataset[coord].attrs["preferred_chunks"] = "chocolate"
-            dataset[coord].encoding["_FillValue"] = "pi"
-            dataset[coord].encoding["missing_value"] = "negative pi"
-        md = manager_class(use_compression=False)
-        md.store = store.IPLD(md)
-        md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding == {}
-        assert dataset["latitude"].encoding == {}
-        assert dataset["longitude"].encoding == {}
-
-    @staticmethod
     def test_set_initial_compression(manager_class, fake_original_dataset):
         dm = manager_class(use_compression=True)
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -218,15 +186,6 @@ class TestMetadata:
         assert dm.metadata == md
 
     @staticmethod
-    def test_check_stac_exists_ipld(manager_class):
-        dm = manager_class()
-        dm.check_stac_on_ipns = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.check_stac_exists("The Jungle Book", metadata.StacType.CATALOG) is dm.check_stac_on_ipns.return_value
-        dm.check_stac_on_ipns.assert_called_once_with("The Jungle Book")
-        dm.store.metadata_exists.assert_not_called()
-
-    @staticmethod
     def test_check_stac_exists_not_ipld(manager_class):
         dm = manager_class()
         dm.check_stac_on_ipns = mock.Mock()
@@ -238,70 +197,31 @@ class TestMetadata:
         dm.store.metadata_exists.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
-    def test_publish_stac_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_publish = mock.Mock()
-        dm.ipfs_put = mock.Mock()
-        dm.json_to_bytes = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
-        dm.json_to_bytes.assert_called_once_with({"hi": "mom!"})
-        dm.ipfs_put.assert_called_once_with(dm.json_to_bytes.return_value)
-        dm.ipns_publish.assert_called_once_with("The Jungle Book", dm.ipfs_put.return_value)
-        dm.store.push_metadata.assert_not_called()
-
-    @staticmethod
     def test_publish_stac_not_ipld(manager_class):
         dm = manager_class()
-        dm.ipns_publish = mock.Mock()
-        dm.ipfs_put = mock.Mock()
         dm.json_to_bytes = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
         dm.json_to_bytes.assert_not_called()
-        dm.ipfs_put.assert_not_called()
-        dm.ipns_publish.assert_not_called()
         dm.store.push_metadata.assert_called_once_with(
             "The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG.value
         )
 
     @staticmethod
-    def test_retrieve_stac_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_retrieve_object = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.ipns_retrieve_object.return_value
-        dm.ipns_retrieve_object.assert_called_once_with("The Jungle Book")
-        dm.store.retrieve_metadata.assert_not_called()
-
-    @staticmethod
     def test_retrieve_stac_not_ipld(manager_class):
         dm = manager_class()
-        dm.ipns_retrieve_object = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert (
             dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
         )
-        dm.ipns_retrieve_object.assert_not_called()
         dm.store.retrieve_metadata.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
-
-    @staticmethod
-    def test_get_href_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_generate_name = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.ipns_generate_name.return_value
-        dm.ipns_generate_name.assert_called_once_with(key="The Jungle Book")
 
     @staticmethod
     def test_get_href_not_ipld(manager_class):
         dm = manager_class()
-        dm.ipns_generate_name = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
-        dm.ipns_generate_name.assert_not_called()
         dm.store.get_metadata_path.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
@@ -924,7 +844,6 @@ class TestMetadata:
             ]
         )
         md.get_href.assert_not_called()
-        md.ipns_resolve.assert_not_called()
 
     @staticmethod
     def test_update_stac_collection(manager_class, fake_original_dataset):
@@ -951,7 +870,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata() == "foo"
@@ -961,7 +880,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_pass_key(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata(key="chiave") == "foo"
@@ -971,7 +890,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_timeout(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(side_effect=Timeout)
 
         assert md.load_stac_metadata() == {}
@@ -1224,85 +1143,6 @@ class TestMetadata:
             "bbox": (100.0, 10.0, 130.0, 40.0),
             "update_is_append_only": True,
         }
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_no_existing_created(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
-        dt_mock.timezone = datetime.timezone
-
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(return_value={"properties": {"date range": ("2000010100", "2021091600")}})
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_existing_created(manager_class, fake_original_dataset, mocker):
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(
-            return_value={"properties": {"date range": ("2000010100", "2021091600"), "created": "1999-01-01T0Z"}}
-        )
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "1999-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_stac_timeout(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
-        dt_mock.timezone = datetime.timezone
-
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(side_effect=Timeout)
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "",
-            "date range": ("2021091600", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
 
     @staticmethod
     @pytest.fixture

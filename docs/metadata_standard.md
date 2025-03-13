@@ -18,9 +18,8 @@ Each climate data Zarr stored on IPFS contains essential metadata fields relevan
 Retrieving in-Zarr metadata is as simple as opening the dataset in Xarray and calling the `.attrs` or `.encoding` methods on it. 
 
     $ ipython
-    > import xarray, ipldstore
-    > mapper = ipldstore.get_ipfs_mapper()
-    > mapper.set_root('bafyreidynjhbbgnhtvbtzo7gfdx7k43xdh4fl6m6flcavnviehjeo5kci4')
+    > import xarray
+    > ds = xr.open_dataset("s3://your/path_here")
     > ds.attrs
     {'coordinate reference system': 'EPSG:4326',
     'name': 'cpc_temp_max',

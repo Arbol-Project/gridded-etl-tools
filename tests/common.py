@@ -183,27 +183,6 @@ def clean_up_input_paths(*args):
             print(f"Cleaned up {originals_path}")
 
 
-# Save the original IPNS publish function, so it can be mocked to force offline to True when the patched
-# IPNS publish is applied.
-
-
-original_ipns_publish = DatasetManager.ipns_publish
-
-
-def offline_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return original_ipns_publish(self, key, cid, offline=True)
-
-
-def empty_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return self.info("Skipping IPNS publish to preserve initial test dataset")
-
-
 # Change the key used by IPNS publish to clearly mark the dataset as a test in your key list
 # This will allow other tests to reference the test dataset and prevent mixups with production data
 

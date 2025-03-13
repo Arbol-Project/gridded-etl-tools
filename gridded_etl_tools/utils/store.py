@@ -618,18 +618,20 @@ class Local(StoreInterface):
         return str((pathlib.Path(self.folder) / "metadata" / stac_type / f"{title}.json").resolve())
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
-        # Edit both .zmetadata and .zattrs
-        for z_path in (".zmetadata", ".zattrs"):
-            # Read current metadata from Zarr
-            with open(self.path / z_path) as z_contents:
-                current_attributes = json.load(z_contents)
+        """
+        Update metadata within the master zarr.json file contained within v3 Zarrs
 
-            # Update given attributes at the appropriate location depending on which z file
-            if z_path == ".zmetadata":
-                current_attributes["metadata"][".zattrs"].update(update_attrs)
-            else:
-                current_attributes.update(update_attrs)
+        Parameters
+        ----------
+        update_attrs : dict[str, Any]
+            A dictionary of attributes to update in the zarr.json file
+        """
+        with open(f"{self.path}/zarr.json") as z_contents:
+            current_attributes = json.load(z_contents)
 
-            # Write back to Zarr
-            with open(self.path / z_path, "w") as z_contents:
-                json.dump(current_attributes, z_contents)
+        # Update given attributes
+        current_attributes["attributes"].update(update_attrs)
+
+        # Write back to Zarr
+        with open(f"{self.path}/zarr.json", "w") as z_contents:
+            json.dump(current_attributes, z_contents)

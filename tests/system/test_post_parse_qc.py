@@ -9,7 +9,6 @@ from unittest.mock import Mock
 from ..common import (
     run_etl,
     clean_up_input_paths,
-    empty_ipns_publish,
     patched_output_root,
     patched_key,
     patched_root_stac_catalog,
@@ -66,7 +65,6 @@ def setup_and_teardown_per_test(
     initial_input_path,
     appended_input_path,
     qc_input_path,
-    create_heads_file_for_testing,
     create_input_directories,
     simulate_file_download,
 ):
@@ -74,7 +72,6 @@ def setup_and_teardown_per_test(
     Call the setup functions first, in a chain ending with `simulate_file_download`.
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
-    # Force ipns_publish to use offline mode to make tests run faster
     mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
     mocker.patch("gridded_etl_tools.utils.publish.Publish.pre_parse_quality_check", Mock())  # speeds things up
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
@@ -85,10 +82,6 @@ def setup_and_teardown_per_test(
     mocker.patch(
         "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
         patched_root_stac_catalog,
-    )
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
-        empty_ipns_publish,
     )
     # Mock the root output directory name, so no existing data will be overwritten and it can be easily cleaned up
     mocker.patch(

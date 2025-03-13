@@ -9,7 +9,7 @@ We reserve the right to revise these timelines and/or their anticipated impacts 
 
 Users currently must built and operate ETLS by importing the directory in question. Our intention is for the library to function as a standalone PyPI package that can be imported and used like `pandas`, `xarray`, or other standard data manipulation frameworks.
 
-Unfortunately, the current iteration of this library relies on custom patches to the `ipldstore` and `kerchunk` libraries hosted on github. PyPI does not allow custom installs from github for its packages so we need to have our changes merged into the open source libraries before we can publish the library. We will prioritize this as time allows but it's not fully under our control.
+Unfortunately, the current iteration of this library relies on custom patches to the `kerchunk` libraries hosted on github. PyPI does not allow custom installs from github for its packages so we need to have our changes merged into the open source libraries before we can publish the library. We will prioritize this as time allows but it's not fully under our control.
 
 ### Allow publication of STAC metadata for non-IPFS stores
 

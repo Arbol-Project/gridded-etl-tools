@@ -8,8 +8,6 @@ from gridded_etl_tools.utils.encryption import generate_encryption_key
 
 from ..common import (
     clean_up_input_paths,
-    empty_ipns_publish,
-    offline_ipns_publish,
     patched_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
@@ -51,7 +49,6 @@ def setup_and_teardown_per_test(
     mocker,
     initial_input_path,
     appended_input_path,
-    create_heads_file_for_testing,
     create_input_directories,
     simulate_file_download,
 ):
@@ -59,7 +56,6 @@ def setup_and_teardown_per_test(
     Call the setup functions first, in a chain ending with `simulate_file_download`.
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
-    # Force ipns_publish to use offline mode to make tests run faster
     mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
     mocker.patch(
@@ -69,10 +65,6 @@ def setup_and_teardown_per_test(
     mocker.patch(
         "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
         patched_root_stac_catalog,
-    )
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
-        empty_ipns_publish,
     )
     yield  # run the tests first
     # delete temp files
@@ -109,13 +101,6 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
         store="ipld",
         encryption_key=encryption_key,
     )
-    manager.HASH_HEADS_PATH = heads_path
-    # Remove IPNS publish mocker on the first run of the dataset, so it lives as "dataset_test" in your IPNS registry
-    if manager.key() not in manager.ipns_key_list():  # pragma NO COVER
-        mocker.patch(
-            "gridded_etl_tools.dataset_manager.DatasetManager.ipns_publish",
-            offline_ipns_publish,
-        )
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
