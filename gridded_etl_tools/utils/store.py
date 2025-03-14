@@ -164,7 +164,7 @@ class StoreInterface(ABC):
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
         if self.has_existing:
-            return xr.open_zarr(store=self.path, **kwargs)
+            return xr.open_zarr(store=self.path, consolidated=False, **kwargs)
         else:
             return None
 

@@ -7,7 +7,6 @@ import dask
 import pathlib
 import random
 
-from contextlib import nullcontext
 from typing import Any, Generator
 from statsmodels.stats.proportion import proportion_confint
 
@@ -65,8 +64,9 @@ class Publish(Transform):
                     # Attempt to find an existing Zarr, using the appropriate method for the store. If there is
                     # existing data and there is no rebuild requested, start an update. If there is no existing data,
                     # start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
-                    # has been set, write a new Zarr, overwriting any existing data. If rebuild is requested and there is
-                    # existing data, but allow overwrite is not set, do not start parsing and issue a warning.
+                    # has been set, write a new Zarr, overwriting any existing data.
+                    # If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
+                    # parsing and issue a warning.
                     if self.store.has_existing and not self.rebuild_requested:
                         self.info(f"Updating existing data at {self.store}")
                         self.update_zarr(publish_dataset)
@@ -239,7 +239,7 @@ class Publish(Transform):
         self.pre_chunk_dataset = publish_dataset.copy()
         publish_dataset = publish_dataset.chunk(self.requested_dask_chunks)
         self.info(f"Chunks after rechunk are {publish_dataset.chunks}")
-        # Now write 
+        # Now write
         self.to_zarr(publish_dataset, store=self.store.path, consolidated=True, mode="w")
 
     # UPDATES
@@ -1041,4 +1041,8 @@ def _is_infish(n):
     An infinite-ish value may either be one of the floating point `inf` values or have an absolute value greater than
     1e100.
     """
-    return np.isinf(n) or abs(n) > 1e100
+    if n.dtype == np.float64:
+        limit = 1e100
+    else:
+        limit = 1e38
+    return np.isinf(n) or abs(n) > limit

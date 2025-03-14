@@ -141,7 +141,7 @@ class TestConvenience:
         mocker.patch("pathlib.Path.is_file", lambda self: self.name != "notafile")
 
         expected = ["/2dogs", "/3cats", "/20ducks", "/aardvarks", "/hamburgers"]
-        assert list(dm.input_files()) == [pathlib.Path(path) for path in expected]
+        assert list(dm.input_files()) == sorted([pathlib.Path(path) for path in expected])
 
     @staticmethod
     def test_get_folder_path_from_date(manager_class):

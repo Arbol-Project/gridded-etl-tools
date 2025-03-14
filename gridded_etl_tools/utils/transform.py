@@ -10,8 +10,6 @@ import s3fs
 import zarr
 
 from subprocess import Popen
-from typing import Union
-from collections.abc import MutableMapping
 
 import xarray as xr
 
@@ -106,7 +104,7 @@ class Transform(Metadata, Convenience):
             if not outfile_path:
                 outfile_path = self.zarr_json_path()
             mzz.translate(filename=outfile_path)
-            self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking)/60,2)} minutes")
+            self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking) / 60, 2)} minutes")
         else:
             self.info("Existing Zarr found, using that")
 
@@ -369,9 +367,7 @@ class Transform(Metadata, Convenience):
         return refs
 
     @classmethod
-    def postprocess_kerchunk(
-        cls, out_zarr: zarr.storage.FsspecStore
-    ) -> zarr.storage.FsspecStore:
+    def postprocess_kerchunk(cls, out_zarr: zarr.storage.FsspecStore) -> zarr.storage.FsspecStore:
         """
         Class method to modify the in-memory Zarr created by Kerchunk for each file
         using Zarr methods. Useful where manipulating individual files via the reference dictionary in

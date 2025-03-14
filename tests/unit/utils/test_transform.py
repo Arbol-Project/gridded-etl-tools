@@ -6,8 +6,6 @@ from unittest import mock
 
 import pytest
 
-from gridded_etl_tools.utils import store
-
 
 @pytest.fixture
 def input_files(tmp_path, mocker):

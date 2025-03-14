@@ -51,7 +51,6 @@ class DatasetManager(Logging, Publish, ABC):
         self,
         requested_dask_chunks,
         requested_zarr_chunks,
-        requested_ipfs_chunker=None,
         rebuild_requested=False,
         custom_output_path=None,
         custom_input_path=None,

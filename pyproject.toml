@@ -34,8 +34,7 @@ requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4",
     "cfgrib",
-    "dag-cbor==0.2.2",
-    "dask[array,diagnostics,distributed]>=2024.8.0",
+    "dask[array,diagnostics,distributed]",
     "deprecation",
     "fsspec",
     "kerchunk",
@@ -54,8 +53,8 @@ dependencies = [
     "shapely",
     "statsmodels",
     "tqdm",
-    "xarray[complete]==2024.3.0",
-    "zarr<3.0.0",
+    "xarray[complete]",
+    "zarr>3.0.0",
 ]
 
 [project.urls]
@@ -96,4 +95,5 @@ namespaces = false
 [tool.flake8]
 # flake8 and black disagree on E203, E701, and W503
 ignore = ["E203", "E701", "W503"]
+exclude = ["temp/*", "build/*", ".nox"]
 max-line-length = 120

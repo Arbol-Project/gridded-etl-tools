@@ -47,15 +47,15 @@ class fake_vmem(dict):
 
 class TestPublish:
     @staticmethod
-    def test_parse_ipld_first_time(manager_class, mocker):
+    def test_parse_first_time(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=False)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -74,19 +74,18 @@ class TestPublish:
         dm.update_zarr.assert_not_called()
         dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_ipld_update(manager_class, mocker):
+    def test_parse_update(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -105,15 +104,13 @@ class TestPublish:
         dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
 
     @staticmethod
     def test_parse_not_ipld_rebuild(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=True)
@@ -138,14 +135,12 @@ class TestPublish:
         dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
         Client.assert_called_once_with(cluster)
-        nullcontext.assert_not_called()
 
     @staticmethod
     def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=False)
@@ -171,18 +166,17 @@ class TestPublish:
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_called_once_with(cluster)
-        nullcontext.assert_not_called()
 
     @staticmethod
-    def test_parse_ipld_update_ctrl_c(manager_class, mocker):
+    def test_parse_not_ipld_update_ctrl_c(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -201,8 +195,7 @@ class TestPublish:
         dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
 
     @staticmethod
     def test_publish_metadata(manager_class):
@@ -288,26 +281,11 @@ class TestPublish:
         dm.create_stac_item.assert_called_once_with(current_zarr)
 
     @staticmethod
-    def test_to_zarr_ipld(manager_class, mocker):
+    def test_to_zarr_not_ipld_dry_run(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dataset = mock.Mock()
-        dm.to_zarr(dataset, "foo", bar="baz")
-
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
-        dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_not_called()
-        dm.move_post_parse_attrs_to_dict.assert_not_called()
-
-    @staticmethod
-    def test_to_zarr_ipld_dry_run(manager_class, mocker):
-        dm = manager_class()
-        dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
+        dm.store = mock.Mock(spec=store.StoreInterface)
         dm.dry_run = True
 
         dataset = mock.Mock()
@@ -404,7 +382,7 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == pre_update_dict[key]
 
         dataset.attrs.update(**post_update_dict)
-        dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+        dm.to_zarr(dataset, store=dm.store.path, append_dim=dm.time_dim)
 
         for key in post_update_dict.keys():
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
@@ -440,7 +418,7 @@ class TestPublish:
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
         dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+        dataset.to_zarr(store=dm.custom_output_path)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
@@ -450,7 +428,7 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == pre_update_dict[key]
 
         dataset.attrs.update(**post_update_dict)
-        dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+        dm.to_zarr(dataset, store=dm.store.path, append_dim=dm.time_dim)
 
         for key in post_update_dict.keys():
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
@@ -478,31 +456,6 @@ class TestPublish:
             "update_previous_end_date": "2020123023",
             "initial_parse": False,
             "some relevant attribute": True,
-        }
-
-    @staticmethod
-    def test_dask_configuration_ipld(manager_class, mocker):
-        dask_config = {}
-
-        def dask_config_set(config):
-            dask_config.update(config)
-
-        dask = mocker.patch("gridded_etl_tools.utils.publish.dask")
-        dask.config.set = dask_config_set
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dm.dask_configuration()
-
-        assert dask_config == {
-            "distributed.scheduler.worker-saturation": dm.dask_scheduler_worker_saturation,
-            "distributed.scheduler.worker-ttl": None,
-            "distributed.worker.memory.target": dm.dask_worker_mem_target,
-            "distributed.worker.memory.spill": dm.dask_worker_mem_spill,
-            "distributed.worker.memory.pause": dm.dask_worker_mem_pause,
-            "distributed.worker.memory.terminate": dm.dask_worker_mem_terminate,
-            "scheduler": "threads",
         }
 
     @staticmethod
@@ -538,12 +491,12 @@ class TestPublish:
         publish_dataset = mock.Mock()
         publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
 
-        mapper = dm.store.mapper.return_value
+        dm.store.path = mock.Mock()
 
         dm.write_initial_zarr(publish_dataset)
 
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
+        # dm.store.path.assert_called_once_with()
+        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, store=dm.store.path, consolidated=True, mode="w")
 
     @staticmethod
     def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
@@ -664,12 +617,8 @@ class TestPublish:
             (("the shire", "mordor"), ("vegas", "atlantic city")),
         )
 
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
         dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
 
-        dm.store.mapper.assert_called_once_with()
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
         dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
 
@@ -678,8 +627,14 @@ class TestPublish:
         )
         dm.to_zarr.assert_has_calls(
             [
-                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+                mock.call(
+                    slice1.drop_vars.return_value, store=dm.store.path, region={"time": slice("the shire", "mordor")}
+                ),
+                mock.call(
+                    slice2.drop_vars.return_value,
+                    store=dm.store.path,
+                    region={"time": slice("vegas", "atlantic city")},
+                ),
             ]
         )
 
@@ -700,15 +655,11 @@ class TestPublish:
         append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
 
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
         dm.append_to_dataset(update_dataset, insert_times)
 
-        dm.store.mapper.assert_called_once_with()
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
 
-        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
+        dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, consolidated=True, append_dim="time")
 
         assert append_dataset.attrs == {"update_is_append_only": True}
 

@@ -4,7 +4,6 @@ import datetime
 import typing
 import zarr
 import shapely.geometry
-import numcodecs
 
 import numpy as np
 import xarray as xr
