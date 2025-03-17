@@ -559,7 +559,9 @@ class Transform(Metadata, Convenience):
         input_kwargs = {
             "filename_or_obj": "reference://",
             "engine": "zarr",
-            "chunks": {},
+            # If there is an existing dataset then the update should have no chunk info whatsoever to prevent
+            # chunk alignment issues. If new, import empty and populate later
+            "chunks": None if self.store.has_existing else {},
             "backend_kwargs": {
                 "storage_options": {
                     "fo": zarr_json_path,

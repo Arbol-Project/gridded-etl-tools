@@ -636,10 +636,23 @@ class Metadata(Convenience):
                 "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
                 "missing_value": self.missing_value,
-                "chunks": tuple(val for val in self.requested_zarr_chunks.values()),
-                "preferred_chunks": self.requested_zarr_chunks,
             }
         )
+        # More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets,
+        # so all chunking information (as well as chunking itself) must be aggressively removed.
+        if self.store.has_existing and not self.rebuild_requested:
+            chunks = preferred_chunks = None
+        else:
+            # Initial parses need chunking information to be present in the encoding dict
+            chunks = tuple(val for val in self.requested_zarr_chunks.values())
+            preferred_chunks = self.requested_zarr_chunks
+        for aspect in list(dataset.dims) + [self.data_var]:
+            dataset[aspect].encoding.update(
+                {
+                    "chunks": chunks,
+                    "preferred_chunks": preferred_chunks,
+                }
+            )
         # Encode 'time' dimension with the Climate and Forecast Convention standards used by major climate data
         # providers.
         if "time" in dataset:
@@ -761,12 +774,12 @@ class Metadata(Convenience):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = zarr.codecs.BloscCodec(cname="lz4") if self.use_compression else None
+        compressor = (zarr.codecs.BloscCodec(cname="lz4"),) if self.use_compression else None
 
         if not self.store.has_existing:
             for coord in dataset.coords:
-                dataset[coord].encoding["compressors"] = (compressor,)
-            dataset[self.data_var].encoding["compressors"] = (compressor,)
+                dataset[coord].encoding["compressors"] = compressor
+            dataset[self.data_var].encoding["compressors"] = compressor
 
     def suppress_invalid_attributes(self, dataset: xr.Dataset):
         """
@@ -787,7 +800,7 @@ class Metadata(Convenience):
         self,
         target_array: str,
         update_key: dict,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Update an array encoding field in the dataset's Zarr store.
 
@@ -804,7 +817,7 @@ class Metadata(Convenience):
         self,
         target_array: str,
         remove_key: str,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Remove an array encoding field from the dataset's Zarr store.
 
@@ -822,7 +835,7 @@ class Metadata(Convenience):
         target_array: str,
         update_key: dict | None = None,
         remove_key: str | None = None,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Modify the encoding of an array -- coordinate or data variable -- in the dataset's Zarr store.
 

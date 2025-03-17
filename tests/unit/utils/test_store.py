@@ -15,6 +15,7 @@ class DummyStoreImpl(store_module.StoreInterface):
     def __init__(self, dm):
         super().__init__(dm)
         self._mapper = mock.Mock()
+        self._path = mock.Mock(return_value="winding")
 
     def get_metadata_path(self, title: str, stac_type: str):  # pragma NO COVER
         raise NotImplementedError
@@ -34,6 +35,10 @@ class DummyStoreImpl(store_module.StoreInterface):
     def mapper(self, **kwargs):
         return self._mapper(**kwargs)
 
+    @property
+    def path(self):
+        return self._path()
+
 
 class TestStoreInterface:
     @staticmethod
@@ -51,8 +56,7 @@ class TestStoreInterface:
         store = DummyStoreImpl(None)
         assert store.dataset(arbitrary="keyword") is dataset
 
-        xr.open_zarr.assert_called_once_with(store._mapper.return_value)
-        store._mapper.assert_called_once_with(arbitrary="keyword")
+        xr.open_zarr.assert_called_once_with(store=store.path, consolidated=False, arbitrary="keyword")
 
     @staticmethod
     def test_dataset_not_existing(mocker):

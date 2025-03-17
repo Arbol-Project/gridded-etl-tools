@@ -5,6 +5,7 @@ import pathlib
 from unittest import mock
 
 import pytest
+from gridded_etl_tools.utils import store
 
 
 @pytest.fixture
@@ -852,6 +853,7 @@ class TestTransform:
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset() is dataset
@@ -873,10 +875,37 @@ class TestTransform:
         )
 
     @staticmethod
+    def test_zarr_json_to_dataset_has_existing(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset() is dataset
+        dm.zarr_json_path.assert_called_once_with()
+        xr.open_dataset.assert_called_once_with(
+            filename_or_obj="reference://",
+            engine="zarr",
+            chunks=None,
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/zarr.json",
+                    "remote_protocol": "handshake",
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=True,
+        )
+
+    @staticmethod
     def test_zarr_json_to_dataset_explicit_args(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dataset

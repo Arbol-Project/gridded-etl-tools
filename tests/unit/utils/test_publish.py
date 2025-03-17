@@ -674,17 +674,17 @@ class TestPublish:
             numpy.timedelta64(1, "[D]"),
         )
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.set_zarr_metadata = lambda x: x
         dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert len(dataset.time) > len(time_values)
 
         dataset = dm.prep_update_dataset(dataset, time_values)
+        dm.encode_vars(dataset)
 
         assert numpy.array_equal(dataset.time, time_values)
-        dataset.chunks["time"][0] == 5
-        dataset.chunks["latitude"][0] == 4
-        dataset.chunks["longitude"][0] == 4
+        assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
@@ -699,45 +699,17 @@ class TestPublish:
             numpy.timedelta64(1, "[D]"),
         )
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.set_zarr_metadata = lambda x: x
         dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert "time" not in dataset.dims
 
         dataset = dm.prep_update_dataset(dataset, time_values)
+        dm.encode_vars(dataset)
 
         assert numpy.array_equal(dataset.time, time_values[:1])
-        dataset.chunks["time"][0] == 5
-        dataset.chunks["latitude"][0] == 4
-        dataset.chunks["longitude"][0] == 4
-        assert dataset.data.dims == ("time", "latitude", "longitude")
-
-    @staticmethod
-    def test_prep_update_dataset_dask_chunks_not_full_size(manager_class, fake_complex_update_dataset):
-        """
-        Regression test to ensure that prep_update_datset always chunks the dataset to have full size
-        full Dask chunks, preventing mismatches between Zarr and Dask chunks that cause Xarray errors
-        """
-        # Give the transpose call in prep_update_dataset something to do
-        dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
-        assert dataset.data.dims == ("longitude", "latitude", "time")
-        dataset = dataset.chunk({"time": 3, "latitude": 1, "longitude": 1})
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        dm = manager_class()
-        dm.set_zarr_metadata = lambda x: x
-        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
-
-        assert len(dataset.time) > len(time_values)
-        dataset = dm.prep_update_dataset(dataset, time_values)
-
-        assert numpy.array_equal(dataset.time, time_values)
-        assert dataset.chunks["time"][0] == 5
-        assert dataset.chunks["latitude"][0] == 4
-        assert dataset.chunks["longitude"][0] == 4
+        assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
