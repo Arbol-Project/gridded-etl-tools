@@ -107,7 +107,7 @@ class TestPublish:
         Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_not_ipld_rebuild(manager_class, mocker):
+    def test_parse_rebuild(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
@@ -137,7 +137,7 @@ class TestPublish:
         Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
+    def test_parse_rebuild_but_overwrite_not_allowed(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
@@ -168,7 +168,7 @@ class TestPublish:
         Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_not_ipld_update_ctrl_c(manager_class, mocker):
+    def test_parse_update_ctrl_c(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
@@ -281,7 +281,7 @@ class TestPublish:
         dm.create_stac_item.assert_called_once_with(current_zarr)
 
     @staticmethod
-    def test_to_zarr_not_ipld_dry_run(manager_class, mocker):
+    def test_to_zarr_dry_run(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
@@ -297,7 +297,7 @@ class TestPublish:
         dm.move_post_parse_attrs_to_dict.assert_not_called()
 
     @staticmethod
-    def test_to_zarr_not_ipld(manager_class, mocker):
+    def test_to_zarr(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
@@ -326,7 +326,7 @@ class TestPublish:
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
     @staticmethod
-    def test_to_zarr_not_ipld_initial(manager_class, mocker):
+    def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
@@ -459,7 +459,7 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_dask_configuration_not_ipld(manager_class, mocker):
+    def test_dask_configuration(manager_class, mocker):
         dask_config = {}
 
         def dask_config_set(config):
@@ -483,7 +483,7 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_write_initial_zarr_not_ipld(manager_class):
+    def test_write_initial_zarr(manager_class):
 
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -594,7 +594,7 @@ class TestPublish:
         dm.append_to_dataset.assert_not_called()
 
     @staticmethod
-    def test_insert_into_dataset_not_ipld_dry_run(manager_class):
+    def test_insert_into_dataset_dry_run(manager_class):
         dm = manager_class()
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -641,7 +641,7 @@ class TestPublish:
         assert insert_dataset.attrs == {"update_is_append_only": False}
 
     @staticmethod
-    def test_append_to_dataset_not_ipld_dry_run(manager_class):
+    def test_append_to_dataset_dry_run(manager_class):
         dm = manager_class()
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)

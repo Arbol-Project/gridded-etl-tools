@@ -185,7 +185,7 @@ class TestMetadata:
         assert dm.metadata == md
 
     @staticmethod
-    def test_check_stac_exists_not_ipld(manager_class):
+    def test_check_stac_exists(manager_class):
         dm = manager_class()
         dm.check_stac_on_ipns = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -196,7 +196,7 @@ class TestMetadata:
         dm.store.metadata_exists.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
-    def test_publish_stac_not_ipld(manager_class):
+    def test_publish_stac(manager_class):
         dm = manager_class()
         dm.json_to_bytes = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -208,7 +208,7 @@ class TestMetadata:
         )
 
     @staticmethod
-    def test_retrieve_stac_not_ipld(manager_class):
+    def test_retrieve_stac(manager_class):
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert (
@@ -217,7 +217,7 @@ class TestMetadata:
         dm.store.retrieve_metadata.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
-    def test_get_href_not_ipld(manager_class):
+    def test_get_href(manager_class):
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
@@ -718,7 +718,7 @@ class TestMetadata:
         dm.update_stac_collection.assert_called_once_with(fake_original_dataset)
 
     @staticmethod
-    def test_create_stac_item_not_ipld(manager_class, fake_original_dataset, mocker):
+    def test_create_stac_item(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
         dt_mock.timezone = datetime.timezone
@@ -786,7 +786,7 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_register_stac_item_already_exists_not_ipld(manager_class):
+    def test_register_stac_item_already_exists(manager_class):
         stac_collection = {
             "title": "War and Peace",
             "links": [{"rel": "lol"}, {"rel": "item", "title": "Asset and Peace", "href": "/old/path/to/item"}],
@@ -1146,7 +1146,7 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_merge_in_outside_metadata_not_ipld(manager_class, fake_original_dataset, mocker):
+    def test_merge_in_outside_metadata(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
@@ -1204,7 +1204,7 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_merge_in_outside_metadata_not_ipld_no_previous_dataset(manager_class, fake_original_dataset, mocker):
+    def test_merge_in_outside_metadata_no_previous_dataset(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
