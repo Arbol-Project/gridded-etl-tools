@@ -7,13 +7,13 @@ import shutil
 import glob
 
 from unittest.mock import Mock
-
 from ..common import (
     clean_up_input_paths,
     get_manager,
     patched_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
+    remove_mock_output,
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
@@ -105,6 +105,7 @@ def setup_and_teardown_per_test(
     )
     yield  # run the tests first
     # delete temp files
+    remove_mock_output()
     remove_zarr_json()
     remove_dask_worker_dir()
     remove_performance_report()
@@ -118,23 +119,9 @@ def setup_and_teardown_per_test(
     )
 
 
-@pytest.fixture(scope="module", autouse=True)
-def teardown_module(request, heads_path):
+def test_extract(mocker, manager_class, test_chunks, extracted_input_path):
     """
-    Remove the heads file at the end of all tests
-    """
-
-    def test_clean():
-        os.remove(heads_path)
-        print(f"Cleaned up {heads_path}")
-
-    request.addfinalizer(test_clean)
-
-
-def test_extract(mocker, manager_class, heads_path, test_chunks, extracted_input_path):
-    """
-    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
-    "test_".
+    Test an extract of CHIRPS data.
     """
     # Get the CHIRPS manager with rebuild set
     manager = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="local")
@@ -151,7 +138,7 @@ def test_extract(mocker, manager_class, heads_path, test_chunks, extracted_input
     manager.check_if_new_data.assert_called_once_with(date_range[1])
 
 
-def test_initial_dry_run(mocker, manager_class, heads_path, test_chunks, initial_input_path):
+def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path):
     """
     Test that a dry run parse of CHIRPS data does not, in fact, parse data.
     """
@@ -165,15 +152,13 @@ def test_initial_dry_run(mocker, manager_class, heads_path, test_chunks, initial
     publish_dataset = manager.transform_dataset_in_memory()
     manager.parse(publish_dataset)
     manager.zarr_json_path().unlink(missing_ok=True)
-    # Check that a hash wasn't created because the dataset wasn't parsed
-    with pytest.raises(FileNotFoundError):
-        manager.zarr_hash_to_dataset(manager.latest_hash())
+    # Check that a path wasn't created because the dataset wasn't parsed
+    assert not manager.store.has_existing
 
 
-def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     """
-    Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
-    "test_".
+    Test a parse of CHIRPS data.
     """
     # Get the CHIRPS manager with rebuild set
     manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, store="local")
@@ -187,8 +172,8 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     manager.publish_metadata()
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
-    # GRIB file
-    generated_dataset = manager.zarr_hash_to_dataset(manager.latest_hash())
+    # GRIB
+    generated_dataset = manager.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
@@ -229,7 +214,7 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
     assert len(list(input_nc4s)) == 32
 
 
-def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(mocker, manager_class, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -247,7 +232,7 @@ def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_in
     manager.publish_metadata()
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file
-    generated_dataset = manager.zarr_json_to_dataset(manager.store.path)
+    generated_dataset = manager.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
@@ -261,40 +246,6 @@ def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_in
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
     )
     assert output_value == original_value
-
-
-def test_bad_append(
-    manager_class,
-    heads_path,
-    test_chunks,
-    appended_input_path_with_hole,
-):
-    """
-    Test an update of chirps data by adding new data to the end of existing data.
-    """
-    # Get a non-rebuild manager for testing append
-    manager = manager_class(custom_input_path=appended_input_path_with_hole, store="local")
-    manager.zarr_chunks = {}
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    with pytest.raises(IndexError):
-        manager.parse(publish_dataset)
-
-
-def test_metadata(manager_class, heads_path):
-    """
-    Test an update of CHIRPS metadata.
-
-    This function will only work after the test dataset's metadata has been populated
-    """
-    # Get a non-rebuild manager for testing metadata creation
-    manager = manager_class(store="local")
-    manager.publish_metadata()
-    assert manager.load_stac_metadata() != {}
 
 
 def test_misaligned_zarr_dask_chunks_regression(
@@ -328,3 +279,39 @@ def test_misaligned_zarr_dask_chunks_regression(
     publish_dataset = manager.transform_dataset_in_memory()
     manager.parse(publish_dataset)
     manager.publish_metadata()
+
+
+def test_bad_append(
+    mocker,
+    manager_class,
+    test_chunks,
+    initial_input_path,
+    appended_input_path_with_hole,
+):
+    """
+    Test an update of chirps data by adding new data to the end of existing data.
+    """
+    # FIRST parse the initial dataset
+    # Get the CHIRPS manager with rebuild set
+    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, store="local")
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
+
+    # NOW try to parse a bad append
+    # Restore the original pre_parse_quality_check, which was patched to speed things up
+    # Get a non-rebuild manager for testing append
+    manager = manager_class(custom_input_path=appended_input_path_with_hole, store="local")
+    manager.zarr_chunks = {}
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    with pytest.raises(IndexError):
+        manager.parse(publish_dataset)

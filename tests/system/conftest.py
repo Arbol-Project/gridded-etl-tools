@@ -3,6 +3,7 @@ import pathlib
 import pytest
 
 from examples.managers.chirps import CHIRPSFinal25
+from ..common import patched_key, patched_zarr_json_path, patched_root_stac_catalog, patched_output_root
 
 
 @pytest.fixture(scope="module")
@@ -74,3 +75,25 @@ def test_chunks():
     Time chunk value to use for tests instead of CHIRPS default
     """
     return {"time": 50, "latitude": 40, "longitude": 40}
+
+
+@pytest.fixture(autouse=True)
+def default_mocking(mocker, module_mocker):
+    """
+    Mockers that are common to every gridded DatasetManager test
+    """
+    module_mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
+    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
+        patched_zarr_json_path,
+    )
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
+        patched_root_stac_catalog,
+    )
+    # Mock the root output directory name, so no existing data will be overwritten and it can be easily cleaned up
+    mocker.patch(
+        "gridded_etl_tools.utils.convenience.Convenience.output_root",
+        patched_output_root,
+    )

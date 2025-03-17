@@ -75,20 +75,7 @@ def setup_and_teardown_per_test(
     clean_up_input_paths(initial_input_path, appended_input_path)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def teardown_module(request, heads_path):
-    """
-    Remove the heads file at the end of all tests
-    """
-
-    def test_clean():
-        os.remove(heads_path)
-        print(f"Cleaned up {heads_path}")
-
-    request.addfinalizer(test_clean)
-
-
-def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_path, root):
+def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     """
     Test a parse of CHIRPS data. This function is run automatically by pytest because the function name starts with
     "test_".
@@ -98,7 +85,7 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     manager = manager_class(
         custom_input_path=initial_input_path,
         rebuild_requested=True,
-        store="ipld",
+        store="local",
         encryption_key=encryption_key,
     )
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
@@ -133,13 +120,12 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     assert output_value == original_value
 
 
-def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(mocker, manager_class, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
     # Get a non-rebuild manager for testing append
-    manager = manager_class(custom_input_path=appended_input_path, store="ipld")
-    manager.HASH_HEADS_PATH = heads_path
+    manager = manager_class(custom_input_path=appended_input_path, store="local")
     manager.zarr_chunks = {}
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks

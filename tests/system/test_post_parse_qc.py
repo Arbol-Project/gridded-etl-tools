@@ -9,10 +9,6 @@ from unittest.mock import Mock
 from ..common import (
     run_etl,
     clean_up_input_paths,
-    patched_output_root,
-    patched_key,
-    patched_root_stac_catalog,
-    patched_zarr_json_path,
     remove_mock_output,
     remove_dask_worker_dir,
     remove_performance_report,
@@ -72,23 +68,6 @@ def setup_and_teardown_per_test(
     Call the setup functions first, in a chain ending with `simulate_file_download`.
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
-    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.pre_parse_quality_check", Mock())  # speeds things up
-    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
-        patched_zarr_json_path,
-    )
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
-        patched_root_stac_catalog,
-    )
-    # Mock the root output directory name, so no existing data will be overwritten and it can be easily cleaned up
-    mocker.patch(
-        "gridded_etl_tools.utils.convenience.Convenience.output_root",
-        patched_output_root,
-    )
-
     yield  # run the tests first
     # delete temp files
     remove_mock_output()
@@ -97,19 +76,6 @@ def setup_and_teardown_per_test(
     remove_performance_report()
     # now clean up the various files created for each test
     clean_up_input_paths(initial_input_path, appended_input_path, qc_input_path)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def teardown_module(request, heads_path):
-    """
-    Remove the heads file at the end of all tests
-    """
-
-    def test_clean():
-        os.remove(heads_path)
-        print(f"Cleaned up {heads_path}")
-
-    request.addfinalizer(test_clean)
 
 
 def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_path):
