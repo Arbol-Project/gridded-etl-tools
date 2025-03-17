@@ -625,8 +625,6 @@ class Metadata(Convenience):
             self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value,
-                # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value,
             }
         }
         dataset[self.data_var].encoding.update(
@@ -634,8 +632,6 @@ class Metadata(Convenience):
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
                 "_FillValue": self.missing_value,
-                # deprecated by NUG but maintained for backwards compatibility
-                "missing_value": self.missing_value,
             }
         )
         # More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets,

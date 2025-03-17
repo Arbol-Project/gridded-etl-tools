@@ -760,7 +760,7 @@ class TestMetadata:
     @staticmethod
     def test_zarr_md_to_stac_format(manager_class, fake_original_dataset):
         dm = manager_class()
-        fake_original_dataset.attrs["missing_value"] = 42
+        fake_original_dataset.attrs["_FillValue"] = 42
         fake_original_dataset.attrs["temporal resolution"] = np.float32(0.125)
         fake_original_dataset.encoding["preferred_chunks"] = "chocolate and peanut"
         fake_original_dataset["data"].encoding["standard name"] = "chris"
@@ -774,7 +774,7 @@ class TestMetadata:
     @staticmethod
     def test_zarr_md_to_stac_format_with_dtype(manager_class, fake_original_dataset):
         dm = manager_class()
-        fake_original_dataset.attrs["missing_value"] = 42
+        fake_original_dataset.attrs["_FillValue"] = 42
         fake_original_dataset.attrs["dtype"] = np.dtype("float32")
         fake_original_dataset.encoding["preferred_chunks"] = "chocolate and peanut"
         fake_original_dataset["data"].encoding["standard name"] = "chris"
@@ -971,12 +971,11 @@ class TestMetadata:
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         md.encode_vars(dataset)
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
-            "missing_value": "",
             "chunks": (1, 1, 1),
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
         }
@@ -1000,12 +999,11 @@ class TestMetadata:
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.encode_vars(dataset)
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
-            "missing_value": "",
             "chunks": None,
             "preferred_chunks": None,
         }
@@ -1030,12 +1028,11 @@ class TestMetadata:
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.encode_vars(dataset)
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
-            "missing_value": "",
             "chunks": None,
             "preferred_chunks": None,
         }
@@ -1067,12 +1064,11 @@ class TestMetadata:
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.encode_vars(dataset) is dataset
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
-            "missing_value": "",
             "chunks": None,
             "preferred_chunks": None,
         }
@@ -1128,12 +1124,11 @@ class TestMetadata:
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.encode_vars(dataset)
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
-            "missing_value": "",
             "chunks": None,
             "preferred_chunks": None,
         }
