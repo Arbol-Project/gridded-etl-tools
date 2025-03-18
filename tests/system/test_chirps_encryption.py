@@ -11,6 +11,7 @@ from ..common import (
     patched_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
+    remove_mock_output,
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
@@ -56,18 +57,9 @@ def setup_and_teardown_per_test(
     Call the setup functions first, in a chain ending with `simulate_file_download`.
     Next run the test in question. Finally, remove generated inputs afterwards, even if the test fails.
     """
-    mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
-    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
-        patched_zarr_json_path,
-    )
-    mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
-        patched_root_stac_catalog,
-    )
     yield  # run the tests first
     # delete temp files
+    remove_mock_output()
     remove_zarr_json()
     remove_dask_worker_dir()
     remove_performance_report()
@@ -99,7 +91,7 @@ def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with
     # the same data points in a local GRIB file
-    generated_dataset = manager.zarr_hash_to_dataset(manager.latest_hash())
+    generated_dataset = manager.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
@@ -120,10 +112,25 @@ def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     assert output_value == original_value
 
 
-def test_append_only(mocker, manager_class, test_chunks, appended_input_path, root):
+def test_append_only(mocker, manager_class, test_chunks, initial_input_path, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
+    # Get the CHIRPS manager with rebuild set
+    encryption_key = generate_encryption_key()
+    manager = manager_class(
+        custom_input_path=initial_input_path,
+        rebuild_requested=True,
+        store="local",
+        encryption_key=encryption_key,
+    )
+    # Overriding the default time chunk to enable testing chunking with a smaller set of times
+    manager.requested_dask_chunks = test_chunks
+    manager.requested_zarr_chunks = test_chunks
+    # run ETL
+    manager.transform_data_on_disk()
+    publish_dataset = manager.transform_dataset_in_memory()
+    manager.parse(publish_dataset)
     # Get a non-rebuild manager for testing append
     manager = manager_class(custom_input_path=appended_input_path, store="local")
     manager.zarr_chunks = {}
@@ -139,7 +146,7 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     manager.publish_metadata()
     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file
-    generated_dataset = manager.zarr_hash_to_dataset(manager.dataset_hash)
+    generated_dataset = manager.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
