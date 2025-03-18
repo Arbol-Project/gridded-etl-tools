@@ -720,7 +720,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_item(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
+        dt_mock.datetime.now = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
         dt_mock.timezone = datetime.timezone
 
         dm = manager_class()
