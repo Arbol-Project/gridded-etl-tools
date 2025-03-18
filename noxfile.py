@@ -14,6 +14,10 @@ def unit(session):
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
+        "-o",
+        "log_cli=true",
+        "-o",
+        "log_cli_level=INFO",
         f"--cov={CODE}",
         "--cov=tests.unit",
         "--cov-append",
@@ -24,26 +28,29 @@ def unit(session):
     )
 
 
-# @nox.session(py=DEFAULT_INTERPRETER)
-# def lint(session):
-#     session.install("black", "flake8", "flake8-pyproject")
-#     run_black(session, check=True)
-#     session.run("flake8", CODE, "tests", "examples")
+@nox.session(py=DEFAULT_INTERPRETER)
+def lint(session):
+    session.install("black", "flake8", "flake8-pyproject")
+    run_black(session, check=True)
+    session.run("flake8", CODE, "tests", "examples")
 
 
-# @nox.session(py=DEFAULT_INTERPRETER)
-# def blacken(session):
-#     # Install all dependencies.
-#     session.install("black")
-#     run_black(session)
+@nox.session(py=DEFAULT_INTERPRETER)
+def blacken(session):
+    # Install all dependencies.
+    session.install("black")
+    run_black(session)
 
 
 @nox.session(py=DEFAULT_INTERPRETER)
 def system(session):
-
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
+        "-o",
+        "log_cli=true",
+        "-o",
+        "log_cli_level=INFO",
         "--cov=tests.system",
         "--cov-config",
         HERE / ".coveragerc",
@@ -52,13 +59,11 @@ def system(session):
         "tests/system",
     )
 
-
 @nox.session(py=DEFAULT_INTERPRETER)
 def cover(session):
     session.install("coverage")
     session.run("coverage", "report", "--fail-under=100", "--show-missing")
     session.run("coverage", "erase")
-
 
 def run_black(session, check=False):
     args = ["black"]
