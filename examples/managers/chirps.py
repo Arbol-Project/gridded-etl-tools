@@ -353,7 +353,7 @@ class CHIRPSFinal25(CHIRPSFinal):
         """Increment size along the latitude/longitude coordinate axis"""
         return 0.25
 
-    expected_nan_frequency = 0.72
+    expected_nan_frequency = 0.00
 
 
 class CHIRPSPrelim05(CHIRPS):

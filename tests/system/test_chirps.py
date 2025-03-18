@@ -8,6 +8,7 @@ import glob
 
 from unittest.mock import Mock
 from ..common import (
+    run_etl,
     clean_up_input_paths,
     get_manager,
     patched_key,
@@ -161,15 +162,7 @@ def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     Test a parse of CHIRPS data.
     """
     # Get the CHIRPS manager with rebuild set
-    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, store="local")
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
-    manager.publish_metadata()
+    manager = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
     manager.zarr_json_path().unlink(missing_ok=True)
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB
@@ -219,17 +212,7 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     Test an update of chirps data by adding new data to the end of existing data.
     """
     # Get a non-rebuild manager for testing append
-    manager = manager_class(custom_input_path=appended_input_path, store="local")
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
-    manager.expected_nan_frequency = 0
-    # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
-    manager.publish_metadata()
+    manager = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False, store="local")
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file
     generated_dataset = manager.store.dataset()
@@ -292,15 +275,7 @@ def test_bad_append(
     Test an update of chirps data by adding new data to the end of existing data.
     """
     # FIRST parse the initial dataset
-    # Get the CHIRPS manager with rebuild set
-    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, store="local")
-    # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
-    # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
+    run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
 
     # NOW try to parse a bad append
     # Restore the original pre_parse_quality_check, which was patched to speed things up

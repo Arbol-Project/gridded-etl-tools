@@ -213,7 +213,7 @@ class S3(StoreInterface):
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
 
-    def fs(self, refresh: bool = False, profile: str | None = None) -> s3fs.S3FileSystem:
+    def fs(self, refresh: bool = False, profile: str | None = None, **kwargs) -> s3fs.S3FileSystem:
         """
         Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
         performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
@@ -235,7 +235,7 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = s3fs.S3FileSystem(profile=profile)
+            self._fs = s3fs.S3FileSystem(profile=profile, **kwargs)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
                 "https://s3fs.readthedocs.io/en/latest/#credentials"
@@ -452,7 +452,7 @@ class Local(StoreInterface):
         self.dm = dm
         self.folder = folder
 
-    def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
+    def fs(self, refresh: bool = False, **kwargs) -> fsspec.implementations.local.LocalFileSystem:
         """
         Get an `fsspec.implementations.local.LocalFileSystem` object. By default, the filesystem is only created once,
         the first time this function is called. To force it create a new one, set `refresh` to `True`.
@@ -469,7 +469,7 @@ class Local(StoreInterface):
             A filesystem object for interfacing with the local filesystem
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = fsspec.filesystem("file")
+            self._fs = fsspec.filesystem("file", **kwargs)
         return self._fs
 
     def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
