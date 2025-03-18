@@ -14,10 +14,7 @@ def unit(session):
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
-        "-o",
-        "log_cli=true",
-        "-o",
-        "log_cli_level=INFO",
+        "--log-disable=DEBUG",
         f"--cov={CODE}",
         "--cov=tests.unit",
         "--cov-append",
@@ -47,10 +44,7 @@ def system(session):
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
-        "-o",
-        "log_cli=true",
-        "-o",
-        "log_cli_level=INFO",
+        "--log-disable=DEBUG",
         "--cov=tests.system",
         "--cov-config",
         HERE / ".coveragerc",
@@ -59,11 +53,13 @@ def system(session):
         "tests/system",
     )
 
+
 @nox.session(py=DEFAULT_INTERPRETER)
 def cover(session):
     session.install("coverage")
     session.run("coverage", "report", "--fail-under=100", "--show-missing")
     session.run("coverage", "erase")
+
 
 def run_black(session, check=False):
     args = ["black"]
