@@ -24,25 +24,18 @@ def unit(session):
     )
 
 
-@nox.session(py=DEFAULT_INTERPRETER)
-def cover(session):
-    session.install("coverage")
-    session.run("coverage", "report", "--fail-under=100", "--show-missing")
-    session.run("coverage", "erase")
+# @nox.session(py=DEFAULT_INTERPRETER)
+# def lint(session):
+#     session.install("black", "flake8", "flake8-pyproject")
+#     run_black(session, check=True)
+#     session.run("flake8", CODE, "tests", "examples")
 
 
-@nox.session(py=DEFAULT_INTERPRETER)
-def lint(session):
-    session.install("black", "flake8", "flake8-pyproject")
-    run_black(session, check=True)
-    session.run("flake8", CODE, "tests", "examples")
-
-
-@nox.session(py=DEFAULT_INTERPRETER)
-def blacken(session):
-    # Install all dependencies.
-    session.install("black")
-    run_black(session)
+# @nox.session(py=DEFAULT_INTERPRETER)
+# def blacken(session):
+#     # Install all dependencies.
+#     session.install("black")
+#     run_black(session)
 
 
 @nox.session(py=DEFAULT_INTERPRETER)
@@ -58,6 +51,13 @@ def system(session):
         "--cov-fail-under=100",
         "tests/system",
     )
+
+
+@nox.session(py=DEFAULT_INTERPRETER)
+def cover(session):
+    session.install("coverage")
+    session.run("coverage", "report", "--fail-under=100", "--show-missing")
+    session.run("coverage", "erase")
 
 
 def run_black(session, check=False):

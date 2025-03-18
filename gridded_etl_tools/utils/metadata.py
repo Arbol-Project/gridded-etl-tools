@@ -268,8 +268,8 @@ class Metadata(Convenience):
         if rebuild or not self.check_stac_exists(self.collection_name, StacType.COLLECTION):
             if rebuild:
                 self.info(
-                    "Collection rebuild requested. Creating new collection, pushing it to IPFS, and populating the "
-                    "main catalog"
+                    "Collection rebuild requested. Creating new collection, pushing it to the store, "
+                    "and populating the main catalog"
                 )
             # Populate data-driven attributes of the collection
             minx, miny, maxx, maxy = self.bbox_coords(dataset)
@@ -326,9 +326,9 @@ class Metadata(Convenience):
 
     def create_stac_item(self, dataset: xr.Dataset):
         """
-        Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal, and data
-        dimensions into a STAC Item-compliant JSON. Push this JSON to IPFS and its relevant parent STAC Collection via
-        `register_stac_item`
+        Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal,
+        and data dimensions into a STAC Item-compliant JSON. Push this JSON to the store and its relevant parent
+        STAC Collection via `register_stac_item`
 
         Parameters
         ----------
@@ -433,7 +433,7 @@ class Metadata(Convenience):
         stac_item : dict
             A dictionary of metadata prepared in `create_stac_item` for publication as a standalone STAC metadata file
         """
-        self.info("Registering STAC Item in IPFS and its parent STAC Collection")
+        self.info("Registering STAC Item in the store a" "nd its parent STAC Collection")
         # Generate variables of interest
         stac_coll, collection_href = self.retrieve_stac(self.collection_name, StacType.COLLECTION)
         # Register links
@@ -451,7 +451,7 @@ class Metadata(Convenience):
             old_stac_item, href = self.retrieve_stac(self.key(), StacType.ITEM)
 
         # TODO: It would be better to not have KeyError in here, as it it's easy for that to be a different exception
-        # than the one you think you're catching. It would be better to have retreive_stac and/or ipns_resolve return
+        # than the one you think you're catching. It would be better to have retreive_stac return
         # None if they can't find the key, and then use an if statement to check the return value for None.
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
@@ -469,7 +469,8 @@ class Metadata(Convenience):
         # push final STAC Item to backing store
         self.info("Pushing STAC Item to backing store")
         self.publish_stac(self.key(), stac_item, StacType.ITEM)
-        # register item as a link in the relevant collection, if not already there, and push updated collection to IPFS
+        # register item as a link in the relevant collection, if not already there,
+        # and push updated collection to the store
         if any(
             stac_item["assets"]["zmetadata"]["title"] in link_dict["title"]
             for link_dict in stac_coll["links"]

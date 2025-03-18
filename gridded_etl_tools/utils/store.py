@@ -386,7 +386,7 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
 
-    def write_metadata_only_v2(self, update_attrs: dict[str, Any]):
+    def write_metadata_only_v2(self, update_attrs: dict[str, Any]):  # pragma NO COVER
         """
         Old method of writing metadata. Kept for backwards compatibility.
         """

@@ -7,27 +7,28 @@ import re
 
 from unittest import mock
 
-import numpy
+import numpy as np
 import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
+from gridded_etl_tools.utils.publish import _is_infish
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
 def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
     # Calculate the number of NaNs and floats
-    total_elements = numpy.prod(shape)
+    total_elements = np.prod(shape)
     num_nans = int(total_elements * percent_nan)
     num_floats = total_elements - num_nans
 
     # Generate them
-    random_floats = numpy.random.random(num_floats)
-    nans = numpy.full(num_nans, numpy.nan)
+    random_floats = np.random.random(num_floats)
+    nans = np.full(num_nans, np.nan)
 
     # Combine them and shuffle them around
-    combined_array = numpy.concatenate((random_floats, nans))
-    numpy.random.shuffle(combined_array)
+    combined_array = np.concatenate((random_floats, nans))
+    np.random.shuffle(combined_array)
 
     # Reshape the array to the desired shape
     final_array = combined_array.reshape(shape)
@@ -502,42 +503,42 @@ class TestPublish:
         dm = manager_class()
         insert_times, update_times = dm.prepare_update_times(fake_original_dataset, fake_complex_update_dataset)
         assert insert_times == [
-            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+            np.datetime64("2021-10-10T00:00:00.000000000"),
         ] + list(
-            numpy.arange(
-                numpy.datetime64("2021-10-16T00:00:00.000000000"),
-                numpy.datetime64("2021-10-24T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2021-10-16T00:00:00.000000000"),
+                np.datetime64("2021-10-24T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         ) + [
-            numpy.datetime64("2021-11-11T00:00:00.000000000"),
-            numpy.datetime64("2021-12-11T00:00:00.000000000"),
+            np.datetime64("2021-11-11T00:00:00.000000000"),
+            np.datetime64("2021-12-11T00:00:00.000000000"),
         ] + list(
-            numpy.arange(
-                numpy.datetime64("2021-12-25T00:00:00.000000000"),
-                numpy.datetime64("2022-01-06T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2021-12-25T00:00:00.000000000"),
+                np.datetime64("2022-01-06T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         ) + [
-            numpy.datetime64("2022-01-14T00:00:00.000000000"),
+            np.datetime64("2022-01-14T00:00:00.000000000"),
         ]
         assert update_times == list(
-            numpy.arange(
-                numpy.datetime64("2022-02-01T00:00:00.000000000"),
-                numpy.datetime64("2022-03-09T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2022-02-01T00:00:00.000000000"),
+                np.datetime64("2022-03-09T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         )
 
     @staticmethod
     def test_prepare_update_times_no_time_dimension(manager_class, fake_original_dataset, fake_complex_update_dataset):
-        update_dataset = fake_complex_update_dataset.sel(time=[numpy.datetime64("2021-10-10T00:00:00.000000000")])
+        update_dataset = fake_complex_update_dataset.sel(time=[np.datetime64("2021-10-10T00:00:00.000000000")])
         update_dataset = update_dataset.squeeze()
         assert "time" not in update_dataset.dims
         dm = manager_class()
         insert_times, update_times = dm.prepare_update_times(fake_original_dataset, update_dataset)
         assert insert_times == [
-            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+            np.datetime64("2021-10-10T00:00:00.000000000"),
         ]
         assert update_times == []
 
@@ -667,10 +668,10 @@ class TestPublish:
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        time_values = np.arange(
+            np.datetime64("2022-02-01T00:00:00.000000000"),
+            np.datetime64("2022-03-09T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
@@ -682,7 +683,7 @@ class TestPublish:
         dataset = dm.prep_update_dataset(dataset, time_values)
         dm.encode_vars(dataset)
 
-        assert numpy.array_equal(dataset.time, time_values)
+        assert np.array_equal(dataset.time, time_values)
         assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
@@ -691,11 +692,11 @@ class TestPublish:
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
-        dataset = dataset.sel(time=[numpy.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        dataset = dataset.sel(time=[np.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
+        time_values = np.arange(
+            np.datetime64("2022-02-01T00:00:00.000000000"),
+            np.datetime64("2022-03-09T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
@@ -707,7 +708,7 @@ class TestPublish:
         dataset = dm.prep_update_dataset(dataset, time_values)
         dm.encode_vars(dataset)
 
-        assert numpy.array_equal(dataset.time, time_values[:1])
+        assert np.array_equal(dataset.time, time_values[:1])
         assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
@@ -737,7 +738,7 @@ class TestPublish:
         # Test that the append is of the expected size
         append_update = datetime_ranges[-1]
         append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
-        assert append_size == numpy.timedelta64(35, "D")
+        assert append_size == np.timedelta64(35, "D")
 
     @staticmethod
     def test_preparse_quality_check(manager_class, fake_original_dataset):
@@ -798,10 +799,10 @@ class TestPublish:
         # patch sample size to 16, size of input dataset
         fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
         dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
-        data_shape = numpy.shape(fake_large_dataset.data)
+        data_shape = np.shape(fake_large_dataset.data)
 
         # Check that it catches all NaNs
-        fake_large_dataset.data[:] = numpy.nan
+        fake_large_dataset.data[:] = np.nan
         dm.pre_chunk_dataset = fake_large_dataset
         with pytest.raises(NanFrequencyMismatchError):
             dm.pre_parse_quality_check(fake_large_dataset)
@@ -835,7 +836,7 @@ class TestPublish:
 
         # patch sample size to 16, size of input dataset
         fake_original_dataset.attrs["expected_nan_frequency"] = 1
-        fake_original_dataset.data[:] = numpy.nan
+        fake_original_dataset.data[:] = np.nan
         dm.pre_chunk_dataset = fake_original_dataset
         dm.pre_parse_quality_check(fake_original_dataset)
 
@@ -887,7 +888,7 @@ class TestPublish:
 
     @staticmethod
     def test_check_random_values_NaN(manager_class, fake_original_dataset):
-        fake_original_dataset.data.values[:] = numpy.nan
+        fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dm.encode_vars(fake_original_dataset)
@@ -916,7 +917,7 @@ class TestPublish:
 
     @staticmethod
     def test_check_random_values_NaNs_are_allowed(manager_class, fake_original_dataset):
-        fake_original_dataset.data.values[:] = numpy.nan
+        fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dm.encode_vars(fake_original_dataset)
@@ -978,8 +979,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_regular_cadence_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta for i in range(10)]
 
         dm = manager_class()
@@ -987,8 +988,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_regular_cadence_not_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta for i in range(10)] + [start + delta * 20]
 
         dm = manager_class()
@@ -996,8 +997,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_irregular_cadence_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta * 1.05 for i in range(10)]
 
         class MyManager(manager_class):
@@ -1008,8 +1009,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_irregular_cadence_not_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta * 2.5 for i in range(10)]
 
         class MyManager(manager_class):
@@ -1114,8 +1115,8 @@ class TestPublish:
         dm.store.dataset.return_value = fake_original_dataset
 
         dataset = dm.get_prod_update_ds()
-        assert dataset["time"].values[0] == numpy.datetime64("2021-12-01T00:00:00.000000000")
-        assert dataset["time"].values[-1] == numpy.datetime64("2022-01-01T00:00:00.000000000")
+        assert dataset["time"].values[0] == np.datetime64("2021-12-01T00:00:00.000000000")
+        assert dataset["time"].values[-1] == np.datetime64("2022-01-01T00:00:00.000000000")
 
     @staticmethod
     def test_check_written_value(manager_class, fake_original_dataset):
@@ -1153,14 +1154,14 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.inf
+        prod_ds.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
-        fake_original_dataset.data[coord_indices] = numpy.inf
+        fake_original_dataset.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_two_nans(manager_class, fake_original_dataset):
@@ -1168,8 +1169,8 @@ class TestPublish:
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
 
-        fake_original_dataset.data[coord_indices] = numpy.nan
-        prod_ds.data[coord_indices] = numpy.nan
+        fake_original_dataset.data[coord_indices] = np.nan
+        prod_ds.data[coord_indices] = np.nan
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
@@ -1181,7 +1182,7 @@ class TestPublish:
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         fake_original_dataset.data[coord_indices] = 5e100
-        prod_ds.data[coord_indices] = numpy.inf
+        prod_ds.data[coord_indices] = np.inf
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
@@ -1192,14 +1193,14 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.nan
+        prod_ds.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
-        fake_original_dataset.data[coord_indices] = numpy.nan
+        fake_original_dataset.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
@@ -1209,16 +1210,16 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.nan
-        fake_original_dataset.data[coord_indices] = numpy.nan
-        dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+        prod_ds.data[coord_indices] = np.nan
+        fake_original_dataset.data[coord_indices] = np.nan
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_filter_search_space(manager_class, hindcast_dataset):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        timestamps = np.arange(
+            np.datetime64("2021-10-16T00:00:00.000000000"),
+            np.datetime64("2021-10-26T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
 
         def fake_input_files(range_num: int):
@@ -1241,8 +1242,8 @@ class TestPublish:
             return date_step_ensemble_fro_files
 
         def raw_file_to_dataset(file_path):
-            path_date = numpy.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
-            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": numpy.atleast_1d(path_date)})
+            path_date = np.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
+            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": np.atleast_1d(path_date)})
             return raw_ds
 
         dm = manager_class()
@@ -1346,7 +1347,7 @@ class TestPublish:
 
         assert "step" in dataset
         assert "step" in dataset.dims
-        assert dataset.step[0] == numpy.datetime64("2022-07-04T00:00:00.000000000")
+        assert dataset.step[0] == np.datetime64("2022-07-04T00:00:00.000000000")
 
         dm.rename_data_variable.assert_called_once_with(dataset)
 
@@ -1387,3 +1388,23 @@ def test_shuffled_coords():
     unshuffled_set = set((frozenset(coords.items()) for coords in unshuffled))
     shuffled_set = set((frozenset(coords.items()) for coords in shuffled))
     assert shuffled_set == unshuffled_set
+
+
+def test_is_infish():
+    # Test regular numbers
+    assert not _is_infish(np.float64(42))
+    assert not _is_infish(np.float32(42))
+
+    # Test infinities
+    assert _is_infish(np.float64("inf"))
+    assert _is_infish(np.float32("inf"))
+    assert _is_infish(-np.float64("inf"))
+    assert _is_infish(-np.float32("inf"))
+
+    # Test very large numbers
+    assert _is_infish(np.float64(1e101))  # Beyond 1e100 threshold for float64
+    assert not _is_infish(np.float64(1e99))  # Below 1e100 threshold for float64
+
+    # Test float32 large numbers
+    assert _is_infish(np.float32(1e39))  # Beyond 1e38 threshold for float32
+    assert not _is_infish(np.float32(1e37))  # Below 1e38 threshold for float32

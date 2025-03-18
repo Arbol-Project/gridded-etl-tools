@@ -758,6 +758,47 @@ class TestMetadata:
         )
 
     @staticmethod
+    def test_create_stac_item_forecast_reference_time(manager_class, forecast_dataset, mocker):
+        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
+        dt_mock.datetime.now = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
+        dt_mock.timezone = datetime.timezone
+
+        dm = manager_class()
+        dm.time_dim = "forecast_reference_time"
+        dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
+        dm.register_stac_item = mock.Mock()
+        dm.create_stac_item(forecast_dataset)
+
+        dm.register_stac_item.assert_called_once_with(
+            {
+                "stac_version": "1.0.0",
+                "type": "Feature",
+                "id": "DummyManager",
+                "collection": "Vintage Guitars",
+                "links": [],
+                "assets": {
+                    "zmetadata": {
+                        "title": "DummyManager",
+                        "type": "application/json",
+                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
+                        "dataset by Xarray",
+                        "roles": ["metadata", "zarr-consolidated-metadata"],
+                        "href": "it/goes/here",
+                    }
+                },
+                "bbox": [100.0, 10.0, 130.0, 40.0],
+                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
+                "[100.0, 10.0], [130.0, 10.0]]]}",
+                "properties": {
+                    "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
+                    "start_datetime": "2021-09-16T00:00:00Z",
+                    "end_datetime": "2022-01-31T00:00:00Z",
+                    "updated": "2010-05-12T0Z",
+                },
+            }
+        )
+
+    @staticmethod
     def test_zarr_md_to_stac_format(manager_class, fake_original_dataset):
         dm = manager_class()
         fake_original_dataset.attrs["_FillValue"] = 42
