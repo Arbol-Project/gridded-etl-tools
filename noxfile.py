@@ -3,12 +3,9 @@ import pathlib
 import nox
 
 # numba is not supported on Python 3.12
-ALL_INTERPRETERS = (
-    "3.10",
-    "3.11",
-)
+ALL_INTERPRETERS = "3.12"
 CODE = "gridded_etl_tools"
-DEFAULT_INTERPRETER = "3.10"
+DEFAULT_INTERPRETER = "3.12"
 HERE = pathlib.Path(__file__).parent
 
 

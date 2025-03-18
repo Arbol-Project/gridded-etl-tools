@@ -30,7 +30,7 @@ classifiers = [
 description = "Tools for transforming gridded climate data into Zarrs"
 readme = "README.md"
 keywords = ["Climate", "Zarr", "ETL"]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4",
     "cfgrib",

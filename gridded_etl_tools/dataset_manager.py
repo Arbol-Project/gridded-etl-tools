@@ -172,7 +172,7 @@ class DatasetManager(Logging, Publish, ABC):
         logging.getLogger().setLevel(global_log_level)
 
         # hide DEBUG spam from h5-to-zarr during kerchunking
-        logging.getLogger('h5-to-zarr').setLevel(logging.WARNING)
+        logging.getLogger("h5-to-zarr").setLevel(logging.WARNING)
 
         # Add a custom exception handler that will print the traceback to loggers
         sys.excepthook = self.log_except_hook

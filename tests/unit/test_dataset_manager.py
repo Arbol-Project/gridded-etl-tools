@@ -61,7 +61,8 @@ class TestDatasetManager:
         assert dm.rebuild_requested is True
         assert dm.custom_output_path == "output/over/here"
         dm.log_to_console.assert_not_called()
-        dataset_manager.logging.getLogger.return_value.setLevel.assert_called_once_with(logging.WARN)
+        dataset_manager.logging.getLogger.return_value.setLevel.assert_called_with(logging.WARN)
+        assert dataset_manager.logging.getLogger.return_value.setLevel.call_count == 2
         assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
         assert dm.dask_num_threads == 4
