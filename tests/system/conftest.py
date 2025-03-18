@@ -14,14 +14,6 @@ def root():
     return pathlib.Path(__file__).parent / "data"
 
 
-@pytest.fixture(scope="module")
-def heads_path(root):
-    """
-    A local heads file for use during testing
-    """
-    return root / "heads.json"
-
-
 @pytest.fixture
 def extracted_input_path(root):
     """

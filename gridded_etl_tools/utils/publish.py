@@ -879,18 +879,19 @@ class Publish(Transform):
             ds = self.postprocess_zarr(ds)
             return self.reformat_orig_ds(ds, file_path)
 
-        # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
-        elif self.protocol == "s3":
-            if not self.use_local_zarr_jsons:
-                raise ValueError(
-                    "ETL protocol is S3 but it was instantiated not to use local zarr JSONs. "
-                    "This prevents running needed checks for this dataset. "
-                    "Please enable `use_local_zarr_jsons` to permit post-parse QC"
-                )
+        # NOTE disabled due to regression in fsspec capabilities
+        # # Presumes that use_local_zarr_jsons is enabled. This avoids repeating the DL from S#
+        # elif self.protocol == "s3":
+        #     if not self.use_local_zarr_jsons:
+        #         raise ValueError(
+        #             "ETL protocol is S3 but it was instantiated not to use local zarr JSONs. "
+        #             "This prevents running needed checks for this dataset. "
+        #             "Please enable `use_local_zarr_jsons` to permit post-parse QC"
+        #         )
 
-            # This will apply postprocess_zarr automtically
-            ds = self.load_dataset_from_disk(zarr_json_path=str(file_path))
-            return self.reformat_orig_ds(ds, file_path)
+        #     # This will apply postprocess_zarr automtically
+        #     ds = self.load_dataset_from_disk(zarr_json_path=str(file_path))
+        #     return self.reformat_orig_ds(ds, file_path)
 
         else:
             raise ValueError('Expected either "file" or "s3" protocol')

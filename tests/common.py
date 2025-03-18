@@ -298,10 +298,11 @@ def nc4_input_files(self):
     return nc4s
 
 
-def json_input_files(self):
-    jsons = [
-        "s3://arbol-testing/gridded/chirps/json/" + fil.name
-        for fil in list(original_input_files(self))
-        if fil.suffix == ".json"
-    ]
-    return jsons
+# NOTE disabled due to regression in fsspec capabilities
+# def json_input_files(self):
+#     jsons = [
+#         "s3://arbol-testing/gridded/chirps/json/" + fil.name
+#         for fil in list(original_input_files(self))
+#         if fil.suffix == ".json"
+#     ]
+#     return jsons
