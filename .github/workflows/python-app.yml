@@ -18,13 +18,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install IPFS
-      uses: ibnesayeed/setup-ipfs@master
-      with:
-        ipfs_version: "0.19.2"
-        run_daemon: true
-      id: ipfs_setup
-
     - name: Install external dependencies via APT
       run: sudo apt-get update && sudo apt-get install cdo netcdf-bin
 

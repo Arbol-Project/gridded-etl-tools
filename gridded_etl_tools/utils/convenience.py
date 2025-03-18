@@ -453,7 +453,7 @@ class Convenience(Attributes):
 
     def json_to_bytes(self, obj: dict) -> bytes:
         """
-        Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata to IPFS
+        Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata over HTTP
 
         Parameters
         ----------

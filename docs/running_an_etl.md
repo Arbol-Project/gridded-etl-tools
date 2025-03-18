@@ -45,7 +45,7 @@ Finally, to export to your local file system run the following
 ```python
     from .managers.manager_script import MyNewETLDataset
 
-    etl = MyNewETLDataset(store='local') # exports to IPFS
+    etl = MyNewETLDataset(store='local') # exports to local file system
     etl.extract() # download the entire dataset, or just updates to the existing dataset
     etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
     etl.parse()  # push this single Zarr it to the storage medium of choice

@@ -229,11 +229,6 @@ class MyNewETL(DatasetManager, ABC):
         #     dataset.attrs.pop(key, None)
         #     dataset[self.data_var].attrs.pop(key, None)
 
-        # It is important to note the encoding of a dataset in particular if compression is enabled
-        # if zlib or other compression is enabled this will subvert IPFS de-duplication if the dataset
-        # is to be continuously updated in the future so it is important to set compression to false
-        # and chunk according to the ETL developer's manual. Otherwise if the dataset will only be converted
-        # once and not updated in the future then it is ok to leave compression enabled.
         # {'zlib': True,
         # 'szip': False,
         # 'zstd': False,

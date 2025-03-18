@@ -163,10 +163,6 @@ class Metadata(Convenience):
         bool
             Whether the entity exists in the backing store
         """
-        # TODO: The prevalance of this this pattern, if isinstance(self.store, IPLD): ... else: ..., probably
-        # indicates that StoreInterface needs to be rethought. Ideally, consumers of the interface wouldn't need to
-        # know which specific implementation they were using. Those details should be encapsulated by the interface
-        # definition and its implementations.
         return self.store.metadata_exists(title, stac_type.value)
 
     def publish_stac(self, title: str, stac_content: dict, stac_type: StacType):

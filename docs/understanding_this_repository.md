@@ -1,7 +1,7 @@
 Understanding this repository
 -----------------------------
 
-This repository is written to build and run ETL workflows to place (climate) data on IPFS, from whence it can be shared over dClimate's Marketplace or used for private purposes. The repository provides a Dataset Manager abstract base class with which to implement ETLs, a host of supporting utilities which the DatasetManager leverages, and example ETLs previously implemented by the Arbol Data Engineering team which can serve as examples and inspiration. The exact breakdown of the repository is as such
+This repository is written to build and run ETL workflows to place (climate) data locally or on cloud storage (AWS S3). The repository provides a Dataset Manager abstract base class with which to implement ETLs, a host of supporting utilities which the DatasetManager leverages, and example ETLs previously implemented by the Arbol Data Engineering team which can serve as examples and inspiration. The exact breakdown of the repository is as such
 
 * **doc** contains additional documentation
 * **etls** contains the *dataset_manager.py* two sub-directories

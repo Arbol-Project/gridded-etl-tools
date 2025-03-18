@@ -94,7 +94,7 @@
 #     manager.parse(publish_dataset)
 #     manager.publish_metadata()
 #     manager.zarr_json_path().unlink(missing_ok=True)
-#     # Open the head with ipldstore + xarray.open_zarr and compare two data points with
+#     # Open xarray.open_zarr and compare two data points with
 #     # the same data points in a local GRIB file
 #     generated_dataset = manager.store.dataset()
 #     lat, lon = 14.625, -91.375
@@ -149,7 +149,7 @@
 #     publish_dataset = manager.transform_dataset_in_memory()
 #     manager.parse(publish_dataset)
 #     manager.publish_metadata()
-#     # Open the head with ipldstore + xarray.open_zarr and compare two data points with the same data points in a local
+#     # Open with xarray.open_zarr and compare two data points with the same data points in a local
 #     # GRIB file
 #     generated_dataset = manager.store.dataset()
 #     lat, lon = 14.625, -91.375
