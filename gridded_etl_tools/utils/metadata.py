@@ -530,8 +530,8 @@ class Metadata(Convenience):
         if not key:
             key = self.key()
         try:
-            stac, href = self.retrieve_stac(key, StacType.ITEM)
-            return stac, href
+            stac, _ = self.retrieve_stac(key, StacType.ITEM)
+            return stac
         except (KeyError, TimeoutError, FileNotFoundError):
             self.warn(
                 f"STAC metadata requested at {key} but no STAC object found at the provided key. "
@@ -698,7 +698,7 @@ class Metadata(Convenience):
         # Load static metadata into the dataset's attributes
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
-        # Get existing stac_metadat, if possible
+        # Get existing stac_metadata, if possible
         stac_metadata = self.load_stac_metadata()
 
         # Determine date to use for "created" field. On S3 and local, use current time.
