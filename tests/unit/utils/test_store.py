@@ -324,11 +324,10 @@ class TestLocal:
         fs.get_mapper.assert_called_once_with("el/cami/no")
 
     @staticmethod
-    def test___str__():
+    def test___repr__():
         dm = mock.Mock(custom_output_path=mock.MagicMock())
-        dm.custom_output_path.__str__.return_value = "string/me/along"
         store = store_module.Local(dm)
-        assert str(store) == "string/me/along"
+        assert str(store) == "Local"
 
     @staticmethod
     def test_path():
