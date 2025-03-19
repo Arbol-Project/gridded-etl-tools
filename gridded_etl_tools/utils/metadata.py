@@ -447,7 +447,7 @@ class Metadata(Convenience):
             old_stac_item, href = self.retrieve_stac(self.key(), StacType.ITEM)
 
         # TODO: It would be better to not have KeyError in here, as it it's easy for that to be a different exception
-        # than the one you think you're catching. It would be better to have retreive_stac return
+        # than the one you think you're catching. It would be better to have retrieve_stac return
         # None if they can't find the key, and then use an if statement to check the return value for None.
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
@@ -530,14 +530,14 @@ class Metadata(Convenience):
         if not key:
             key = self.key()
         try:
-            return self.retrieve_stac(key, StacType.ITEM)[0]
-        except (KeyError, TimeoutError):
+            stac, href = self.retrieve_stac(key, StacType.ITEM)
+            return stac, href
+        except (KeyError, TimeoutError, FileNotFoundError):
             self.warn(
-                "STAC metadata requested but no STAC object found at the provided key. Returning empty dictionary"
+                f"STAC metadata requested at {key} but no STAC object found at the provided key. "
+                "Returning empty dictionary"
             )
             return {}
-
-        # else: raise exception?
 
     # NON-STAC METADATA
 
@@ -699,11 +699,7 @@ class Metadata(Convenience):
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
         # Get existing stac_metadat, if possible
-        stac_metadata = None
-        try:
-            stac_metadata = self.load_stac_metadata()
-        except (KeyError, TimeoutError):
-            pass
+        stac_metadata = self.load_stac_metadata()
 
         # Determine date to use for "created" field. On S3 and local, use current time.
         if stac_metadata and "created" in stac_metadata["properties"]:

@@ -257,11 +257,8 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/datasets/{self.dm.key()}.zarr"
 
-    def __str__(self) -> str:
-        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
-        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
-        # instance.
-        return self.path
+    def __repr__(self) -> str:
+        return "S3"
 
     def mapper(self, refresh: bool = False, **kwargs) -> fsspec.mapping.FSMap:
         """

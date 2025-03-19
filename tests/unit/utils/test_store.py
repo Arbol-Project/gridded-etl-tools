@@ -134,10 +134,10 @@ class TestS3:
         assert store.path == "use/this/one/instead.zarr"
 
     @staticmethod
-    def test___str__():
-        dm = mock.Mock(key=mock.Mock(return_value="hello_mother"), custom_output_path=None)
+    def test___repr__():
+        dm = mock.Mock(custom_output_path=mock.MagicMock())
         store = store_module.S3(dm, "mop_bucket")
-        assert str(store) == "s3://mop_bucket/datasets/hello_mother.zarr"
+        assert str(store) == "S3"
 
     @staticmethod
     def test_mapper(mocker):
