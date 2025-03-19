@@ -126,6 +126,8 @@ def get_manager(
             store=store,
             **kwargs,
         )
+    if repr(manager.store) == "Local":
+        manager.store.folder = "tests"
 
     # Override the default (usually very large) time chunk with the given value.
     # Intended to enable testing chunking with a smaller set of times.

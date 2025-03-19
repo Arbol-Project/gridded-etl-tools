@@ -9,8 +9,8 @@ import glob
 from unittest.mock import Mock
 from ..common import (
     run_etl,
-    clean_up_input_paths,
     get_manager,
+    clean_up_input_paths,
     patched_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
@@ -125,18 +125,18 @@ def test_extract(mocker, manager_class, test_chunks, extracted_input_path):
     Test an extract of CHIRPS data.
     """
     # Get the CHIRPS manager with rebuild set
-    manager = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="local")
-    manager.check_if_new_data = Mock(return_value=True)
+    dm = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="local")
+    dm.check_if_new_data = Mock(return_value=True)
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
+    dm.requested_dask_chunks = test_chunks
+    dm.requested_zarr_chunks = test_chunks
     # run and check extract
     date_range = [datetime.datetime(2020, 1, 1), datetime.datetime(2020, 12, 31)]
-    manager.extract(date_range=date_range)
-    input_files = list(manager.input_files())
+    dm.extract(date_range=date_range)
+    input_files = list(dm.input_files())
 
     assert len(input_files) == 1
-    manager.check_if_new_data.assert_called_once_with(date_range[1])
+    dm.check_if_new_data.assert_called_once_with(date_range[1])
 
 
 def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path):
@@ -144,17 +144,18 @@ def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path)
     Test that a dry run parse of CHIRPS data does not, in fact, parse data.
     """
     # Get the CHIRPS manager with rebuild set
-    manager = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, dry_run=True, store="local")
+    dm = manager_class(custom_input_path=initial_input_path, rebuild_requested=True, dry_run=True, store="local")
+    dm.store.folder = "tests"
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
+    dm.requested_dask_chunks = test_chunks
+    dm.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
-    manager.zarr_json_path().unlink(missing_ok=True)
+    dm.transform_data_on_disk()
+    publish_dataset = dm.transform_dataset_in_memory()
+    dm.parse(publish_dataset)
+    dm.zarr_json_path().unlink(missing_ok=True)
     # Check that a path wasn't created because the dataset wasn't parsed
-    assert not manager.store.has_existing
+    assert not dm.store.has_existing
 
 
 def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
@@ -162,15 +163,15 @@ def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     Test a parse of CHIRPS data.
     """
     # Get the CHIRPS manager with rebuild set
-    manager = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
-    manager.zarr_json_path().unlink(missing_ok=True)
+    dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
+    dm.zarr_json_path().unlink(missing_ok=True)
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB
-    generated_dataset = manager.store.dataset()
+    generated_dataset = dm.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var]
+        generated_dataset[dm.data_var]
         .sel(
             latitude=lat,
             longitude=lon,
@@ -212,16 +213,14 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     Test an update of chirps data by adding new data to the end of existing data.
     """
     # Get a non-rebuild manager for testing append
-    manager = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False, store="local")
+    dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False, store="local")
     # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
     # GRIB file
-    generated_dataset = manager.store.dataset()
+    generated_dataset = dm.store.dataset()
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var]
-        .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
-        .values
+        generated_dataset[dm.data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
     )
     original_dataset = xarray.open_dataset(root / "chirps_append_subset_0.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
@@ -243,25 +242,25 @@ def test_misaligned_zarr_dask_chunks_regression(
     is addressed. If the test fails then the most likely suspect is a problem with rechunking here.
     """
     # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
-    manager = manager_class(custom_input_path=initial_smaller_input_path, store="local")
+    dm = get_manager(manager_class, input_path=initial_smaller_input_path, store="local")
     # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
-    manager.expected_nan_frequency = 0.02
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
-    manager.publish_metadata()
+    dm.expected_nan_frequency = 0.02
+    dm.transform_data_on_disk()
+    publish_dataset = dm.transform_dataset_in_memory()
+    dm.parse(publish_dataset)
+    dm.publish_metadata()
     # Test an append on this curtailed dataset
     # run_etl(manager_class, input_path=appended_input_path, store="local")
 
     # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
-    manager = manager_class(custom_input_path=appended_input_path, store="local")
+    dm = get_manager(manager_class, input_path=appended_input_path, store="local")
     # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
-    manager.expected_nan_frequency = 0.02
+    dm.expected_nan_frequency = 0.02
     # run the ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
-    manager.parse(publish_dataset)
-    manager.publish_metadata()
+    dm.transform_data_on_disk()
+    publish_dataset = dm.transform_dataset_in_memory()
+    dm.parse(publish_dataset)
+    dm.publish_metadata()
 
 
 def test_bad_append(
@@ -279,14 +278,14 @@ def test_bad_append(
 
     # NOW try to parse a bad append
     # Restore the original pre_parse_quality_check, which was patched to speed things up
-    # Get a non-rebuild manager for testing append
-    manager = manager_class(custom_input_path=appended_input_path_with_hole, store="local")
-    manager.zarr_chunks = {}
+    # Get a non-rebuild manager for testing appended_input_path_with_hole
+    dm = get_manager(manager_class, input_path=appended_input_path_with_hole, store="local")
+    dm.zarr_chunks = {}
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
-    manager.requested_dask_chunks = test_chunks
-    manager.requested_zarr_chunks = test_chunks
+    dm.requested_dask_chunks = test_chunks
+    dm.requested_zarr_chunks = test_chunks
     # run ETL
-    manager.transform_data_on_disk()
-    publish_dataset = manager.transform_dataset_in_memory()
+    dm.transform_data_on_disk()
+    publish_dataset = dm.transform_dataset_in_memory()
     with pytest.raises(IndexError):
-        manager.parse(publish_dataset)
+        dm.parse(publish_dataset)

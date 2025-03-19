@@ -494,11 +494,8 @@ class Local(StoreInterface):
             self._mapper = self.fs().get_mapper(self.path)
         return self._mapper
 
-    def __str__(self) -> str:
-        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
-        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
-        # instance.
-        return str(self.path)
+    def __repr__(self) -> str:
+        return "Local"
 
     @property
     def path(self) -> pathlib.Path:
