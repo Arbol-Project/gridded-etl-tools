@@ -252,6 +252,9 @@ class Convenience(Attributes):
         ----------
         np.datetime64
             A numpy.datetime64 object to be converted
+        kwargs : dict, optional
+            Additional keyword arguments to pass to pd.Timestamp
+            Most notably "tz" can be used to set the timezone of the returned datetime
 
         Returns
         -------
