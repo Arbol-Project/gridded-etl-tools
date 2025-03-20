@@ -240,7 +240,7 @@ class Publish(Transform):
         publish_dataset = publish_dataset.chunk(self.requested_dask_chunks)
         self.info(f"Chunks after rechunk are {publish_dataset.chunks}")
         # Now write
-        self.to_zarr(publish_dataset, store=self.store.path, consolidated=True, mode="w")
+        self.to_zarr(publish_dataset, store=self.store.path, mode="w")
 
     # UPDATES
 
@@ -361,7 +361,7 @@ class Publish(Transform):
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
 
-        self.to_zarr(append_dataset, store=self.store.path, consolidated=True, append_dim=self.time_dim)
+        self.to_zarr(append_dataset, store=self.store.path, append_dim=self.time_dim)
 
         if not self.dry_run:
             self.info(f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr")

@@ -77,7 +77,7 @@ This path can be used to open the dataset in an interactive session using `xarra
     import xarray
     from gridded_etl_managers.chirps import CHIRPSFinal25 as chirps_f25
     etl = chirps_f05(s3_bucket_name="zarr-dev", store="s3", **input_kwargs)
-    xarray.open_zarr(store=etl.store.path, consolidated=False)
+    xarray.open_zarr(store=etl.store.path)
     <xarray.Dataset>
     Dimensions:    (latitude: 120, longitude: 300, time: 5736)
     Coordinates:
