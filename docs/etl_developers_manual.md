@@ -3,7 +3,7 @@ ETL Developer's Manual
 
 This README expands on the [library README](../README.md), which explains the logic behind the structure of the library and how to run the CHIRPS ETL manager example script. If you have not read that yet, do so before reading the below.
 
-Writing a new gridded climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `extract` for retrieval and a `parse` method that optionally modifies the format of the data and writes the data to IPFS, S3, or a local file system.
+Writing a new gridded climate data ETL class, at its most basic level, is achieved by inheriting [DatasetManager](dataset_manager.py) and implementing its abstract methods, particularly `extract` for retrieval and a `parse` method that optionally modifies the format of the data and writes the data to S3, or a local file system.
 
 New climate datasets can be added by creating a child class for that dataset within the manager script for the overall source. The recommended practice is to create child classes for each climate variable (minimum temperature, water salinity, etc.) extracted from that source -- e.g. CHIRPSFinal05 for the CHIRPS data source. Abstractly, a new dataset's manager will look like:
 
@@ -25,19 +25,19 @@ To run the manager script for a given child class follow the instructions under 
 Zarr ETLs
 ---------
 
-gridded_etl_tools retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on [IPFS](https://ipfs.tech/). 
+gridded_etl_tools retrieves, transforms, and stores N-Dimensional gridded datasets in [Zarr](https://zarr.readthedocs.io/en/stable/) format directly on amazon S3.
 
 Legacy climate data providers frequently publish climate data as individual files per period in a datasets' time series (e.g. one file per day) because bandwidth and hard disk space previously constrained many users's ability to download and process massive files. Today this complicates retrieval and consolidation in more performant modern systems. Fully implemented managers are able to retrieve the files composing an overall dataset, transform them into Zarr-compatible formats, and create or update a single final output Zarr containing all of their data.
 
 The output datasets for gridded data produced using gridded_etl_tools are meant to be read and transformed by [dClimate-Zarr-Client](https://github.com/dClimate/dClimate-Zarr-Client) and served by [dClimate-Zarr-API](https://github.com/dClimate/dClimate-Zarr-API).
 
-Standalone metadata for datasets and their sources are stored over IPFS in formats compatible with the Spatio-Temporal Asset Catalog ([STAC](https://stacspec.org/en)) industry metadata standard -- see the [metadata guide](./metadata_standard.md) for more details.
+Standalone metadata for datasets and their sources are stored in formats compatible with the Spatio-Temporal Asset Catalog ([STAC](https://stacspec.org/en)) industry metadata standard -- see the [metadata guide](./metadata_standard.md) for more details.
 
 ### Overview
 
 The following parameters must be defined per dataset
 
-* Zarr/dask/IPFS chunk sizes
+* Zarr/Dask chunk sizes
 * standard_dims
 * Name, collection, temporal_resolution, missing_value_indicator (_metadata_)
 * Remote_protocol, identical_dims, concat_dims, engine (_kerchunk_)
@@ -114,7 +114,6 @@ Chunks are specified in the `__init__` of an ETL. This means that within a manag
                     # 0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
                     requested_dask_chunks = {"time": 200, "latitude": 25, "longitude": -1}, # 144 MB
                     requested_zarr_chunks = {"time": 200, "latitude": 25, "longitude": 50}, # 1 MB
-                    requested_ipfs_chunker = "size-5000", 
                     **kwargs):
             """
 
@@ -123,20 +122,18 @@ Chunks are specified in the `__init__` of an ETL. This means that within a manag
     from examples.managers.chirps import CHIRPSFinal05
     requested_dask_chunks = {"time": 200, "latitude": 25, "longitude": -1}, # 144 MB
     requested_zarr_chunks = {"time": 200, "latitude": 25, "longitude": 50}, # 1 MB
-    requested_ipfs_chunker = "size-5000"
 
-    etl = CHIRPSFinal05(requested_dask_chunks, requested_zarr_chunks, requested_ipfs_chunker)
+    etl = CHIRPSFinal05(requested_dask_chunks, requested_zarr_chunks)
     # proceed with ETL operations
 
 But what values to assign these chunks? Read on...
 
 #### Types of chunks
 
-Confusingly, we work with three _types_ of chunks: dask, zarr, and ipfs chunks.
+Confusingly, we work with two _types_ of chunks: dask and zarr chunks.
 
 * Dask chunks are the chunk sizes that Dask works with when parsing out the dataset. Dask's documentation says it is most efficient with chunks of approximately 100-200 MB. However in certain edge cases Dask chunks can be made larger.
 * Zarr chunks are the chunk sizes stored within the Zarr and retrieved by the Client. Small chunks of 1-5 MB are preferable to speed up retrieval.
-* IPFS chunks are the chunks stored within IPFS. Since IPFS hashes represent each chunk, any change to a chunk from dataset updates will cause the entire chunk to duplicate. Therefore we want IPFS chunks sized equivalent to the size of each update issued for a dataset. For instance, ERA5 data is hourly but is issued as 1 day updates, so we batch 24 hourly data points into each IPFS chunk. Additionally, IPFS Chunks should be limited to 1mb in size, with IPFS defaults of 262kb (due to IPFS max block size limits which are [technically 1mb but actually 2mb](https://discuss.ipfs.tech/t/1mb-max-chunk-size/4687), however if the total block size including network headers is over 2mb, blocks will not transfer via bitswap over IPFS so 1mb is recommended by the IPFS team), otherwise there are no other "hard rules" regarding IPFS chunk sizes. That said, very small chunks (~1KB) can cause problems as far more I/O is necessary to retrieve blocks increasing RTT for accessing data so IPFS Chunk sizes must be chosen based on usecases :) 
 
 The relationship between these chunks is hierarchical, as per the graphic below.
 
@@ -148,18 +145,11 @@ Chunk sizing for each dataset is part art and part science. The ideal chunking s
 
 The following principles should guide your choice of Dask chunk dimensions, which will in turn condition the size of all other chunks. Keep in mind that the true size (in bytes) of each chunk is the product of each dimension's size and 4 (the size in bytes of a data point in binary).
 
-* Time chunks should be large (in the hundreds or thousands) to speed retrieval of large time series with relatively few chunks. **As an aside:** if having long time series is not important to you then you can definitely have larger latitude/longitude chunks (and correspondingly larger IPFS chunks) and correspondingly smaller time chunks. Arbol's main use case is pulling in lots of time periods quickly, at a cost to the actual geographic size of each chunk, however, this is an Arbol-specific implementation detail one can instead prioritize chunks providing big geographic size at the expense of temporal coverage. 
+* Time chunks should be large (in the hundreds or thousands) to speed retrieval of large time series with relatively few chunks. **As an aside:** if having long time series is not important to you then you can definitely have larger latitude/longitude chunks and correspondingly smaller time chunks. Arbol's main use case is pulling in lots of time periods quickly, at a cost to the actual geographic size of each chunk, however, this is an Arbol-specific implementation detail one can instead prioritize chunks providing big geographic size at the expense of temporal coverage. 
 * Latitude/longitude chunks should be sufficiently large to enable queries over small areas in a single chunk, i.e. 16x 16 or 30 x 30.
 * Latitude and longitude chunk sizes must be even divisors of both range lengths -- e.g. PRISM has 120 latitudes and 300 longitudes, so 20 is chosen as a chunk size. It is important to note that although dask chunk sizes don’t need to evenly divide the overall dimensions of the dataset, zarr chunk sizes do need to evenly divide the dask chunks. For instance, consider an example dataset with 1801 Latitude points and 3600 Longitude points. You can set dask chunks to be whatever you want for the 1801 dimension (say, 40) and -1 (the entirety) of the 3600 longitude dimension. Then you can set zarr chunks to be 40 by 40, since 40 divides both 40 and 3600.
 * Always set `longitude = -1` (all values) for Dask chunks as this greatly speeds up parses.
 * Therefore dask and zarr chunk sizes should be chosen such that `time * latitude * {all longitudes} = ~100-200 MB` and `time * latitude * {zarr chunk longitude size} = ~1-6MB`. 
-
-Because IPFS chunk sizes should equate to one day's worth of data, a simple mathematical relationship with the `zarr_chunk` sizes determines their ideal size. IPFS chunks are specified as **strings** because this is how they are manually passed in to IPFS settings. Reminder: The IPFS chunk size is then multiplied by 4 (bytes) to have the total size.
-
-* ipfs chunk size = `zarr_chunk` / `time_chunk` _(daily or weekly temporal resolution datasets)_
-* ipfs chunk size = `zarr_chunk` / `time_chunk` * 24 _(hourly temporal resolution datasets)_
-
-You may ask why chunks are not maximized in size in order to reduce latency (as more blocks require more round-trips), and that would be because for Arbol datasets, which are continuously updated, Arbol is repeatedly appending a fixed number of bytes to the end of each zarr chunk. With larger block sizes, Arbol would be re-adding other parts of the zarr chunk with every update. The sizes chosen below are very specifically chosen to ensure that each update results in whole IPFS blocks being appended to the end of each zarr chunk, as opposed to fractional blocks, which would not be deduplicated. If a dataset is not continuously updated then other chunk sizes can be selected based on spatial/temporal query needs.
 
 #### Chunking sizing examples
 
@@ -171,12 +161,9 @@ ERA5 is an hourly global dataset reaching back to 1950, meaning it has a huge ov
 
 The tradeoff is that spatial coverage for each chunk is small -- 16 x 16 locations at 0.25 degrees of latitude or longitude each, so roughly 4 x 4 degrees latitude and longitude. Modeling of large areas will be very slow as a result.
 
-Even with an hourly dataset we encode IPFS chunks of one day each, since ERA5 data is updated for 24 hours at a time and we want to maximize de-duplication. Therefore the IPFS chunk size for ERA5 has to be quite large, `16 (latitude) * 16 (longitude) * 4 (bytes) * 24 (hours) = 24,576 bytes` since it must encompass 24 separate data points.
-
 ```python
     requested_dask_chunks={"time": 5000, "latitude": 16, "longitude": -1},
     requested_zarr_chunks={"time": 5000, "latitude": 16, "longitude": 16},
-    requested_ipfs_chunker="size-24576"
 ```
 
 **PRISM**
@@ -185,12 +172,10 @@ PRISM is a daily dataset which only begins in 1981 and therefore has a much smal
 
 The smaller time dimension means we can afford to make time chunks smaller relative to latitude/longitude without badly compromising the performance of queries over the full time range. As a result, queries for large areas with PRISM will perform better (quicker) relative to ERA5. 
 
-Because the temporal resolution of PRISM is daily each IPFS chunk only has to encode a single data point. Therefore the IPFS chunks are much smaller than ERA5's hourly data. 
 
 ```python
     requested_dask_chunks={"time": 625, "latitude": -1, "longitude": 27},
     requested_zarr_chunks={"time": 625, "latitude": 27, "longitude": 27},
-    requested_ipfs_chunker="size-2916"
 ```
 
 ### Abstract base class overview
@@ -202,14 +187,13 @@ A short summary of each util follows:
 * **attributes**: Specifies properties common to all ETLs. Where possible properties are filled; where not marked as @abstractmethod to force ETL writers to instantiate them within the ETL.
 * **convenience**: Provides convenience methods (repacking data, formatting strings and paths, etc.)
 * **logging**: Instantiates and attunes loggers
-* **IPFS**: Connects to, retrieves, and stores data on IPFS and/or IPNS
-* **metadata**: Prepares, manipulates, and places STAC metadata on IPFS
+* **metadata**: Prepares, manipulates, and places STAC metadata on S3
 * **zarr_methods**: Packages data transformation and load methods common to all Zarr ETLS. 
 
 DatasetManager combines these utils in a structure common to all N-dimensional datasets being output as Zarrs. Specifically, it;
 
 * Packages input datasets into a single JSON that Xarray can read as a single Zarr, without actually opening each dataset
-* Lazily opens the resulting Zarr, performs any final metadata improvements, and writes it out to IPFS as a new dataset (first time) or an update to an existing dataset (subsequently)
+* Lazily opens the resulting Zarr, performs any final metadata improvements, and writes it out to S3 as a new dataset (first time) or an update to an existing dataset (subsequently)
 * Creates, updates, and publishes STAC-compliant metadata based on metadata fields taken from the dataset's properties and the attributes of the output Zarr.
 
 ### ETL Overview
@@ -249,11 +233,10 @@ class CHIRPS(DatasetManager):
                 # 0.05 dataset size is time: 15000, latitude: 2000, longitude: 7200
                 requested_dask_chunks = {"time": 200, "latitude": 25, "longitude": -1}, # 144 MB
                 requested_zarr_chunks = {"time": 200, "latitude": 25, "longitude": 50}, # 1 MB
-                requested_ipfs_chunker = "size-5000", **kwargs):
         """
         Initialize a new CHIRPS object with appropriate chunking parameters.
         """
-        super().__init__(requested_dask_chunks, requested_zarr_chunks, requested_ipfs_chunker, *args, **kwargs)
+        super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         self.standard_dims = ["latitude", "longitude", "time"]
 ```
 
@@ -316,16 +299,16 @@ Subclasses describing each dataset in a collection (i.e. PRISM minimum temperatu
 
 #### Gotchas
 
-Some input datasets come with **filters** and/or **compressors** specified in the input GRIB or NetCDF files. **Filters** will usually cause zarr writes to fail and a **compressor** will prompt compression which prevents IPFS from de-duplicating data. 
+Some input datasets come with **filters** and/or **compressors** specified in the input GRIB or NetCDF files. **Filters** will usually cause zarr writes to fail.
 
-These flags are loaded in under the `encoding` dictionary of a dataset's data variables in Xarray, i.e. `dataset.tmax.encoding`. To prevent this we remove the **filters** entirely from the dictionary and set `compressor = None` for all data variables and coordinates. Note that Xarray will by default apply `Blosc (zlib)` compression if we remove the **compressor** key entirely, so it must remain and be set to `None`.
+These flags are loaded in under the `encoding` dictionary of a dataset's data variables in Xarray, i.e. `dataset.tmax.encoding`. To prevent this we remove the **filters** entirely from the dictionary and set `compressor = None` for all data variables and coordinates. We by default apply `Blosc (zlib)` compression.
 
 The `encoding` dictionary of the data variable may contain other surprises. For instance, CPC populates it with **zlib** and **complevel** keys related to compression, causing Xarray to compress automatically. Each dataset's encoding should be carefully reviewed and any unnecessary parameters stripped out in `set_zarr_metadata` before parsing. This makes datasets easier to interpret, prevents unwanted changes to the final data structure from encoded parameters, and in many cases heads off outright data writing failures.
 
 Metadata
 --------
 
-Metadata specific to the dataset is processed within its manager and appended to the Zarr's attributes before publishing or modifying a dataset. These attributes are then reformatted as necessary and published to IPFS as standalone STAC compliant Items and Collection using standardized methods in `DatasetManager`. Recycling metadata like so ensures harmony between the metadata within a Zarr and attached to it.
+Metadata specific to the dataset is processed within its manager and appended to the Zarr's attributes before publishing or modifying a dataset. These attributes are then reformatted as necessary and published as standalone STAC compliant Items and Collection using standardized methods in `DatasetManager`. Recycling metadata like so ensures harmony between the metadata within a Zarr and attached to it.
 
 Metadata creation and updates should adopt the following logic to avoid unanticipated points of failure with the population of metadata:
 
