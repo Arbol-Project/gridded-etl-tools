@@ -56,7 +56,7 @@ class TestStoreInterface:
         store = DummyStoreImpl(None)
         assert store.dataset(arbitrary="keyword") is dataset
 
-        xr.open_zarr.assert_called_once_with(store=store.path, arbitrary="keyword")
+        xr.open_zarr.assert_called_once_with(store=store.path, decode_timedelta=True, arbitrary="keyword")
 
     @staticmethod
     def test_dataset_not_existing(mocker):

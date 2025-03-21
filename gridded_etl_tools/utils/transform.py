@@ -535,7 +535,7 @@ class Transform(Metadata, Convenience):
 
     # LOAD RAW DATA TO IN-MEMORY DATASET
 
-    def zarr_json_to_dataset(self, *args, zarr_json_path: str = None, **kwargs) -> xr.Dataset:
+    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True, **kwargs) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying
         any desired postprocessing steps
@@ -576,6 +576,7 @@ class Transform(Metadata, Convenience):
                 },
                 "consolidated": False,
             },
+            "decode_times": decode_times,
             **kwargs,
         }
 

@@ -496,7 +496,7 @@ class TestPublish:
         dm.write_initial_zarr(publish_dataset)
 
         # dm.store.path.assert_called_once_with()
-        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, store=dm.store.path, consolidated=True, mode="w")
+        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, store=dm.store.path, mode="w")
 
     @staticmethod
     def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
@@ -659,7 +659,7 @@ class TestPublish:
 
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
 
-        dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, consolidated=True, append_dim="time")
+        dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, append_dim="time")
 
         assert append_dataset.attrs == {"update_is_append_only": True}
 

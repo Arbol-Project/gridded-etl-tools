@@ -866,6 +866,7 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/zarr.json",
                     "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
@@ -892,6 +893,7 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/zarr.json",
                     "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
@@ -908,7 +910,7 @@ class TestTransform:
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
-        assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dataset
+        assert dm.zarr_json_to_dataset("/path/to/different.json", decode_times=False, other_stuff=True) is dataset
         dm.zarr_json_path.assert_not_called()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
@@ -918,12 +920,14 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/different.json",
                     "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
                 "consolidated": False,
             },
             decode_times=False,
+            other_stuff=True,
         )
 
     @staticmethod
