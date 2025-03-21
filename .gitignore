@@ -32,6 +32,7 @@ temp/
 tests/local_*/
 tests/etc/local_*/
 tests/*.log
+tests/metadata/
 tests/dask-worker-space/
 tests/intermediate/
 tests/logging/
