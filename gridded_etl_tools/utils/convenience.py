@@ -235,7 +235,7 @@ class Convenience(Attributes):
         """
         return parse_date(isodate)
 
-    def numpydate_to_py(self, numpy_date: np.datetime64) -> datetime.datetime:
+    def numpydate_to_py(self, numpy_date: np.datetime64, **kwargs) -> datetime.datetime:
         """
         Convert a numpy datetime object to a python standard library datetime object
 
@@ -243,6 +243,9 @@ class Convenience(Attributes):
         ----------
         np.datetime64
             A numpy.datetime64 object to be converted
+        kwargs : dict, optional
+            Additional keyword arguments to pass to pd.Timestamp
+            Most notably "tz" can be used to set the timezone of the returned datetime
 
         Returns
         -------
@@ -250,7 +253,7 @@ class Convenience(Attributes):
             A datetime.datetime object
 
         """
-        return pd.Timestamp(numpy_date).to_pydatetime()
+        return pd.Timestamp(numpy_date, **kwargs).to_pydatetime()
 
     @staticmethod
     def today() -> str:

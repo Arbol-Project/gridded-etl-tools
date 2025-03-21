@@ -231,7 +231,9 @@ class TestConvenience:
     @staticmethod
     def test_numpydate_to_py(manager_class):
         dm = manager_class()
-        assert dm.numpydate_to_py(np.datetime64("2000-01-01")) == datetime.datetime(2000, 1, 1, 0, 0)
+        assert dm.numpydate_to_py(np.datetime64("2000-01-01"), tz="UTC") == datetime.datetime(
+            2000, 1, 1, 0, 0, tzinfo=datetime.timezone.utc
+        )
 
     @staticmethod
     def test_today(mocker, manager_class):
