@@ -1445,7 +1445,7 @@ class TestPublish:
         dm.update_v3_metadata = mock.Mock()
         dm.extract_v3_metadata = mock.Mock()
         extracted_attrs = {"updated": "2023-08-01T12:00:00Z", "date range": ["2023-01-01", "2023-08-01"]}
-        extracted_arrays = {"time": {"shape": [220]}, "data_var": {"shape": [220, 360, 720]}}
+        extracted_arrays = {"time": {"shape": [220]}, "data": {"shape": [220, 360, 720]}}
         dm.extract_v3_metadata.return_value = (extracted_attrs, extracted_arrays)
         dm.synchronize_v2_metadata = mock.Mock()
 
@@ -1482,7 +1482,7 @@ class TestPublish:
 
     @staticmethod
     def test_to_zarr_synchronizes_v2_and_v3_metadata_integration(
-        manager_class, v3_zarr_json, v2_zattrs, v2_zmetadata, tmpdir, mock_dm, mocker
+        manager_class, v3_zarr_json, v2_zattrs, v2_zmetadata, tmpdir, mocker
     ):
         """
         Integration test that verifies the to_zarr method correctly synchronizes V2 and V3 metadata.
@@ -1495,7 +1495,7 @@ class TestPublish:
 
         # Create time and data_var directories for arrays
         time_dir = zarr_store_path / "time"
-        data_var_dir = zarr_store_path / "data_var"
+        data_var_dir = zarr_store_path / "data"
         time_dir.mkdir(parents=True, exist_ok=True)
         data_var_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1515,7 +1515,7 @@ class TestPublish:
         with open(time_zarray_path, "w") as f:
             json.dump(v2_zmetadata["metadata"]["time/.zarray"], f)
         with open(data_var_zarray_path, "w") as f:
-            json.dump(v2_zmetadata["metadata"]["data_var/.zarray"], f)
+            json.dump(v2_zmetadata["metadata"]["data/.zarray"], f)
 
         # Setup manager with a properly mocked store
         dm = manager_class()
@@ -1528,10 +1528,6 @@ class TestPublish:
 
         # Setup the file open functionality to use the real filesystem
         dm.store.open.side_effect = lambda path, mode: open(path, mode)
-
-        # Set the time_dim and data_var properties to match the test fixtures
-        dm.time_dim = mock_dm.time_dim
-        dm.data_var = mock_dm.data_var
 
         # Setup pre_parse_quality_check to avoid actual checks
         dm.pre_parse_quality_check = mock.Mock()
@@ -1562,7 +1558,7 @@ class TestPublish:
         lon_values = np.array([0, 1, 2, 3, 4, 5], dtype="float32")
 
         ds = xr.Dataset(
-            data_vars={"data_var": (["time", "latitude", "longitude"], np.random.rand(2, 5, 6).astype("float32"))},
+            data_vars={"data": (["time", "latitude", "longitude"], np.random.rand(2, 5, 6).astype("float32"))},
             coords={"time": time_values, "latitude": lat_values, "longitude": lon_values},
         )
         ds.attrs = update_attrs.copy()
@@ -1588,7 +1584,7 @@ class TestPublish:
             assert "date range" in sync_attrs
             assert "updated" in sync_attrs
             assert "time" in sync_arrays
-            assert "data_var" in sync_arrays
+            assert "data" in sync_arrays
         finally:
             # Restore the original to_zarr method
             xr.Dataset.to_zarr = original_to_zarr
