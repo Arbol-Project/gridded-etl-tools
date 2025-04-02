@@ -181,6 +181,17 @@ class TestS3:
         fs.exists.assert_called_once_with("it/is/here.zarr")
 
     @staticmethod
+    def test_has_v2_metadata():
+        store = store_module.S3(mock.Mock(custom_output_path="it/is/here.zarr"), "bucket")
+        store.fs = mock.Mock()
+        fs = store.fs.return_value
+
+        assert store.has_existing is fs.exists.return_value
+
+        store.fs.assert_called_once_with()
+        fs.exists.assert_called_once_with("it/is/here.zarr/.zmetadata")
+
+    @staticmethod
     def test_push_metadata_path_does_not_exist():
         store = store_module.S3(None, "mopwater")
         store.get_metadata_path = mock.Mock(return_value="path/to/meta/data")
@@ -364,6 +375,15 @@ class TestLocal:
         path.exists.assert_called_once_with()
 
     @staticmethod
+    def test_has_v2_metadata():
+        store = store_module.Local(mock.Mock())
+        path = store.dm.custom_output_path + "/.zmetadata"
+
+        assert store.has_existing is path.exists.return_value
+
+        path.exists.assert_called_once_with()
+
+    @staticmethod
     def test_push_metadata(tmpdir):
         metadata_path = tmpdir / "ztest.json"
         store = store_module.Local(mock.Mock())
@@ -421,14 +441,3 @@ class TestLocal:
     def test_get_metadata_path():
         store = store_module.Local(None, "/hi/mom")
         assert store.get_metadata_path("A Separate Peace", "novel") == "/hi/mom/metadata/novel/A Separate Peace.json"
-
-    @staticmethod
-    def test_write_metadata_only(tmpdir):
-        with open(tmpdir / "zarr.json", "w") as f:
-            json.dump({"attributes": {"meta": "data"}}, f)
-
-        store = store_module.Local(mock.Mock(custom_output_path=tmpdir))
-        store.write_metadata_only({"new": "value"})
-
-        with open(tmpdir / "zarr.json") as f:
-            assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}

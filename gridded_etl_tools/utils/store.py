@@ -65,6 +65,17 @@ class StoreInterface(ABC):
             Return `True` if there is existing data for this dataset on the store.
         """
 
+    @property
+    @abstractmethod
+    def has_v2_metadata(self) -> bool:
+        """
+        Returns
+        -------
+        bool
+            Return `True` if there is v2 metadata for this dataset on the store.
+        """
+        pass
+
     @abstractmethod
     def metadata_exists(self, title: str, stac_type: str) -> bool:
         """
@@ -169,21 +180,18 @@ class StoreInterface(ABC):
             return None
 
     @abstractmethod
-    def write_metadata_only(self, attributes: dict):
+    def open(self, path: str, mode: str):
         """
-        Writes the metadata to the stored Zarr.
-
-        Open the Zarr's `.zmetadata` and `.zattr` files with the JSON library, update the values with the values in the
-        given dict, and write the files.
-
-        These changes will be reflected in the attributes dict of subsequent calls to `DatasetManager.store.dataset`
-        without needing to call `DatasetManager.to_zarr`.
+        Abstract method to open a file. Must be implemented by subclasses.
 
         Parameters
         ----------
-        attributes
-            A dict of metadata attributes to add or update to the Zarr
+        path : str
+            The path to the file.
+        mode : str
+            The mode in which to open the file.
         """
+        pass
 
 
 class S3(StoreInterface):
@@ -295,6 +303,15 @@ class S3(StoreInterface):
         """
         return self.fs().exists(self.path)
 
+    @property
+    def has_v2_metadata(self) -> bool:
+        if not self.has_existing:
+            return False
+        elif self.fs().exists(self.path + "/.zmetadata"):
+            return True
+        else:
+            return False
+
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
         Publish metadata entity to s3 store. Tracks historical state
@@ -383,49 +400,18 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
 
-    def write_metadata_only_v2(self, update_attrs: dict[str, Any]):  # pragma NO COVER
+    def open(self, path: str, mode: str) -> dict[str, Any]:
         """
-        Old method of writing metadata. Kept for backwards compatibility.
-        """
-        # Edit both .zmetadata and .zattrs
-        fs = self.fs()
-
-        for z_path in (".zmetadata", ".zattrs"):
-            # Read current metadata from Zarr
-            with fs.open(f"{self.path}/{z_path}") as z_contents:
-                current_attributes = json.load(z_contents)
-
-            # Update given attributes at the appropriate location depending on which z file
-            if z_path == ".zmetadata":
-                current_attributes["metadata"][".zattrs"].update(update_attrs)
-            else:
-                current_attributes.update(update_attrs)
-
-            # Write back to Zarr
-            with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
-                json.dump(current_attributes, z_contents)
-
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
-        """
-        Update metadata within the master zarr.json file contained within v3 Zarrs
+        Open a file on S3.
 
         Parameters
         ----------
-        update_attrs : dict[str, Any]
-            A dictionary of attributes to update in the zarr.json file
+        path : str
+            The S3 path to the file.
+        mode : str
+            The mode in which to open the file.
         """
-        fs = self.fs()
-
-        # Read current metadata from Zarr
-        with fs.open(f"{self.path}/zarr.json") as z_contents:
-            current_attributes = json.load(z_contents)
-
-        # Update given attributes
-        current_attributes["attributes"].update(update_attrs)
-
-        # Write back to Zarr
-        with fs.open(f"{self.path}/zarr.json", "w") as z_contents:
-            json.dump(current_attributes, z_contents)
+        return self.fs().open(path, mode)
 
 
 class Local(StoreInterface):
@@ -516,6 +502,15 @@ class Local(StoreInterface):
             Return `True` if there is a local Zarr for this dataset, `False` otherwise.
         """
         return self.path.exists()
+
+    @property
+    def has_v2_metadata(self) -> bool:
+        if not self.has_existing:
+            return False
+        elif (self.path + "/.zmetadata").exists():
+            return True
+        else:
+            return False
 
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
@@ -611,21 +606,15 @@ class Local(StoreInterface):
         """
         return str((pathlib.Path(self.folder) / "metadata" / stac_type / f"{title}.json").resolve())
 
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
+    def open(self, path: str, mode: str) -> dict[str, Any]:
         """
-        Update metadata within the master zarr.json file contained within v3 Zarrs
+        Open a file on the local filesystem.
 
         Parameters
         ----------
-        update_attrs : dict[str, Any]
-            A dictionary of attributes to update in the zarr.json file
+        path : str
+            The local path to the file.
+        mode : str
+            The mode in which to open the file.
         """
-        with open(f"{self.path}/zarr.json") as z_contents:
-            current_attributes = json.load(z_contents)
-
-        # Update given attributes
-        current_attributes["attributes"].update(update_attrs)
-
-        # Write back to Zarr
-        with open(f"{self.path}/zarr.json", "w") as z_contents:
-            json.dump(current_attributes, z_contents)
+        return open(path, mode)

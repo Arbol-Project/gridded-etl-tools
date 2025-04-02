@@ -4,12 +4,14 @@ import functools
 import operator
 import pathlib
 import re
+import json
 
 from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
 
 from gridded_etl_tools.utils import publish, store
 from gridded_etl_tools.utils.publish import _is_infish
@@ -287,13 +289,14 @@ class TestPublish:
         dm.move_post_parse_attrs_to_dict = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.dry_run = True
+        dm.update_v3_metadata = mock.Mock()
 
         dataset = mock.Mock()
         dm.to_zarr(dataset, "foo", bar="baz")
 
         dataset.to_zarr.assert_not_called()
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_not_called()
+        dm.update_v3_metadata.assert_not_called()
         dm.move_post_parse_attrs_to_dict.assert_not_called()
 
     @staticmethod
@@ -302,7 +305,9 @@ class TestPublish:
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
         dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_v2_metadata=False)
+        dm.store.has_v2_metadata = False
+        dm.update_v3_metadata = mock.Mock()
 
         dataset = mock.Mock()
         dataset.get.return_value = "is it?"
@@ -311,16 +316,16 @@ class TestPublish:
         dataset.to_zarr.assert_called_once_with("foo", bar="baz")
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls(
+        dm.update_v3_metadata.assert_has_calls(
             [
                 mock.call(
-                    update_attrs={
+                    {
                         "update_in_progress": True,
                         "update_is_append_only": "is it?",
                         "initial_parse": False,
                     }
                 ),
-                mock.call(update_attrs=post_parse_attrs),
+                mock.call(post_parse_attrs),
             ]
         )
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
@@ -331,7 +336,8 @@ class TestPublish:
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
         dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False, has_v2_metadata=False)
+        dm.update_v3_metadata = mock.Mock()
 
         dataset = mock.Mock()
         dataset.get.return_value = "is it?"
@@ -339,8 +345,8 @@ class TestPublish:
 
         dataset.to_zarr.assert_called_once_with("foo", bar="baz")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+        dm.update_v3_metadata.assert_called_once_with(post_parse_attrs)
 
     @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
@@ -375,7 +381,14 @@ class TestPublish:
         dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
 
         # Mock functions
+        update_attrs, update_arrays = {}, {}
         dm.pre_parse_quality_check = mock.Mock()
+        dm.extract_v3_metadata = mock.Mock(return_value=(update_attrs, update_arrays))
+        dm.synchronize_v2_metadata = mock.Mock()
+
+        # dm.store = mock.Mock(spec=store.StoreInterface)
+        # dm.store.has_existing = True
+        # dm.store.has_v2_metadata = True
 
         # Tests
         for key in pre_update_dict.keys():
@@ -388,6 +401,64 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
 
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.extract_v3_metadata.assert_not_called()
+        dm.synchronize_v2_metadata.assert_not_called()
+
+    @staticmethod
+    def test_to_zarr_integration_with_v2_metadata(manager_class, fake_original_dataset, tmpdir):
+        """
+        Integration test that calls to `to_zarr` correctly run three times, updating relevant metadata fields to show a
+        parse is underway.
+
+        Test that metadata fields for date ranges, etc. are only populated to a datset *after* a successful parse
+        """
+        dm = manager_class()
+        dm.update_attributes = ["date range", "update_previous_end_date", "another attribute"]
+        pre_update_dict = {
+            "date range": ["2000010100", "2020123123"],
+            "update_date_range": ["202012293", "2020123123"],
+            "update_previous_end_date": "2020123023",
+            "update_in_progress": False,
+            "attribute relevant to updates": 1,
+            "another attribute": True,
+        }
+        post_update_dict = {
+            "date range": ["2000010100", "2021010523"],
+            "update_previous_end_date": "2020123123",
+            "update_in_progress": False,
+            "another attribute": True,
+            "initial_parse": False,
+        }
+
+        # Mock datasets
+        dataset = copy.deepcopy(fake_original_dataset)
+        dataset.attrs.update(**pre_update_dict)
+        dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
+        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+
+        # create a blank .zmetadata file to trigger self.store.has_v2_metadata=True
+        with open(dm.store.path / ".zmetadata", "w") as f:
+            f.write("hi")
+
+        # Mock functions
+        update_attrs, update_arrays = {}, {}
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.extract_v3_metadata = mock.Mock(return_value=(update_attrs, update_arrays))
+        dm.synchronize_v2_metadata = mock.Mock()
+
+        # Tests
+        for key in pre_update_dict.keys():
+            assert dm.store.dataset().attrs[key] == pre_update_dict[key]
+
+        dataset.attrs.update(**post_update_dict)
+        dm.to_zarr(dataset, store=dm.store.path, append_dim=dm.time_dim)
+
+        for key in post_update_dict.keys():
+            assert dm.store.dataset().attrs[key] == post_update_dict[key]
+
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.extract_v3_metadata.assert_called_once_with(dm.store.path)
+        dm.synchronize_v2_metadata.assert_called_once_with(update_attrs, update_arrays)
 
     @staticmethod
     def test_to_zarr_integration_initial(manager_class, fake_original_dataset, tmpdir):
@@ -421,7 +492,10 @@ class TestPublish:
         dataset.to_zarr(store=dm.custom_output_path)  # write out local file to test updates on
 
         # Mock functions
+        update_attrs, update_arrays = {}, {}
         dm.pre_parse_quality_check = mock.Mock()
+        dm.extract_v3_metadata = mock.Mock(return_value=(update_attrs, update_arrays))
+        dm.synchronize_v2_metadata = mock.Mock()
 
         # Tests
         for key in pre_update_dict.keys():
@@ -434,6 +508,8 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
 
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.extract_v3_metadata.assert_not_called()
+        dm.synchronize_v2_metadata.assert_not_called()
 
     @staticmethod
     def test_move_post_parse_attrs_to_dict(manager_class, fake_original_dataset):
@@ -1350,6 +1426,172 @@ class TestPublish:
         assert dataset.step[0] == np.datetime64("2022-07-04T00:00:00.000000000")
 
         dm.rename_data_variable.assert_called_once_with(dataset)
+
+    @staticmethod
+    def test_to_zarr_synchronizes_v2_and_v3_metadata(manager_class, mocker):
+        # Setup
+        dm = manager_class()
+        dm.pre_parse_quality_check = mock.Mock()
+        dm.move_post_parse_attrs_to_dict = mock.Mock()
+        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = {"update_in_progress": False}
+
+        # Create store mock with needed methods
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.path = "/path/to/zarr/store"
+        dm.store.has_existing = True
+        dm.store.has_v2_metadata = True  # Enable the v2 metadata synchronization
+
+        # Mock the metadata synchronization methods on the manager
+        dm.update_v3_metadata = mock.Mock()
+        dm.extract_v3_metadata = mock.Mock()
+        extracted_attrs = {"updated": "2023-08-01T12:00:00Z", "date range": ["2023-01-01", "2023-08-01"]}
+        extracted_arrays = {"time": {"shape": [220]}, "data_var": {"shape": [220, 360, 720]}}
+        dm.extract_v3_metadata.return_value = (extracted_attrs, extracted_arrays)
+        dm.synchronize_v2_metadata = mock.Mock()
+
+        # Expected update_attrs values that will be used in the process
+        initial_update_attrs = {
+            "update_in_progress": True,
+            "update_is_append_only": False,
+            "initial_parse": False,
+        }
+
+        # Call function under test
+        dataset = mock.Mock()
+        dataset.get.return_value = False
+        dm.to_zarr(dataset, "foo")
+
+        # Verify results
+        # First check that the basic to_zarr functionality works
+        dataset.to_zarr.assert_called_once_with("foo")
+        dm.pre_parse_quality_check.assert_called_once_with(dataset)
+        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+
+        # Now verify the metadata synchronization steps
+        # update_v3_metadata is called twice during to_zarr
+        # First call is for indicating write in progress
+        assert dm.update_v3_metadata.call_count == 2
+        assert dm.update_v3_metadata.call_args_list[0] == mock.call(initial_update_attrs)
+
+        # Second call is for updating with post-parse attributes
+        assert dm.update_v3_metadata.call_args_list[1] == mock.call(post_parse_attrs)
+
+        # Check that extract and synchronize were called correctly
+        dm.extract_v3_metadata.assert_called_once_with(dm.store.path)
+        dm.synchronize_v2_metadata.assert_called_once_with(extracted_attrs, extracted_arrays)
+
+    @staticmethod
+    def test_to_zarr_synchronizes_v2_and_v3_metadata_integration(
+        manager_class, v3_zarr_json, v2_zattrs, v2_zmetadata, tmpdir, mock_dm, mocker
+    ):
+        """
+        Integration test that verifies the to_zarr method correctly synchronizes V2 and V3 metadata.
+        """
+        # Create temp directory structure and files for testing
+        zarr_store_path = pathlib.Path(tmpdir)
+        zarr_json_path = zarr_store_path / "zarr.json"
+        zattrs_path = zarr_store_path / ".zattrs"
+        zmetadata_path = zarr_store_path / ".zmetadata"
+
+        # Create time and data_var directories for arrays
+        time_dir = zarr_store_path / "time"
+        data_var_dir = zarr_store_path / "data_var"
+        time_dir.mkdir(parents=True, exist_ok=True)
+        data_var_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write initial v3 metadata
+        with open(zarr_json_path, "w") as f:
+            json.dump(v3_zarr_json, f)
+
+        # Write initial v2 metadata
+        with open(zattrs_path, "w") as f:
+            json.dump(v2_zattrs, f)
+        with open(zmetadata_path, "w") as f:
+            json.dump(v2_zmetadata, f)
+
+        # Create .zarray files
+        time_zarray_path = time_dir / ".zarray"
+        data_var_zarray_path = data_var_dir / ".zarray"
+        with open(time_zarray_path, "w") as f:
+            json.dump(v2_zmetadata["metadata"]["time/.zarray"], f)
+        with open(data_var_zarray_path, "w") as f:
+            json.dump(v2_zmetadata["metadata"]["data_var/.zarray"], f)
+
+        # Setup manager with a properly mocked store
+        dm = manager_class()
+
+        # Setup a proper mock store
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.path = str(zarr_store_path)
+        dm.store.has_existing = True
+        dm.store.has_v2_metadata = True
+
+        # Setup the file open functionality to use the real filesystem
+        dm.store.open.side_effect = lambda path, mode: open(path, mode)
+
+        # Set the time_dim and data_var properties to match the test fixtures
+        dm.time_dim = mock_dm.time_dim
+        dm.data_var = mock_dm.data_var
+
+        # Setup pre_parse_quality_check to avoid actual checks
+        dm.pre_parse_quality_check = mock.Mock()
+
+        # Update post-parse attributes to test
+        update_attrs = {
+            "updated": "2023-08-15T12:00:00Z",
+            "date range": ["2023-01-01", "2023-08-15"],
+            "update_date_range": ["2023-08-01", "2023-08-15"],
+            "update_in_progress": False,
+        }
+
+        # Spy on the actual methods to verify they're called
+        original_update_v3 = dm.update_v3_metadata
+        original_extract_v3 = dm.extract_v3_metadata
+        original_sync_v2 = dm.synchronize_v2_metadata
+
+        dm.update_v3_metadata = mock.Mock(side_effect=lambda attrs: original_update_v3(attrs))
+        dm.extract_v3_metadata = mock.Mock(side_effect=lambda path: original_extract_v3(path))
+        dm.synchronize_v2_metadata = mock.Mock(side_effect=lambda attrs, arrays: original_sync_v2(attrs, arrays))
+
+        # Mock move_post_parse_attrs_to_dict to return our desired attributes
+        dm.move_post_parse_attrs_to_dict = mock.Mock(return_value=update_attrs)
+
+        # Call function under test - with a real dataset to write
+        time_values = np.array(["2023-08-01", "2023-08-15"], dtype="datetime64[ns]")
+        lat_values = np.array([0, 1, 2, 3, 4], dtype="float32")
+        lon_values = np.array([0, 1, 2, 3, 4, 5], dtype="float32")
+
+        ds = xr.Dataset(
+            data_vars={"data_var": (["time", "latitude", "longitude"], np.random.rand(2, 5, 6).astype("float32"))},
+            coords={"time": time_values, "latitude": lat_values, "longitude": lon_values},
+        )
+        ds.attrs = update_attrs.copy()
+
+        # Patch xarray's to_zarr method to prevent actual file writing
+        original_to_zarr = xr.Dataset.to_zarr
+        mocker.patch.object(xr.Dataset, "to_zarr", return_value=None)
+
+        try:
+            # Call to_zarr with the store path
+            dm.to_zarr(ds, store=str(zarr_store_path), mode="w")
+
+            # Verify the calls were made in the correct order
+            dm.update_v3_metadata.assert_called()
+            assert dm.update_v3_metadata.call_count >= 1
+            dm.extract_v3_metadata.assert_called_once_with(str(zarr_store_path))
+            dm.synchronize_v2_metadata.assert_called_once()
+
+            # Get the arguments passed to synchronize_v2_metadata
+            sync_attrs, sync_arrays = dm.synchronize_v2_metadata.call_args[0]
+
+            # Verify the extracted attributes were passed to synchronize
+            assert "date range" in sync_attrs
+            assert "updated" in sync_attrs
+            assert "time" in sync_arrays
+            assert "data_var" in sync_arrays
+        finally:
+            # Restore the original to_zarr method
+            xr.Dataset.to_zarr = original_to_zarr
 
 
 class DummyDataset(UserDict):

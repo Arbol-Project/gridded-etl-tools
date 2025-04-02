@@ -4,17 +4,18 @@ from unittest import mock
 import pathlib
 import pytest
 import zarr
+import json
 import numpy as np
 
 # Imports used for legacy encoding change tests
 # import os
-# import json
 # import xarray as xr
 # from time import sleep
 
 from requests.exceptions import Timeout
 
-from gridded_etl_tools.utils import encryption, metadata, store
+from gridded_etl_tools.utils import encryption, metadata
+from gridded_etl_tools.utils import store as store_module
 from ...common import clean_up_input_paths
 
 
@@ -105,7 +106,7 @@ class TestMetadata:
     @staticmethod
     def test_set_initial_compression(manager_class, fake_original_dataset):
         dm = manager_class(use_compression=True)
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         dm.store.has_existing = False
 
         dataset = fake_original_dataset
@@ -114,7 +115,7 @@ class TestMetadata:
         dataset["data"].encoding = {}
 
         dm = manager_class(use_compression=True)
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         dm.store.has_existing = False
 
         dm.set_initial_compression(dataset)
@@ -126,7 +127,7 @@ class TestMetadata:
     # def test_set_initial_compression(manager_class, fake_original_dataset):
     #     """Test setting initial compression on a new dataset"""
     #     dm = manager_class(use_compression=True)
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
+    #     dm.store = mock.Mock(spec=store_module.StoreInterface)
     #     dm.store.has_existing = False
 
     #     dataset = fake_original_dataset
@@ -144,7 +145,7 @@ class TestMetadata:
     def test_set_initial_compression_no_compression(manager_class, fake_original_dataset):
         """Test that `set_initial_compression` does nothing if compression is disabled"""
         dm = manager_class(use_compression=False)
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         dm.store.has_existing = False
 
         dataset = fake_original_dataset
@@ -160,7 +161,7 @@ class TestMetadata:
     def test_set_initial_compression_existing_store(manager_class, fake_original_dataset):
         """Test that `set_initial_compression` does nothing if the store already exists"""
         dm = manager_class(use_compression=True)
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         dm.store.has_existing = True
 
         dataset = fake_original_dataset
@@ -188,7 +189,7 @@ class TestMetadata:
     def test_check_stac_exists(manager_class):
         dm = manager_class()
         dm.check_stac_on_ipns = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         assert (
             dm.check_stac_exists("The Jungle Book", metadata.StacType.CATALOG) is dm.store.metadata_exists.return_value
         )
@@ -199,7 +200,7 @@ class TestMetadata:
     def test_publish_stac(manager_class):
         dm = manager_class()
         dm.json_to_bytes = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
 
         dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
         dm.json_to_bytes.assert_not_called()
@@ -210,7 +211,7 @@ class TestMetadata:
     @staticmethod
     def test_retrieve_stac(manager_class):
         dm = manager_class()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         assert (
             dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
         )
@@ -219,7 +220,7 @@ class TestMetadata:
     @staticmethod
     def test_get_href(manager_class):
         dm = manager_class()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
         dm.store.get_metadata_path.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
@@ -227,7 +228,7 @@ class TestMetadata:
     def test_create_root_stac_catalog(organized_manager_class):
         dm = organized_manager_class()
         dm.publish_stac = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
         dm.check_stac_exists = mock.Mock(return_value=False)
         dm.get_href = mock.Mock(return_value="/it/is/here.json")
 
@@ -299,8 +300,8 @@ class TestMetadata:
                     "stac_version": "1.0.0",
                     "description": "This catalog contains all the data uploaded to Church of the Flying Spaghetti "
                     "Monster that has been issued STAC-compliant metadata. The catalogs and collections describe "
-                    "single providers. Each may contain one or multiple datasets. Each individual dataset has been "
-                    "documented as STAC Items.",
+                    "single providers. Each may contain one or multiple datasets. Each individual dataset has "
+                    "been documented as STAC Items.",
                     "links": [
                         {
                             "rel": "root",
@@ -724,7 +725,7 @@ class TestMetadata:
         dt_mock.timezone = datetime.timezone
 
         dm = manager_class()
-        dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
+        dm.store = mock.Mock(spec=store_module.StoreInterface, path="it/goes/here")
         dm.register_stac_item = mock.Mock()
         dm.create_stac_item(fake_original_dataset)
 
@@ -765,7 +766,7 @@ class TestMetadata:
 
         dm = manager_class()
         dm.time_dim = "forecast_reference_time"
-        dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
+        dm.store = mock.Mock(spec=store_module.StoreInterface, path="it/goes/here")
         dm.register_stac_item = mock.Mock()
         dm.create_stac_item(forecast_dataset)
 
@@ -846,7 +847,7 @@ class TestMetadata:
 
         md = manager_class()
         md.publish_stac = mock.Mock()
-        md.store = mock.Mock(spec=store.StoreInterface)
+        md.store = mock.Mock(spec=store_module.StoreInterface)
         md.retrieve_stac = mock.Mock(
             side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
         )
@@ -910,7 +911,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.Local)
+        md.store = mock.Mock(spec=store_module.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata() == "foo"
@@ -920,7 +921,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_pass_key(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.Local)
+        md.store = mock.Mock(spec=store_module.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata(key="chiave") == "foo"
@@ -930,7 +931,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_timeout(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.Local)
+        md.store = mock.Mock(spec=store_module.Local)
         md.retrieve_stac = mock.Mock(side_effect=Timeout)
 
         assert md.load_stac_metadata() == {}
@@ -940,7 +941,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_keyerror(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.StoreInterface)
+        md.store = mock.Mock(spec=store_module.StoreInterface)
         md.retrieve_stac = mock.Mock(side_effect=KeyError)
 
         assert md.load_stac_metadata() == {}
@@ -1009,7 +1010,7 @@ class TestMetadata:
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=False)
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
@@ -1037,7 +1038,7 @@ class TestMetadata:
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=True)
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
@@ -1066,7 +1067,7 @@ class TestMetadata:
         md = manager_class()
         md.time_dim = "forecast_reference_time"
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "step": 1, "forecast_reference_time": 1}
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=True)
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
@@ -1102,7 +1103,7 @@ class TestMetadata:
             "forecast_reference_time": 1,
             "hindcast_reference_time": 1,
         }
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=True)
         md.encode_vars(dataset) is dataset
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": ""}}
@@ -1161,7 +1162,7 @@ class TestMetadata:
         dataset.time.encoding = {"units": "picoseconds since the big bang"}
 
         md = manager_class()
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=True)
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.encode_vars(dataset)
 
@@ -1191,7 +1192,7 @@ class TestMetadata:
 
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
-        md.store = mock.Mock(spec=store.StoreInterface)
+        md.store = mock.Mock(spec=store_module.StoreInterface)
         mock_dataset = mock.Mock()
         mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
         md.store.dataset = mock.Mock(return_value=mock_dataset)
@@ -1219,7 +1220,7 @@ class TestMetadata:
 
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
-        md.store = mock.Mock(spec=store.StoreInterface)
+        md.store = mock.Mock(spec=store_module.StoreInterface)
         mock_dataset = mock.Mock()
         mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
         md.store.dataset = mock.Mock(return_value=mock_dataset)
@@ -1249,7 +1250,7 @@ class TestMetadata:
 
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
-        md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        md.store = mock.Mock(spec=store_module.StoreInterface, has_existing=False)
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
@@ -1273,194 +1274,219 @@ class TestMetadata:
         yield output_path
         clean_up_input_paths(output_path)
 
-    # LEGACY ENCODING CHANGE TESTS DISABLED AS THEY RELY ON ZARR V2
-    # WHICH IS NOT AVAILABLE IN THE CI ENVIRONMENT
+    @staticmethod
+    def test_update_v3_metadata(manager_class, tmpdir):
+        # Setup
+        update_attrs = {"updated": "2023-08-01T12:00:00Z", "date range": ["2023-01-01", "2023-08-01"]}
+        zarr_json_content = {
+            "attributes": {"updated": "2023-07-15T12:00:00Z", "date range": ["2023-01-01", "2023-07-15"]}
+        }
 
-    # @staticmethod
-    # def test_update_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-    #     """Test modifying encoding of a single coordinate using zarr library directly"""
+        # Create test zarr.json file
+        zarr_json_path = tmpdir / "zarr.json"
+        with open(zarr_json_path, "w") as f:
+            json.dump(zarr_json_content, f)
 
-    #     # Setup
-    #     dm = manager_class(="local")
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
+        # Setup manager and store mock
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
+        dm.store.path = str(tmpdir)
+        dm.store.open.side_effect = lambda path, mode: open(path, mode)
 
-    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-    #     type(dm.store).path = path_mock
+        # Call function under test
+        dm.update_v3_metadata(update_attrs)
 
-    #     dataset = fake_original_dataset
-    #     coordinate_to_change = "latitude"
+        # Verify results
+        with open(zarr_json_path) as f:
+            updated_content = json.load(f)
 
-    #     # Write dataset to zarr
-    #     dataset.to_zarr(dm.store.path, mode="w")
+        assert updated_content["attributes"]["updated"] == "2023-08-01T12:00:00Z"
+        assert updated_content["attributes"]["date range"] == ["2023-01-01", "2023-08-01"]
+        # Original attribute should remain
+        assert "zarr_format" not in updated_content
 
-    #     # Record initial modification times of all arrays
-    #     root = zarr.open_group(dm.store.path, mode="r")
-    #     initial_mtimes = {
-    #         name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
-    #     }
+    @staticmethod
+    def test_extract_v3_metadata(manager_class, v3_zarr_json):
+        # Setup
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
 
-    #     # Get initial encoding for selected coordinate, xarray and zarr versions
-    #     initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
-    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-    #         initial_lat_encoding_zarr = json.load(f)
+        # Create a proper file mock that supports context manager
+        mock_file = mock.mock_open(read_data=json.dumps(v3_zarr_json))
+        dm.store.open.return_value = mock_file.return_value
 
-    #     # Verify initial setup changes at both Zarr and Xarray level
-    #     assert initial_lat_encoding_xr["compressor"].cname == "lz4"
-    #     assert initial_lat_encoding_zarr["compressor"]["cname"] == "lz4"
+        # Call function under test
+        update_attrs, update_arrays = dm.extract_v3_metadata("/path/to/zarr")
 
-    #     # Wait a moment to ensure modification times would be different if files are touched
-    #     sleep(0.1)
+        # Verify results - check expected fields were extracted
+        expected_fields = ["update_date_range", "date range"]
+        for field in expected_fields:
+            assert field in update_attrs
+            assert update_attrs[field] == v3_zarr_json["attributes"][field]
 
-    #     # Modify the selected coordinate's encoding
-    #     new_compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=zarr.Blosc.SHUFFLE)
-    #     dm.update_array_encoding(target_array=coordinate_to_change, update_key={"compressor": new_compressor})
+        # Check arrays information
+        assert "time" in update_arrays
+        assert "data" in update_arrays
+        assert "chunks" in update_arrays["time"]
+        assert "shape" in update_arrays["time"]
+        assert update_arrays["time"]["shape"] == v3_zarr_json["consolidated_metadata"]["metadata"]["time"]["shape"]
+        assert update_arrays["data"]["shape"] == v3_zarr_json["consolidated_metadata"]["metadata"]["data"]["shape"]
 
-    #     # Get final modification times to show that only the selected coordinate was modified
-    #     root = zarr.open_group(dm.store.path, mode="r")
-    #     final_mtimes = {
-    #         name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
-    #     }
+    @staticmethod
+    def test_update_v2_group_metadata(manager_class, v2_zattrs, v2_zmetadata, updated_attrs, tmpdir):
+        # Setup
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
+        dm.store.path = str(tmpdir)
 
-    #     # Get final encoding for the selected coordinate, xarray and zarr versions
-    #     final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
-    #         coordinate_to_change
-    #     ].encoding.copy()
-    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-    #         final_lat_encoding_zarr = json.load(f)
+        # Create test files
+        zattrs_path = tmpdir / ".zattrs"
+        zmetadata_path = tmpdir / ".zmetadata"
 
-    #     # Verify selected coordinate, and only the selected coordinate, was modified
-    #     for name in root.array_keys():
-    #         if name == coordinate_to_change:
-    #             assert (
-    #                 final_mtimes[name] > initial_mtimes[name]
-    #             ), "Changed coordinate .zarray should have been modified"
-    #             assert root[name].compressor.cname == "zstd", "Changed coordinate should have new " \
-    #             "compression settings"
-    #         else:
-    #             assert final_mtimes[name] == initial_mtimes[name], f"{name} .zarray should not have been modified"
-    #             assert root[name].compressor.cname != "zstd", f"{name} compression should be unchanged"
-    #     # Check .zarray files just to be sure
-    #     assert final_lat_encoding_xr["compressor"].cname == "zstd", "Xarray should show new compression type"
-    #     assert final_lat_encoding_zarr["compressor"]["cname"] == "zstd", "Zarr should show new compression type"
+        with open(zattrs_path, "w") as f:
+            json.dump(v2_zattrs, f)
+        with open(zmetadata_path, "w") as f:
+            json.dump(v2_zmetadata, f)
 
-    # @staticmethod
-    # def test_remove_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-    #     """Test modifying encoding of a single coordinate using zarr library directly"""
+        # Setup open side effect to use real file system
+        dm.store.open.side_effect = lambda path, mode: open(path, mode)
 
-    #     # Setup
-    #     dm = manager_class(store="local")
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
+        # Call function under test
+        dm.update_v2_group_metadata(updated_attrs)
 
-    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-    #     type(dm.store).path = path_mock
+        # Verify results
+        with open(zattrs_path) as f:
+            updated_zattrs = json.load(f)
+        with open(zmetadata_path) as f:
+            updated_zmetadata = json.load(f)
 
-    #     dataset = fake_original_dataset
-    #     coordinate_to_change = "latitude"
-    #     key_to_remove = "missing_value"
+        # Check that attributes were updated in both files
+        for key, value in updated_attrs.items():
+            assert updated_zattrs[key] == value
+            assert updated_zmetadata["metadata"][".zattrs"][key] == value
 
-    #     # Write dataset to zarr
-    #     dataset[coordinate_to_change].encoding.update({key_to_remove: 42})
-    #     dataset.to_zarr(dm.store.path, mode="w")
+        # Check that other attributes weren't modified
+        assert updated_zattrs["title"] == v2_zattrs["title"]
+        assert updated_zmetadata["metadata"][".zattrs"]["title"] == v2_zattrs["title"]
 
-    #     # Record initial modification times of all arrays
-    #     root = zarr.open_group(dm.store.path, mode="r")
+    @staticmethod
+    def test_update_v2_arrays(manager_class, v2_zmetadata, updated_arrays, tmpdir):
+        # Setup
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
+        dm.store.path = str(tmpdir)
 
-    #     # Get initial encoding for selected coordinate, xarray and zarr versions
-    #     initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
-    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-    #         initial_lat_encoding_zarr = json.load(f)
+        # Create test files
+        zmetadata_path = tmpdir / ".zmetadata"
+        time_zarray_path = tmpdir / "time" / ".zarray"
+        data_var_zarray_path = tmpdir / "data" / ".zarray"
 
-    #     # Verify initial setup changes at both Zarr and Xarray level
-    #     if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
-    #         assert initial_lat_encoding_xr[key_to_remove] == 42
-    #     if key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
-    #         assert initial_lat_encoding_zarr[key_to_remove] == 42
+        # Create necessary directories
+        pathlib.Path(tmpdir / "time").mkdir(parents=True, exist_ok=True)
+        pathlib.Path(tmpdir / "data").mkdir(parents=True, exist_ok=True)
 
-    #     # Modify the selected coordinate's encoding
-    #     dm.remove_array_encoding(target_array=coordinate_to_change, remove_key=key_to_remove)
+        with open(zmetadata_path, "w") as f:
+            json.dump(v2_zmetadata, f)
+        with open(time_zarray_path, "w") as f:
+            json.dump(v2_zmetadata["metadata"]["time/.zarray"], f)
+        with open(data_var_zarray_path, "w") as f:
+            json.dump(v2_zmetadata["metadata"]["data/.zarray"], f)
 
-    #     # Get final modification times to show that only the selected coordinate was modified
-    #     root = zarr.open_group(dm.store.path, mode="r")
+        # Setup open side effect to use real file system
+        dm.store.open.side_effect = lambda path, mode: open(path, mode)
 
-    #     # Get final encoding for the selected coordinate, xarray and zarr versions
-    #     final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
-    #         coordinate_to_change
-    #     ].encoding.copy()
-    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-    #         final_lat_encoding_zarr = json.load(f)
+        # Call function under test
+        dm.update_v2_arrays(updated_arrays)
 
-    #     if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
-    #         assert (
-    #             key_to_remove in initial_lat_encoding_xr
-    #         ), f"Test setup should include {key_to_remove} in Xarray encoding"
-    #         assert (
-    #             key_to_remove not in final_lat_encoding_xr
-    #         ), f"{key_to_remove} should have been removed from Xarray encoding"
+        # Verify results
+        with open(zmetadata_path) as f:
+            updated_zmetadata = json.load(f)
+        with open(time_zarray_path) as f:
+            updated_time_zarray = json.load(f)
+        with open(data_var_zarray_path) as f:
+            updated_data_var_zarray = json.load(f)
 
-    #     # Verify only selected coordinate was modified
-    #     for name in root.array_keys():
-    #         if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
-    #             assert (
-    #                 key_to_remove not in final_lat_encoding_zarr
-    #             ), f"{key_to_remove} should have been removed from encoding"
+        # Check that array information was updated
+        for dim in ["time", "data"]:
+            for key in ["chunks", "shape"]:
+                assert updated_zmetadata["metadata"][f"{dim}/.zarray"][key] == updated_arrays[dim][key]
 
-    # @staticmethod
-    # def test_modify_array_encoding_no_changes(manager_class, fake_original_dataset, encoding_test_output):
-    #     """Test catching no changes specified"""
+        # Check individual .zarray files
+        assert updated_time_zarray["chunks"] == updated_arrays["time"]["chunks"]
+        assert updated_time_zarray["shape"] == updated_arrays["time"]["shape"]
+        assert updated_data_var_zarray["chunks"] == updated_arrays["data"]["chunks"]
+        assert updated_data_var_zarray["shape"] == updated_arrays["data"]["shape"]
 
-    #     # Setup
-    #     dm = manager_class(store="local")
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
+        # Verify that other properties weren't modified
+        assert updated_time_zarray["compressor"] == v2_zmetadata["metadata"]["time/.zarray"]["compressor"]
+        assert updated_data_var_zarray["dtype"] == v2_zmetadata["metadata"]["data/.zarray"]["dtype"]
 
-    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-    #     type(dm.store).path = path_mock
+    @staticmethod
+    def test_synchronize_v2_metadata(manager_class, v3_zarr_json, tmpdir):
+        # Setup
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
+        dm.store.path = str(tmpdir)
 
-    #     coordinate_to_change = "latitude"
+        # Create minimal v2 files structure
+        pathlib.Path(tmpdir / "time").mkdir(parents=True, exist_ok=True)
+        pathlib.Path(tmpdir / "data").mkdir(parents=True, exist_ok=True)
 
-    #     # Modify nothing
-    #     with pytest.raises(ValueError, match="No changes to the array encoding were specified"):
-    #         dm._modify_array_encoding(target_array=coordinate_to_change, update_key=None, remove_key=None)
+        # Create mocks for the update methods
+        dm.extract_v3_metadata = mock.Mock(
+            return_value=(
+                {"update_date_range": ["2023-07-16", "2023-07-31"]},
+                {"time": {"shape": [220]}, "data": {"shape": [220, 360, 720]}},
+            )
+        )
+        dm.update_v2_group_metadata = mock.Mock()
+        dm.update_v2_arrays = mock.Mock()
 
-    # @staticmethod
-    # def test_update_array_encoding_not_coordinate(manager_class, fake_original_dataset, encoding_test_output):
-    #     """Test catching non-coordinate array names"""
+        # Call function under test
+        dm.synchronize_v2_metadata({"updated": "2023-07-31"}, {"time": {"shape": [220]}})
 
-    #     # Setup
-    #     dm = manager_class(store="local")
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
-    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-    #     type(dm.store).path = path_mock
+        # Verify results
+        dm.update_v2_group_metadata.assert_called_once_with({"updated": "2023-07-31"})
+        dm.update_v2_arrays.assert_called_once_with({"time": {"shape": [220]}})
 
-    #     # Pass a non-coordinate array name
-    #     with pytest.raises(
-    #         ValueError, match="Target array precipitation is not in this dataset's list of coordinate dimensions"
-    #     ):
-    #         dm.update_array_encoding(target_array="precipitation", update_key={"fill_value": 999_999_999})
+    @staticmethod
+    def test_synchronize_v2_metadata_with_extraction(manager_class, v3_zarr_json, tmpdir):
+        # Setup
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store_module.StoreInterface)
+        dm.store.path = str(tmpdir)
 
-    #     # Pass a standard coordinate name but now the standard dims are wrong
-    #     def mock_set_key_dims(self, *args, **kwargs):
-    #         self.standard_dims = ["non-standard", "other non-standard"]
+        # Create minimal v2 files structure
+        pathlib.Path(tmpdir / "time").mkdir(parents=True, exist_ok=True)
+        pathlib.Path(tmpdir / "data").mkdir(parents=True, exist_ok=True)
 
-    #     dm.set_key_dims = mock.Mock(side_effect=mock_set_key_dims(dm))
-    #     with pytest.raises(
-    #         ValueError, match="Target array latitude is not in this dataset's list of coordinate dimensions"
-    #     ):
-    #         dm.update_array_encoding(target_array="latitude", update_key={"fill_value": 999_999_999})
+        # Create v3 json file
+        with open(tmpdir / "zarr.json", "w") as f:
+            json.dump(v3_zarr_json, f)
 
-    # @staticmethod
-    # def test_update_array_encoding_invalid_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-    #     """Test specifying an invalid encoding field according to Xarray and Zarr standards"""
+        # Mock the update functions to check they're called with extracted data
+        dm.update_v2_group_metadata = mock.Mock()
+        dm.update_v2_arrays = mock.Mock()
 
-    #     # Setup
-    #     dm = manager_class(store="local")
-    #     dm.standard_dims = ["latitude", "longitude", "time"]
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
+        # Setup open side effect to use real file system
+        dm.store.open.side_effect = lambda path, mode: open(path, mode)
 
-    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-    #     type(dm.store).path = path_mock
+        # Call extract_v3_metadata first
+        v3_path = str(tmpdir)
+        extracted_attrs, extracted_arrays = dm.extract_v3_metadata(v3_path)
 
-    #     coordinate_to_change = "longitude"
+        # Call synchronize_v2_metadata with the extracted data
+        dm.synchronize_v2_metadata(extracted_attrs, extracted_arrays)
 
-    #     # Pass a non-encoding array name
-    #     with pytest.raises(ValueError, match="Invalid key"):
-    #         dm.update_array_encoding(target_array=coordinate_to_change, update_key={"fill_er_up_value": 999_999_999})
+        # Verify results
+        dm.update_v2_group_metadata.assert_called_once_with(extracted_attrs)
+        dm.update_v2_arrays.assert_called_once_with(extracted_arrays)
+
+        # Verify the extracted data was passed to the update functions
+        attrs_arg = dm.update_v2_group_metadata.call_args[0][0]
+        arrays_arg = dm.update_v2_arrays.call_args[0][0]
+
+        assert "updated" in attrs_arg
+        assert "date range" in attrs_arg
+        assert "time" in arrays_arg
+        assert "data" in arrays_arg
