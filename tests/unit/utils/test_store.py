@@ -17,7 +17,6 @@ class DummyStoreImpl(store_module.StoreInterface):
 
     def __init__(self, dm):
         super().__init__(dm)
-        self._mapper = mock.Mock()
         self._path = mock.Mock(return_value="winding")
 
     def get_metadata_path(self, title: str, stac_type: str):  # pragma NO COVER
@@ -34,9 +33,6 @@ class DummyStoreImpl(store_module.StoreInterface):
 
     def update_v3_metadata(self, attributes: dict):  # pragma NO COVER
         raise NotImplementedError
-
-    def mapper(self, **kwargs):
-        return self._mapper(**kwargs)
 
     def open(self, path: str, mode: str):  # pragma NO COVER
         return NotImplementedError
@@ -73,7 +69,6 @@ class TestStoreInterface:
         assert store.dataset() is None
 
         xr.open_zarr.assert_not_called()
-        store._mapper.assert_not_called()
 
 
 class TestS3:
@@ -144,36 +139,6 @@ class TestS3:
         dm = mock.Mock(custom_output_path=mock.MagicMock())
         store = store_module.S3(dm, "mop_bucket")
         assert str(store) == "S3"
-
-    @staticmethod
-    def test_mapper(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        mapper = s3fs.S3Map.return_value
-        store = store_module.S3(mock.Mock(custom_output_path="put/it/here.zarr"), "bucket")
-        store.fs = mock.Mock()
-
-        fs = store.fs.return_value
-
-        assert store.mapper(arbitrary="keyword") is mapper
-        assert store.mapper() is mapper  # second call uses cached object
-
-        store.fs.assert_called_once_with()
-        s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
-
-    @staticmethod
-    def test_mapper_refresh(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        mapper = s3fs.S3Map.return_value
-        store = store_module.S3(mock.Mock(custom_output_path="put/it/here.zarr"), "bucket")
-        store.fs = mock.Mock()
-        store._mapper = object()
-
-        fs = store.fs.return_value
-
-        assert store.mapper(refresh=True) is mapper
-
-        store.fs.assert_called_once_with()
-        s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
 
     @staticmethod
     def test_has_existing():
@@ -302,32 +267,6 @@ class TestLocal:
         assert store.fs(refresh=True) is fs
 
         fsspec.filesystem.assert_called_once_with("file")
-
-    @staticmethod
-    def test_mapper():
-        store = store_module.Local(mock.Mock(custom_output_path="el/cami/no"))
-        store.fs = mock.Mock()
-        fs = store.fs.return_value
-        mapper = fs.get_mapper.return_value
-
-        assert store.mapper(arbitrary="keyword") is mapper
-        assert store.mapper() is mapper  # Second call returns cached copy
-
-        store.fs.assert_called_once_with()
-        fs.get_mapper.assert_called_once_with("el/cami/no")
-
-    @staticmethod
-    def test_mapper_refresh():
-        store = store_module.Local(mock.Mock(custom_output_path="el/cami/no"))
-        store.fs = mock.Mock()
-        fs = store.fs.return_value
-        mapper = fs.get_mapper.return_value
-        store._mapper = object()
-
-        assert store.mapper(refresh=True) is mapper
-
-        store.fs.assert_called_once_with()
-        fs.get_mapper.assert_called_once_with("el/cami/no")
 
     @staticmethod
     def test___repr__():
