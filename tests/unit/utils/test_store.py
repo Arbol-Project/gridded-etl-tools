@@ -152,18 +152,41 @@ class TestS3:
         fs.exists.assert_called_once_with("it/is/here.zarr")
 
     @staticmethod
-    def test_has_v2_metadata(tmpdir):
+    def test_has_v2_metadata():
         store = store_module.S3(mock.Mock(custom_output_path="it/is/here.zarr"), "bucket")
         store.fs = mock.Mock()
         fs = store.fs.return_value
 
-        zarr_store_path = pathlib.Path(tmpdir)
-        zmetadata_path = zarr_store_path / ".zmetadata"
-
-        with open(zmetadata_path, "w") as f:
-            json.dump({"metadata": "loads of it"}, f)
+        # Configure mock to return True for both Zarr path and .zmetadata path
+        fs.exists.side_effect = lambda path: True
 
         assert store.has_v2_metadata is True
+
+        assert store.fs.call_count == 2
+        assert fs.exists.call_args_list == [call("it/is/here.zarr"), call("it/is/here.zarr/.zmetadata")]
+
+    @staticmethod
+    def test_has_v2_metadata_no_zarr():
+        store = store_module.S3(mock.Mock(custom_output_path="it/is/here.zarr"), "bucket")
+        store.fs = mock.Mock()
+        fs = store.fs.return_value
+        fs.exists.return_value = False
+
+        assert store.has_v2_metadata is False
+
+        assert store.fs.call_count == 1
+        assert fs.exists.call_args_list == [call("it/is/here.zarr")]
+
+    @staticmethod
+    def test_has_v2_metadata_false():
+        store = store_module.S3(mock.Mock(custom_output_path="it/is/here.zarr"), "bucket")
+        store.fs = mock.Mock()
+        fs = store.fs.return_value
+
+        # Configure mock to return True for Zarr path but False for .zmetadata
+        fs.exists.side_effect = lambda path: path == "it/is/here.zarr"
+
+        assert store.has_v2_metadata is False
 
         assert store.fs.call_count == 2
         assert fs.exists.call_args_list == [call("it/is/here.zarr"), call("it/is/here.zarr/.zmetadata")]
@@ -308,19 +331,21 @@ class TestLocal:
 
         path.exists.assert_called_once_with()
 
-    # @staticmethod
-    # def test_has_v2_metadata(tmpdir):
-    #     store = store_module.Local(mock.Mock(custom_output_path="it/is/here.zarr"))
-    #     path = store.dm.custom_output_path
+    @staticmethod
+    def test_has_v2_metadata(tmpdir):
 
-    #     zarr_store_path = pathlib.Path(tmpdir)
-    #     zmetadata_path = zarr_store_path / "it/is/here.zarr" / ".zmetadata"
+        zarr_store_path = pathlib.Path(tmpdir)
+        zarr_path = zarr_store_path / "it/is/here.zarr"
+        zarr_path.mkdir(parents=True, exist_ok=True)
+        zmetadata_path = zarr_path / ".zmetadata"
 
-    #     with open(zmetadata_path, "w") as f:
-    #         json.dump({"metadata": "loads of it"}, f)
+        store = store_module.Local(mock.Mock(custom_output_path=zarr_path))
+        store.dm.custom_output_path
 
-    #     assert store.has_v2_metadata is True
-    #     path.exists.assert_called_once_with()
+        with open(zmetadata_path, "w") as f:
+            json.dump({"metadata": "loads of it"}, f)
+
+        assert store.has_v2_metadata is True
 
     @staticmethod
     def test_push_metadata(tmpdir):

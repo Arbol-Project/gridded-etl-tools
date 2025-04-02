@@ -14,7 +14,6 @@ import s3fs
 import xarray as xr
 import pathlib
 import fsspec
-import collections
 
 from abc import abstractmethod, ABC
 from typing import Any
@@ -446,7 +445,7 @@ class Local(StoreInterface):
     def has_v2_metadata(self) -> bool:
         if not self.has_existing:
             return False
-        elif (self.path + "/.zmetadata").exists():
+        elif (self.path / ".zmetadata").exists():
             return True
         else:
             return False
