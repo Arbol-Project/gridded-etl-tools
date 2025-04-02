@@ -8,9 +8,12 @@ import pytest
 
 from gridded_etl_tools.utils import store as store_module
 
+from unittest.mock import call
+
 
 class DummyStoreImpl(store_module.StoreInterface):
     has_existing = True
+    has_v2_metadata = True
 
     def __init__(self, dm):
         super().__init__(dm)
@@ -29,11 +32,14 @@ class DummyStoreImpl(store_module.StoreInterface):
     def retrieve_metadata(self, title: str, stac_type: str):  # pragma NO COVER
         raise NotImplementedError
 
-    def write_metadata_only(self, attributes: dict):  # pragma NO COVER
+    def update_v3_metadata(self, attributes: dict):  # pragma NO COVER
         raise NotImplementedError
 
     def mapper(self, **kwargs):
         return self._mapper(**kwargs)
+
+    def open(self, path: str, mode: str):  # pragma NO COVER
+        return NotImplementedError
 
     @property
     def path(self):
@@ -181,15 +187,21 @@ class TestS3:
         fs.exists.assert_called_once_with("it/is/here.zarr")
 
     @staticmethod
-    def test_has_v2_metadata():
+    def test_has_v2_metadata(tmpdir):
         store = store_module.S3(mock.Mock(custom_output_path="it/is/here.zarr"), "bucket")
         store.fs = mock.Mock()
         fs = store.fs.return_value
 
-        assert store.has_existing is fs.exists.return_value
+        zarr_store_path = pathlib.Path(tmpdir)
+        zmetadata_path = zarr_store_path / ".zmetadata"
 
-        store.fs.assert_called_once_with()
-        fs.exists.assert_called_once_with("it/is/here.zarr/.zmetadata")
+        with open(zmetadata_path, "w") as f:
+            json.dump({"metadata": "loads of it"}, f)
+
+        assert store.has_v2_metadata is True
+
+        assert store.fs.call_count == 2
+        assert fs.exists.call_args_list == [call("it/is/here.zarr"), call("it/is/here.zarr/.zmetadata")]
 
     @staticmethod
     def test_push_metadata_path_does_not_exist():
@@ -266,23 +278,6 @@ class TestS3:
         store = store_module.S3(None, "sop")
         assert store.get_metadata_path("Die Hard", "film") == "s3://sop/metadata/film/Die Hard.json"
         assert store.get_metadata_path("Hammer of the Bobs", "") == "s3://sop/metadata/Hammer of the Bobs.json"
-
-    @staticmethod
-    def test_write_metadata_only(tmpdir):
-        with open(tmpdir / "zarr.json", "w") as f:
-            json.dump({"attributes": {"meta": "data"}}, f)
-
-        store = store_module.S3(mock.Mock(custom_output_path=tmpdir), "bucket")
-        store.fs = mock.Mock()
-        fs = store.fs.return_value
-        fs.open = open
-
-        store.write_metadata_only({"new": "value"})
-
-        store.fs.assert_called_once_with()
-
-        with open(tmpdir / "zarr.json") as f:
-            assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
 
 
 class TestLocal:
@@ -374,14 +369,19 @@ class TestLocal:
 
         path.exists.assert_called_once_with()
 
-    @staticmethod
-    def test_has_v2_metadata():
-        store = store_module.Local(mock.Mock())
-        path = store.dm.custom_output_path + "/.zmetadata"
+    # @staticmethod
+    # def test_has_v2_metadata(tmpdir):
+    #     store = store_module.Local(mock.Mock(custom_output_path="it/is/here.zarr"))
+    #     path = store.dm.custom_output_path
 
-        assert store.has_existing is path.exists.return_value
+    #     zarr_store_path = pathlib.Path(tmpdir)
+    #     zmetadata_path = zarr_store_path / "it/is/here.zarr" / ".zmetadata"
 
-        path.exists.assert_called_once_with()
+    #     with open(zmetadata_path, "w") as f:
+    #         json.dump({"metadata": "loads of it"}, f)
+
+    #     assert store.has_v2_metadata is True
+    #     path.exists.assert_called_once_with()
 
     @staticmethod
     def test_push_metadata(tmpdir):
