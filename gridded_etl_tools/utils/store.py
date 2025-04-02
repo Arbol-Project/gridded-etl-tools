@@ -41,20 +41,6 @@ class StoreInterface(ABC):
         """
         self.dm = dm
 
-    @abstractmethod
-    def mapper(self, **kwargs) -> collections.abc.MutableMapping:
-        """
-        Parameters
-        ----------
-        **kwargs : dict
-            Implementation specific keywords. TODO: standardize interface across implementations
-
-        Returns
-        -------
-        collections.abc.MutableMapping
-            A key/value mapping of files to contents
-        """
-
     @property
     @abstractmethod
     def has_existing(self) -> bool:
@@ -268,31 +254,6 @@ class S3(StoreInterface):
     def __repr__(self) -> str:
         return "S3"
 
-    def mapper(self, refresh: bool = False, **kwargs) -> fsspec.mapping.FSMap:
-        """
-        Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once,
-        when this function is first called.
-
-        To force a new mapper, set `refresh` to `True`. To use an output path other than the default path returned by
-        self.path, set a `custom_output_path` when the DatasetManager is instantiated and it will be passed through to
-        here. This path must be a valid S3 destination for which you have write permissions.
-
-        Parameters
-        ----------
-        refresh : bool
-            Set to `True` to force a new mapper to be created even if this object has one already
-        **kwargs : dict
-            Arbitrary keyword args supported
-
-        Returns
-        -------
-        s3fs.S3Map
-            A `MutableMapping` which is the S3 key/value store
-        """
-        if refresh or not hasattr(self, "_mapper"):
-            self._mapper = s3fs.S3Map(root=self.path, s3=self.fs())
-        return self._mapper
-
     @property
     def has_existing(self) -> bool:
         """
@@ -454,28 +415,6 @@ class Local(StoreInterface):
         if refresh or not hasattr(self, "_fs"):
             self._fs = fsspec.filesystem("file", **kwargs)
         return self._fs
-
-    def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
-        """
-        Get a `MutableMapping` representing a local filesystem key/value store.
-        By default, the mapper will be created only once, when this function is first
-        called. To force a new mapper, set `refresh` to `True`.
-
-        Parameters
-        ----------
-        refresh : bool
-            Set to `True` to force a new mapper to be created even if this object has one already.
-        **kwargs : dict
-            Arbitrary keyword args supported
-
-        Returns
-        -------
-        fsspec.mapping.FSMap
-            A `MutableMapping` which is a key/value representation of the local filesystem
-        """
-        if refresh or not hasattr(self, "_mapper"):
-            self._mapper = self.fs().get_mapper(self.path)
-        return self._mapper
 
     def __repr__(self) -> str:
         return "Local"
