@@ -35,7 +35,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     .05 data
     """
 
+    SPAN_HALF_HOURLY = "half_hourly"
     SPAN_HOURLY = "hourly"
+    SPAN_THREE_HOURLY = "3hourly"
     SPAN_SIX_HOURLY = "6hourly"
     SPAN_DAILY = "daily"
     SPAN_WEEKLY = "weekly"
@@ -67,6 +69,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dask_cpu_mem_target_ratio: float = 4 / 32,
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
+        skip_pre_parse_nan_check: bool = False,
         skip_post_parse_qc: bool = False,
         skip_post_parse_api_check: bool = False,
         encryption_key: str = None,
@@ -154,6 +157,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.dry_run = dry_run
         self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
+        self.skip_pre_parse_nan_check = skip_pre_parse_nan_check
         self.skip_post_parse_qc = skip_post_parse_qc
         self.skip_post_parse_api_check = skip_post_parse_api_check
 
@@ -392,7 +396,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str) -> type:
+    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -409,6 +413,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         for source in cls.get_subclasses():
             if source.dataset_name == name:
+                if time_resolution and source.time_resolution != time_resolution:
+                    continue
                 return source
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")

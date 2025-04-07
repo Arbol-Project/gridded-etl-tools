@@ -220,7 +220,7 @@ class Attributes(ABC):
     Tags for dataset.
     """
 
-    dataset_category: typing.Literal = "observation"
+    dataset_category: typing.Literal["observation", "forecast", "ensemble", "hindcast"] = "observation"
     """
     The type of climate data provided in a given dataset. Used to control various processes.
     Valid options include "observation", "forecast", "ensemble", and "hindcast".
@@ -292,6 +292,17 @@ class Attributes(ABC):
     it has a 5 day lag.
 
     Only applicable to datasets that publish preliminary data, for example CHIRPS Preliminary
+    """
+
+    expected_nan_frequency: float = 0.0
+    """
+    Datasets contain NaN values in varying proportions depending on how the source provider encodes data.
+
+    Updates with unusual proportions of NaN values possibly represent possibly corrupted data
+    from the source provider and should be investigated manually.
+
+    This property encodes the anticipated proportion of NaNs in a daily dataset, based on empirical study
+    of the dataaset in question
     """
 
     @property

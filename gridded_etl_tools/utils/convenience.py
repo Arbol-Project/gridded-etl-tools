@@ -1,12 +1,9 @@
-import os
 import pathlib
 import datetime
-import re
-import ftplib
 import io
 import json
 import random
-from typing import Any
+from typing import Any, Iterator
 
 from dateutil.parser import parse as parse_date
 import deprecation
@@ -27,12 +24,12 @@ class Convenience(Attributes):
     # BASE DIRECTORIES
 
     def root_directory(self, refresh: bool = False):
-        if refresh or not hasattr(
-            self, "_root_directory"
-        ):  # ensure this is only calculated one time, at the beginning of the script
-            self._root_directory = (
-                pathlib.Path.cwd()
-            )  # Paths are relative to the working directory of the ETL manager, *not* the scripts
+        # ensure this is only calculated one time, at the beginning of the script
+        if refresh or not hasattr(self, "_root_directory"):
+
+            # Paths are relative to the working directory of the ETL manager, *not* the scripts
+            self._root_directory = pathlib.Path.cwd()
+
         return self._root_directory
 
     @property
@@ -105,14 +102,14 @@ class Convenience(Attributes):
         """
         return pathlib.Path(".")
 
-    def input_files(self) -> list[pathlib.Path]:
+    def input_files(self) -> Iterator[pathlib.Path]:
         """
-        Iterator for iterating through the list of local input files
+        Iterate over the listing of local input files
 
         Returns
         -------
-        list
-            List of input files from `self.local_input_path()`
+        Generator[pathlib.Path]
+            Files from `self.local_input_path()`
 
         """
         root = pathlib.Path(self.local_input_path())
@@ -247,7 +244,7 @@ class Convenience(Attributes):
         """
         return parse_date(isodate)
 
-    def numpydate_to_py(self, numpy_date: np.datetime64) -> datetime.datetime:
+    def numpydate_to_py(self, numpy_date: np.datetime64, **kwargs) -> datetime.datetime:
         """
         Convert a numpy datetime object to a python standard library datetime object
 
@@ -255,6 +252,9 @@ class Convenience(Attributes):
         ----------
         np.datetime64
             A numpy.datetime64 object to be converted
+        kwargs : dict, optional
+            Additional keyword arguments to pass to pd.Timestamp
+            Most notably "tz" can be used to set the timezone of the returned datetime
 
         Returns
         -------
@@ -262,7 +262,7 @@ class Convenience(Attributes):
             A datetime.datetime object
 
         """
-        return pd.Timestamp(numpy_date).to_pydatetime()
+        return pd.Timestamp(numpy_date, **kwargs).to_pydatetime()
 
     @staticmethod
     def today() -> str:
@@ -306,7 +306,7 @@ class Convenience(Attributes):
         return start, end
 
     def get_date_range_from_file(
-        self, path: str, backend_kwargs: dict = None
+        self, path: str, backend_kwargs: dict = None, **kwargs
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Open file and return the start and end date of the data. The dimension name used to store dates should be
@@ -318,14 +318,15 @@ class Convenience(Attributes):
             Path to the input dataset file on disk
         backend_kwargs : dict, optional
             Backend arguments for the xr.open_dataset() method
+        kwargs : dict, optional
+            A dictionary of any additional kwargs that are specific to open_dataset, not the backend
 
         Returns
         -------
         tuple
             A tuple of datetime.datetime objects defining the start and end date of a file's time dimension
-
         """
-        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs)
+        dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs, **kwargs)
         return self.get_date_range_from_dataset(dataset)
 
     def date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
@@ -370,7 +371,7 @@ class Convenience(Attributes):
             datetime.datetime.strptime(date_range[1], parse_string),
         )
 
-    def get_newest_file_date_range(self) -> datetime.datetime:
+    def get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
         """
         Return the date range of the newest local file
 
@@ -380,7 +381,7 @@ class Convenience(Attributes):
             The start and end date of the newest local file
 
         """
-        return self.get_date_range_from_file(list(self.input_files())[-1])
+        return self.get_date_range_from_file(list(self.input_files())[-1], **kwargs)
 
     @property
     def next_date(self) -> datetime.datetime:
@@ -408,7 +409,7 @@ class Convenience(Attributes):
         if not hasattr(self, "time_dim"):
             self.set_key_dims()
         dataset = self.store.dataset()
-        time_delta = dataset[self.time_dim].values[-1] - dataset[self.time_dim].values[-2]
+        time_delta = dataset[self.time_dim].values[1] - dataset[self.time_dim].values[0]
         return self.numpydate_to_py(dataset[self.time_dim].values[-1] + time_delta)
 
     def get_next_date_as_date_range(self) -> tuple[datetime.datetime, datetime.datetime]:
@@ -437,78 +438,6 @@ class Convenience(Attributes):
                 "programmatically. Please locate the date manually."
             )
         return (self.next_date, self.next_date)
-
-    # FTP
-
-    def sync_ftp_files(
-        self,
-        server: str,
-        directory_path: str,
-        file_match_pattern: str,
-        include_size_check: bool = False,
-    ):
-        """
-        Connect to `server` (currently only supports anonymous login), change to `directory_path`, pull new and updated
-        files that match `file_match_pattern` in that directory into `self.local_input_path()`. Store a list of newly
-        downloaded files in a member variable.
-
-        Parameters
-        ----------
-        server : str
-            The URL of the FTP server to check
-        directory_path: str
-            The path to the directory holding the desired FTP files on the server
-        file_match_pattern : str
-            A regex string to match file names (in directory_path) against
-        include_size_check : bool, optional
-            Switch to check (or not) the size of files against a maximum. Defaults to False.
-
-        """
-        # Login to remote FTP server
-        with ftplib.FTP(server) as ftp:
-            self.info("checking {}:{} for files that match {}".format(server, directory_path, file_match_pattern))
-            ftp.login()
-            ftp.cwd(directory_path)
-            # Loop through directory listing
-            for file_name in ftp.nlst():
-                if re.match(file_match_pattern, file_name):
-                    # path on our local filesystem
-                    local_file_path = pathlib.Path(self.local_input_path()) / file_name
-                    modification_timestamp = ftp.sendcmd("MDTM {}".format(file_name))[4:].strip()
-                    modification_time = datetime.datetime.strptime(modification_timestamp, "%Y%m%d%H%M%S")
-                    # Retrieve this file unless we find conditions not to
-                    retrieve = True
-                    # Compare to local file of same name
-                    if local_file_path.exists():
-                        local_file_attributes = os.stat(local_file_path)
-                        local_file_mtime = datetime.datetime.fromtimestamp(local_file_attributes.st_mtime)
-                        local_file_size = local_file_attributes.st_size
-                        # Set to binary transfer mode
-                        ftp.sendcmd("TYPE I")
-                        remote_file_size = ftp.size(file_name)
-                        if modification_time <= local_file_mtime and (
-                            not include_size_check or remote_file_size == local_file_size
-                        ):
-                            self.debug("local file {} does not need updating".format(local_file_path))
-                            retrieve = False
-                        elif modification_time > local_file_mtime:
-                            self.debug(
-                                "file {} local modification time {} less than remote modification time {}".format(
-                                    local_file_path,
-                                    local_file_mtime.strftime("%Y/%m/%d"),
-                                    modification_time.strftime("%Y/%m/%d"),
-                                )
-                            )
-                        else:
-                            self.debug("mismatch between local and remote size for file {}".format(local_file_path))
-                    else:
-                        self.debug("new remote file found {}".format(file_name))
-                    # Write this file locally
-                    if retrieve:
-                        self.new_files.append(self.local_input_path() / file_name)
-                        self.info("downloading remote file {} to {}".format(file_name, local_file_path))
-                        with open(local_file_path, "wb") as fp:
-                            ftp.retrbinary("RETR {}".format(file_name), fp.write)
 
     # ETC
 

@@ -32,9 +32,10 @@ readme = "README.md"
 keywords = ["Climate", "Zarr", "ETL", "IPFS"]
 requires-python = ">=3.10"
 dependencies = [
+    "beautifulsoup4",
     "cfgrib",
     "dag-cbor==0.2.2",
-    "dask[array,diagnostics,distributed]",
+    "dask[array,diagnostics,distributed]>=2024.8.0",
     "deprecation",
     "fsspec",
     "ipldstore @ git+https://github.com/dClimate/ipldstore@v2.1.3",
@@ -42,7 +43,8 @@ dependencies = [
     "multiformats",
     "natsort",
     "nest-asyncio",
-    "numpy",
+    "netcdf4<1.7.1",
+    "numpy<2.0.0",
     "p_tqdm",
     "pandas",
     "psutil",
@@ -51,9 +53,10 @@ dependencies = [
     "requests",
     "s3fs",
     "shapely",
+    "statsmodels",
     "tqdm",
-    "xarray[complete]>=2023.9.0",
-    "zarr>=2.16.1",
+    "xarray[complete]==2024.3.0",
+    "zarr<3.0.0",
 ]
 
 [project.urls]
@@ -64,6 +67,7 @@ testing = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "responses"
 ]
 dev = [
     "black",
@@ -93,4 +97,4 @@ namespaces = false
 [tool.flake8]
 # flake8 and black disagree on E203, E701, and W503
 ignore = ["E203", "E701", "W503"]
-max-line-length = 119
+max-line-length = 120

@@ -1,7 +1,6 @@
 import datetime
 import json
 import pathlib
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -27,6 +26,22 @@ def fake_original_dataset():
     longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
     data = xr.DataArray(
         np.random.randn(138, 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def fake_large_dataset():
+    time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
+    latitude = xr.DataArray(np.arange(1, 1001), dims="latitude", coords={"latitude": np.arange(1, 1001)})
+    longitude = xr.DataArray(np.arange(1, 1001), dims="longitude", coords={"longitude": np.arange(1, 1001)})
+    data = xr.DataArray(
+        np.random.randn(138, 1000, 1000),
         dims=("time", "latitude", "longitude"),
         coords=(time, latitude, longitude),
     )
@@ -127,11 +142,6 @@ def manager_class():
     return DummyManager
 
 
-@pytest.fixture
-def session_obj():
-    return DummySession
-
-
 def unimplemented(*args, **kwargs):  # pragma NO COVER
     raise NotImplementedError
 
@@ -160,9 +170,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         if set_key_dims:
             self.set_key_dims()
 
-    @classmethod
-    def data_var(self):
-        return "data"
+    data_var = "data"
 
     @property
     def data_var_dtype(self):
@@ -180,14 +188,6 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         return self._static_metadata
 
 
-class DummySession:
-
-    def get(self, *args, **kwargs):
-        return_object = Mock()
-        return_object.content = b"get it while the gettins good"
-        return return_object
-
-
 class DummyManager(DummyManagerBase):
     collection_name = "Vintage Guitars"
     concat_dimensions = ["z", "zz"]
@@ -196,9 +196,7 @@ class DummyManager(DummyManagerBase):
     protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
     final_lag_in_days = 3
-
-    def get_session(self):
-        self.session = DummySession()
+    expected_nan_frequency = 0.2
 
 
 # Set up overcomplicated mro for testing get_subclass(es)
@@ -216,6 +214,12 @@ class George(John, Paul):
 
 class Ringo(George):
     dataset_name = "Ringo"
+    time_resolution = dataset_manager.DatasetManager.SPAN_HOURLY
+
+
+class RingoDaily(DummyManager):
+    dataset_name = "Ringo"
+    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
 
 
 original_times = np.array(

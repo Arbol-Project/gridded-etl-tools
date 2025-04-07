@@ -7,7 +7,7 @@ import pytest
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
 
-from .conftest import John, Paul, George, Ringo
+from .conftest import John, Paul, George, Ringo, RingoDaily
 
 
 class TestDatasetManager:
@@ -241,7 +241,7 @@ class TestDatasetManager:
 
     @staticmethod
     def test_get_subclasses(manager_class):
-        assert set(manager_class.get_subclasses()) == {John, Paul, George, Ringo}
+        assert set(manager_class.get_subclasses()) == {John, Paul, George, Ringo, RingoDaily}
         assert set(John.get_subclasses()) == {George, Ringo}
         assert set(Paul.get_subclasses()) == {George, Ringo}
         assert set(George.get_subclasses()) == {Ringo}
@@ -260,6 +260,12 @@ class TestDatasetManager:
         assert Paul.get_subclass("George") is George
         assert Paul.get_subclass("Ringo") is Ringo
 
+        assert George.get_subclass("Ringo") is Ringo
+
+    @staticmethod
+    def test_get_subclass_time_resolution(manager_class):
+        assert manager_class.get_subclass("Ringo") is Ringo
+        assert manager_class.get_subclass("Ringo", time_resolution="daily") is RingoDaily
         assert George.get_subclass("Ringo") is Ringo
 
     @staticmethod

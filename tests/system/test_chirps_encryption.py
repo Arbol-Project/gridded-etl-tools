@@ -131,7 +131,7 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(
             latitude=lat,
             longitude=lon,
@@ -148,7 +148,7 @@ def test_initial(mocker, manager_class, heads_path, test_chunks, initial_input_p
     assert output_value == original_value
 
 
-def test_append_only(manager_class, heads_path, test_chunks, appended_input_path, root):
+def test_append_only(mocker, manager_class, heads_path, test_chunks, appended_input_path, root):
     """
     Test an update of chirps data by adding new data to the end of existing data.
     """
@@ -159,6 +159,8 @@ def test_append_only(manager_class, heads_path, test_chunks, appended_input_path
     # Overriding the default time chunk to enable testing chunking with a smaller set of times
     manager.requested_dask_chunks = test_chunks
     manager.requested_zarr_chunks = test_chunks
+    # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
+    manager.expected_nan_frequency = 0
     # run ETL
     manager.transform_data_on_disk()
     publish_dataset = manager.transform_dataset_in_memory()
@@ -170,7 +172,7 @@ def test_append_only(manager_class, heads_path, test_chunks, appended_input_path
     lat, lon = 14.625, -91.375
     # Validate one row of data
     output_value = (
-        generated_dataset[manager.data_var()]
+        generated_dataset[manager.data_var]
         .sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25))
         .values
     )

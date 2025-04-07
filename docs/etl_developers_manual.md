@@ -181,7 +181,7 @@ Even with an hourly dataset we encode IPFS chunks of one day each, since ERA5 da
 
 **PRISM**
 
-PRISM is a daily dataset which only begins in 1991 and therefore has a much smaller time dimension of approximately 15,000 datetimes. 
+PRISM is a daily dataset which only begins in 1981 and therefore has a much smaller time dimension of approximately 15,000 datetimes. 
 
 The smaller time dimension means we can afford to make time chunks smaller relative to latitude/longitude without badly compromising the performance of queries over the full time range. As a result, queries for large areas with PRISM will perform better (quicker) relative to ERA5. 
 
@@ -216,15 +216,19 @@ DatasetManager combines these utils in a structure common to all N-dimensional d
 
 ETL managers adapt the above approach to the specificities of each dataset. They download datasets, transform them as needed to be readable as Zarrs, and then parse them out either using or adapting the tools from DatasetManager. 
 
-Each gridded ETL can be divided into 5 stages which live under 3 separate functions.
+Each gridded ETL can be divided into 4 stages which live under separate functions.
 
 * etl.extract()
   * Instantiation and parameter definition
   * Update local input
-* etl.transform()
-  * Processing data
+* etl.transform_data_on_disk()
+  * On-disk changes to file formats, encoding, aggregation (by time period)
+  * Optional, may not be needed for every dataset
+* etl.transform_dataset_in_memory()
+  * In-memory transformations of the properties of an Xarray Dataset object
 * etl.parse(ds)
-  * Parsing (and metadata preparation)
+  * Publishing
+  * Metadata preparation
   * Subclass definition
 
 This section also reviews some tricky 'gotchas' that result from inputting older N-Dimensional formats into Xarray and outputting them as Zarrs.

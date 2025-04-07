@@ -2,6 +2,10 @@ import pytest
 import time
 import ftplib
 import pathlib
+import responses
+import requests
+import re
+import os
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
@@ -16,7 +20,6 @@ class ConcreteExtractor(Extractor):
 
 
 class TestExtractor:
-
     @staticmethod
     def test_init():
         dm = Mock()
@@ -35,8 +38,29 @@ class TestExtractor:
         dm = Mock()
         extractor = ConcreteExtractor(dm)
         extractor.request = Mock(return_value=True)
+
+        # Mappings
         result = extractor.pool(batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}])
         assert extractor.request.call_count == 3
+        extractor.request.assert_any_call(one=1, two=2)
+        extractor.request.assert_any_call(one=3, two=4)
+        extractor.request.assert_any_call(one=5, two=6)
+
+        # Sequences
+        result = extractor.pool(batch=[[1, 2], [3, 4], [5, 6]])
+        assert extractor.request.call_count == 6
+        extractor.request.assert_any_call(1, 2)
+        extractor.request.assert_any_call(3, 4)
+        extractor.request.assert_any_call(5, 6)
+
+        # Scalars
+        result = extractor.pool(batch=[1, 2, 3, 4])
+        assert extractor.request.call_count == 10
+        extractor.request.assert_any_call(1)
+        extractor.request.assert_any_call(2)
+        extractor.request.assert_any_call(3)
+        extractor.request.assert_any_call(4)
+
         assert result is True
 
     def test_pool_request_failure(self):
@@ -48,48 +72,174 @@ class TestExtractor:
         assert result is False
 
 
+# Mock data for testing HTTP extraction
+
+government_website = "https://bizarre-foods.reference/farmland/yield.html"
+
+government_website_broken = "https://bizarre-foods.reference/broken/link"
+
+crops = b"""<a class="example" href="purple-coffee" id="Link1">Purple coffee<</a>,
+    <a class="example" href="sour-avocadoes" id="Link2"><Sour avocadoes</a>,
+    <a class="example" href="happy/juice.data" id="Link2"><Happy Juice</a>,
+    <a class="example" href="/deforestation_techniques.html" id="Link2">Learn from the pros</a>,
+    <a class="example" href="https://boring-normal-foods.tasty" id="Link1"><Other stuff</a>,
+    <a class="example" href="mailto:vladimir-putin@farmers-only.com" id="Link1"><Lonely hearts</a>,"""
+
+happy_juice = b"\xe2\x98\xba\xf0\x9f\xa7\x83"
+purple_coffee = b"\xf0\x9f\x9f\xaa\xe2\x98\x95"
+sour_avocadoes = b"\xf0\x9f\x8d\x8b\xf0\x9f\xa5\x91"
+
+
+# Requests for mock URLs defined in this fixture will be successfully requested when this fixture is passed to a
+# function and the `@responses.activate` header is used.
+@pytest.fixture
+def mocked_responses():
+    with responses.RequestsMock() as rsps:
+        # To test successful requests
+        responses.get(government_website, body=crops, status=200)
+
+        # To test unsuccessful requests
+        responses.get(government_website_broken, status=500)
+
+        # To test downloading data
+        responses.get("https://bizarre-foods.reference/farmland/sour-avocadoes", body=sour_avocadoes, status=200)
+        responses.get("https://bizarre-foods.reference/farmland/purple-coffee", body=purple_coffee, status=200)
+        responses.get("https://bizarre-foods.reference/farmland/happy/juice.data", body=happy_juice, status=200)
+
+        yield rsps
+
+
 class TestHTTPExtractor:
-
     @staticmethod
-    def test_http_request_no_existing_session(manager_class, tmp_path):
-        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
-        dm = manager_class()
-        dm.get_session = Mock(side_effect=dm.get_session)
+    def test_member_assignments(manager_class):
+        with HTTPExtractor(manager_class(), 4, 5, 0.5) as extractor:
+            assert extractor._concurrency_limit == 4
+            assert extractor.retries == 5
+            assert extractor.backoff_factor == 0.5
 
-        extractor = HTTPExtractor(dm)
-        dm.local_input_path = Mock(return_value=tmp_path)
-        dm.session.get = Mock(side_effect=dm.session.get)
-
-        rfp = "https://remote/sand/depo/castle1.json"
-        lfp = "castle1.json"
-        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
-
-        extractor.request(**kwargs)
-        dm.get_session.assert_called_once()
-        dm.session.get.assert_called_once_with(rfp)
-
+    # Test a request that gets the mocked responses. This will write a file to a temporary location using pytest's
+    # `tmp_path` fixture.
     @staticmethod
-    def test_http_request_session_already_exists(manager_class, tmp_path, session_obj):
-        tmp_path.mkdir(mode=0o777, parents=True, exist_ok=True)
-        dm = manager_class()
-        dm.session = session_obj
-        dm.get_session = Mock(side_effect=dm.get_session)
+    @responses.activate
+    def test_requests(manager_class, mocked_responses, tmp_path):
+        tmp_path.mkdir(exist_ok=True)
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            # Test writing to a given file path
+            extractor.request(government_website, tmp_path / "automated_insurance.data")
+            assert (tmp_path / "automated_insurance.data").read_bytes() == crops
 
-        extractor = HTTPExtractor(dm)
-        dm.local_input_path = Mock(return_value=tmp_path)
-        dm.session.get = Mock(side_effect=dm.session.get)
+            # Change into a temp directory to test the default write location. The try/finally ensures that the original
+            # directory is always returned to. In Python 3.11, there is a better alternative in contextlib.chdir.
+            original_working_dir = os.getcwd()
+            try:
+                os.chdir(tmp_path)
+                extractor.request(government_website)
+            finally:
+                os.chdir(original_working_dir)
+            assert (tmp_path / "yield.html").read_bytes() == crops
 
-        rfp = "https://remote/sand/depo/castle1.json"
-        lfp = "castle1.json"
-        kwargs = {"remote_file_path": rfp, "local_file_path": lfp}
+            # Test writing to an existing directory
+            research_folder = tmp_path / "research"
+            research_folder.mkdir(exist_ok=True)
+            extractor.request(government_website, research_folder)
+            assert (research_folder / "yield.html").read_bytes() == crops
 
-        extractor.request(**kwargs)
-        dm.get_session.assert_not_called()
-        dm.session.get.assert_called_once_with(rfp)
+    # Test that a 500 error fails with a RetryError exception
+    @staticmethod
+    @responses.activate
+    def test_server_error_request(manager_class, mocked_responses):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            with pytest.raises(requests.exceptions.RetryError):
+                extractor.request(government_website_broken)
+
+    # Test that making requests outside of a context manager fails
+    @staticmethod
+    def test_missing_context_manager(manager_class):
+        extractor = HTTPExtractor(manager_class(), 4, 3, 0.1)
+        with pytest.raises(RuntimeError):
+            extractor.request(government_website)
+        with pytest.raises(RuntimeError):
+            extractor.get_links(government_website)
+
+    # Test link scraping and filtering
+    @staticmethod
+    @responses.activate
+    def test_get_links(manager_class, mocked_responses, tmp_path):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            # Get all links
+            links = extractor.get_links(government_website)
+            assert links == set(
+                [
+                    "https://bizarre-foods.reference/farmland/sour-avocadoes",
+                    "https://bizarre-foods.reference/farmland/purple-coffee",
+                    "https://bizarre-foods.reference/farmland/happy/juice.data",
+                    "https://bizarre-foods.reference/deforestation_techniques.html",
+                    "https://boring-normal-foods.tasty",
+                    "mailto:vladimir-putin@farmers-only.com",
+                ]
+            )
+
+            # Get links that match a regular expression
+            links = extractor.get_links(government_website, re.compile("[a-z]+-[a-z]+-[a-z]+"))
+            assert links == set(["https://boring-normal-foods.tasty"])
+
+            # Remove links matching specific prefixes using a separately defined function
+            def filter_out_prefixes(href):
+                return not href.startswith("https://") and not href.startswith("mailto:") and not href.startswith("/")
+
+            links = extractor.get_links(government_website, filter_out_prefixes)
+            assert links == set(
+                [
+                    "https://bizarre-foods.reference/farmland/sour-avocadoes",
+                    "https://bizarre-foods.reference/farmland/purple-coffee",
+                    "https://bizarre-foods.reference/farmland/happy/juice.data",
+                ]
+            )
+
+            # Download the content of the last request, using a temp directory as the working directory. The
+            # try/finally ensures that the original directory is always returned to. In Python 3.11, there is a better
+            # alternative in contextlib.chdir.
+            tmp_path.mkdir(exist_ok=True)
+            original_working_dir = os.getcwd()
+            try:
+                os.chdir(tmp_path)
+                extractor.pool(links)
+            finally:
+                os.chdir(original_working_dir)
+
+            # Check the files
+            (tmp_path / "sour-avocadoes").read_bytes().decode() == "🍋🥑"
+            (tmp_path / "purple-coffee").read_bytes().decode() == "🟪☕"
+            (tmp_path / "juice.data").read_bytes().decode() == "☺🧃"
+
+    # Use OrderedRegistry to create a series of only failed responses, and a series of failed responses followed
+    # by a successful response
+    @staticmethod
+    @responses.activate(registry=responses.registries.OrderedRegistry)
+    def test_extract_http_retries(manager_class, tmp_path):
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 6):
+                results.append(responses.get("https://good.data", status=500))
+            with pytest.raises(requests.exceptions.RetryError):
+                extractor.get_links("https://good.data")
+            for index, result in enumerate(results):
+                if index < 4:
+                    assert result.call_count == 1
+                else:
+                    assert result.call_count == 0
+        responses.reset()
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            results = list()
+            for index in range(0, 3):
+                results.append(responses.get("https://good.data", status=500))
+            results.append(responses.get("https://good.data", status=200))
+            assert extractor.request("https://good.data", tmp_path / pathlib.Path("stonks.jpeg"))
+            for result in results:
+                assert result.call_count == 1
 
 
 class TestS3Extractor:
-
     @staticmethod
     def test_s3_request(manager_class):
         extractor = S3Extractor(manager_class())

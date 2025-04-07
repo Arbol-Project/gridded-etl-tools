@@ -1,6 +1,5 @@
 import datetime
 import json
-import os
 import pathlib
 import ftplib
 from unittest.mock import Mock
@@ -40,20 +39,11 @@ class DummyFtpClient:
     def nlst(self, *args):
         return ["one.txt", "two.dat", "three.dat"]
 
-    def sendcmd(self, command):
-        self.commands.append(command)
-        if command.startswith("MDTM "):
-            filename = command[5:]
-            return "XXX " + self.files[filename]["timestamp"]
-
     def retrbinary(self, command, write):
         self.commands.append(command)
         assert command.startswith("RETR ")
         filename = command[5:]
         write(self.files[filename]["contents"])
-
-    def size(self, filename):
-        return len(self.files[filename]["contents"])
 
     def pwd(self):
         if self.contexts == 0:
@@ -252,7 +242,9 @@ class TestConvenience:
     @staticmethod
     def test_numpydate_to_py(manager_class):
         dm = manager_class()
-        assert dm.numpydate_to_py(np.datetime64("2000-01-01")) == datetime.datetime(2000, 1, 1, 0, 0)
+        assert dm.numpydate_to_py(np.datetime64("2000-01-01"), tz="UTC") == datetime.datetime(
+            2000, 1, 1, 0, 0, tzinfo=datetime.timezone.utc
+        )
 
     @staticmethod
     def test_today(mocker, manager_class):
@@ -294,12 +286,13 @@ class TestConvenience:
         xr.open_dataset.return_value = fake_original_dataset
 
         dm = manager_class()
-        assert dm.get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}) == (
+        kwargs = {"engine": "Rolls Royce"}
+        assert dm.get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}, **kwargs) == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
 
-        xr.open_dataset.assert_called_once_with("some/arbitrary/path", backend_kwargs={"foo": "bar"})
+        xr.open_dataset.assert_called_once_with("some/arbitrary/path", backend_kwargs={"foo": "bar"}, **kwargs)
 
     @staticmethod
     def test_date_range_to_string(manager_class):
@@ -326,12 +319,12 @@ class TestConvenience:
 
         dm = manager_class()
         dm.input_files = Mock(return_value=("notthisone", "thisone"))
-        assert dm.get_newest_file_date_range() == (
+        assert dm.get_newest_file_date_range(engine="Rolls Royce") == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
 
-        xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None)
+        xr.open_dataset.assert_called_once_with("thisone", backend_kwargs=None, engine="Rolls Royce")
 
     @staticmethod
     def test_next_date(manager_class, fake_original_dataset):
@@ -388,116 +381,6 @@ class TestConvenience:
 
         with pytest.raises(ValueError):
             dm.get_next_date_as_date_range()
-
-    @staticmethod
-    def test_sync_ftp_files(mocker, manager_class, tmp_path):
-        ftp_client = DummyFtpClient()
-        mocker.patch("gridded_etl_tools.utils.convenience.ftplib", Mock(FTP=ftp_client))
-
-        dm = manager_class()
-        dm.custom_input_path = tmp_path
-        dm.sync_ftp_files("ftp.example.com", "/all/the/data", r".+\.dat$")
-
-        assert ftp_client.host == "ftp.example.com"
-        assert ftp_client.contexts == 0
-        ftp_client.login.assert_called_once_with()
-        ftp_client.cwd.assert_called_once_with("/all/the/data")
-        assert ftp_client.commands == [
-            "MDTM two.dat",
-            "RETR two.dat",
-            "MDTM three.dat",
-            "RETR three.dat",
-        ]
-
-        assert open(tmp_path / "two.dat").read() == "Hi Mom!"
-        assert open(tmp_path / "three.dat").read() == "Hello Dad!"
-
-    @staticmethod
-    def test_sync_ftp_files_already_downloaded(mocker, manager_class, tmp_path):
-        with open(tmp_path / "two.dat", "w") as f:
-            f.write("Hi Mom!")
-        with open(tmp_path / "three.dat", "w") as f:
-            f.write("Hello Dad!")
-        ftp_client = DummyFtpClient()
-        mocker.patch("gridded_etl_tools.utils.convenience.ftplib", Mock(FTP=ftp_client))
-
-        dm = manager_class()
-        dm.custom_input_path = tmp_path
-        dm.sync_ftp_files("ftp.example.com", "/all/the/data", r".+\.dat$")
-
-        assert ftp_client.host == "ftp.example.com"
-        assert ftp_client.contexts == 0
-        ftp_client.login.assert_called_once_with()
-        ftp_client.cwd.assert_called_once_with("/all/the/data")
-        assert ftp_client.commands == [
-            "MDTM two.dat",
-            "TYPE I",
-            "MDTM three.dat",
-            "TYPE I",
-        ]
-
-        assert open(tmp_path / "two.dat").read() == "Hi Mom!"
-        assert open(tmp_path / "three.dat").read() == "Hello Dad!"
-
-    @staticmethod
-    def test_sync_ftp_files_already_downloaded_but_wrong_size(mocker, manager_class, tmp_path):
-        with open(tmp_path / "two.dat", "w") as f:
-            f.write("Hi Mom")
-        with open(tmp_path / "three.dat", "w") as f:
-            f.write("Hello Dad")
-        ftp_client = DummyFtpClient()
-        mocker.patch("gridded_etl_tools.utils.convenience.ftplib", Mock(FTP=ftp_client))
-
-        dm = manager_class()
-        dm.custom_input_path = tmp_path
-        dm.sync_ftp_files("ftp.example.com", "/all/the/data", r".+\.dat$", include_size_check=True)
-
-        assert ftp_client.host == "ftp.example.com"
-        assert ftp_client.contexts == 0
-        ftp_client.login.assert_called_once_with()
-        ftp_client.cwd.assert_called_once_with("/all/the/data")
-        assert ftp_client.commands == [
-            "MDTM two.dat",
-            "TYPE I",
-            "RETR two.dat",
-            "MDTM three.dat",
-            "TYPE I",
-            "RETR three.dat",
-        ]
-
-        assert open(tmp_path / "two.dat").read() == "Hi Mom!"
-        assert open(tmp_path / "three.dat").read() == "Hello Dad!"
-
-    @staticmethod
-    def test_sync_ftp_files_already_downloaded_but_old(mocker, manager_class, tmp_path):
-        with open(tmp_path / "two.dat", "w") as f:
-            f.write("Hi Mom.")
-        os.utime(tmp_path / "two.dat", (0, 0))
-        with open(tmp_path / "three.dat", "w") as f:
-            f.write("Hello Dad.")
-        os.utime(tmp_path / "three.dat", (0, 0))
-        ftp_client = DummyFtpClient()
-        mocker.patch("gridded_etl_tools.utils.convenience.ftplib", Mock(FTP=ftp_client))
-
-        dm = manager_class()
-        dm.custom_input_path = tmp_path
-        dm.sync_ftp_files("ftp.example.com", "/all/the/data", r".+\.dat$", include_size_check=True)
-
-        assert ftp_client.host == "ftp.example.com"
-        assert ftp_client.contexts == 0
-        ftp_client.login.assert_called_once_with()
-        ftp_client.cwd.assert_called_once_with("/all/the/data")
-        assert ftp_client.commands == [
-            "MDTM two.dat",
-            "TYPE I",
-            "RETR two.dat",
-            "MDTM three.dat",
-            "TYPE I",
-            "RETR three.dat",
-        ]
-
-        assert open(tmp_path / "two.dat").read() == "Hi Mom!"
-        assert open(tmp_path / "three.dat").read() == "Hello Dad!"
 
     @staticmethod
     def test_bbox_coords(manager_class, fake_original_dataset):

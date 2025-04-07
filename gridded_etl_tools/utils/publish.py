@@ -9,6 +9,7 @@ import random
 
 from contextlib import nullcontext
 from typing import Any, Generator
+from statsmodels.stats.proportion import proportion_confint
 
 import pandas as pd
 import numpy as np
@@ -18,6 +19,7 @@ from dask.distributed import Client, LocalCluster
 
 from .store import IPLD
 from .transform import Transform
+from .errors import NanFrequencyMismatchError
 
 TWENTY_MINUTES = 1200
 
@@ -276,6 +278,7 @@ class Publish(Transform):
         """
         original_dataset = self.store.dataset()
         self.info(f"Original dataset\n{original_dataset}")
+        self.info(f"Unfiltered new data\n{publish_dataset}")
         # Create a list of any datetimes to insert and/or append
         insert_times, append_times = self.prepare_update_times(original_dataset, publish_dataset)
         # First check that the data is not obviously wrong
@@ -495,7 +498,7 @@ class Publish(Transform):
 
     def pre_parse_quality_check(self, dataset: xr.Dataset):
         """
-        Function containing quality checks applicable to all datasets we parse, initial or update
+        Guard against corrupted source data by applying quality checks to all datasets we parse, initial or update
         Intended to be run on a dataset prior to parsing.
 
         If successful passes without comment. If unsuccessful raises a descriptive error message.
@@ -509,28 +512,30 @@ class Publish(Transform):
         start_checking = time.perf_counter()
         # TIME CHECK
         # Aggressively assert that the time dimension of the data is in the anticipated order.
-        # Only valid if the dataset's time dimension is longer than 1 element
-        # This is to protect against data corruption, especially during insert and append operations,
-        # but it should probably be replaced with a more sophisticated set of flags
-        # that let the user decide how to handle time data at their own risk.
+        # Only valid if the dataset's time dimension has 2 or more values with which to calculate the delta
         times = dataset[self.time_dim].values
         if len(times) >= 2:
-            # Check is only valid if we have 2 or more values with which to calculate the delta
             expected_delta = times[1] - times[0]
             if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise IndexError("Dataset does not contain contiguous time data")
 
         # VALUES CHECK
-        # Check 100 values for NAs and extreme values
+        # Check 100 values for unanticipated NaNs and extreme values
         self.check_random_values(dataset.copy())
 
         # ENCODING CHECK
         # Check that data is stored in a space efficient format
-        if not dataset[self.data_var()].encoding["dtype"] == self.data_var_dtype:
+        if not dataset[self.data_var].encoding["dtype"] == self.data_var_dtype:
             raise TypeError(
-                f"Dtype for data variable {self.data_var()} is "
-                f"{dataset[self.data_var()].dtype} when it should be {self.data_var_dtype}"
+                f"Dtype for data variable {self.data_var} is "
+                f"{dataset[self.data_var].dtype} when it should be {self.data_var_dtype}"
             )
+
+        # NAN CHECK
+        # Check that the % of NaN values approximately matches the historical average. Not applicable on first run.
+        if self.store.has_existing and not self.skip_pre_parse_nan_check and not self.rebuild_requested:
+            self.check_nan_frequency()
+
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
     def check_random_values(self, dataset: xr.Dataset, checks: int = 100):
@@ -554,13 +559,13 @@ class Publish(Transform):
             }
             dataset = dataset.assign_coords(**orig_coords)
         for random_coords in itertools.islice(shuffled_coords(dataset), checks):
-            random_val = self.pre_chunk_dataset[self.data_var()].sel(**random_coords).values
+            random_val = self.pre_chunk_dataset[self.data_var].sel(**random_coords).values
             # Check for unanticipated NaNs
             if np.isnan(random_val) and not self.has_nans:
                 raise ValueError(f"NaN value found for random point at coordinates {random_coords}")
             # Check extreme values if they are defined
             if not np.isnan(random_val):
-                unit = dataset[self.data_var()].encoding["units"]
+                unit = dataset[self.data_var].encoding["units"]
                 if unit in self.EXTREME_VALUES_BY_UNIT.keys():
                     limit_vals = self.EXTREME_VALUES_BY_UNIT[unit]
                     if not limit_vals[0] <= random_val <= limit_vals[1]:
@@ -568,6 +573,33 @@ class Publish(Transform):
                             f"Value {random_val} falls outside acceptable range "
                             f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
+
+    def check_nan_frequency(self):
+        """
+        Use a binomial test to check whether the percentage of NaN values matches
+        the anticipated percentage within the dataset, based on the observed ratio of NaNs in historical data
+
+        Tests every time period in the update dataset
+
+        Raises
+        ------
+        AttributeError
+            Inform ETL operator that the expected_nan_frequency field
+            used by the binomial test are missing from the production dataset.
+        """
+        if "expected_nan_frequency" not in self.pre_chunk_dataset.attrs:
+            raise AttributeError(
+                "Update dataset is missing the `expected_nan_frequency` field in its attributes. "
+                "Please calculate and populate this field manually "
+                "to enable NaN quality checks during updates."
+            )
+        for update_dt_index in range(len(self.pre_chunk_dataset[self.time_dim])):
+            time_value = self.pre_chunk_dataset[self.time_dim].values[update_dt_index]
+            selected_array = self.pre_chunk_dataset.sel(**{self.time_dim: time_value})[self.data_var].values
+            test_nan_frequency(
+                data_array=selected_array,
+                expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
+            )
 
     def update_quality_check(
         self,
@@ -828,8 +860,8 @@ class Publish(Transform):
         # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
 
         # Open desired data values.
-        orig_val = orig_ds[self.data_var()].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var()].sel(**selection_coords, method="nearest", tolerance=0.0001).values
+        orig_val = orig_ds[self.data_var].sel(**selection_coords).values
+        prod_val = prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=0.0001).values
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,
@@ -936,10 +968,64 @@ class Publish(Transform):
                 ds = ds.expand_dims(time_dim)
 
             # Also expand it for the data var!
-            if time_dim in ds.dims and time_dim not in ds[self.data_var()].dims:
-                ds[self.data_var()] = ds[self.data_var()].expand_dims(time_dim)
+            if time_dim in ds.dims and time_dim not in ds[self.data_var].dims:
+                ds[self.data_var] = ds[self.data_var].expand_dims(time_dim)
 
         return ds
+
+
+def test_nan_frequency(
+    data_array: np.ndarray,
+    expected_nan_frequency: float,
+    sample_size: int = 5000,
+    alpha: float = 0.00001,
+):
+    """
+    Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
+    using a binomial test
+
+    This will raise an error if the binomial test fails, otherwise passes silently
+
+    Parameters
+    ----------
+    data_array : np.ndarray
+        The numpy array to test.
+    expected_frequency : float
+        The expected frequency of NaNs
+    sample_size : int
+        The number of sample values to randomly extract from the selected time series
+        of the update dataset
+    alpha : float
+        The significance level for the hypothesis test (default is 0.001).
+
+    Returns
+    -------
+    bool
+        True if the observed frequency matches the expected frequency, False otherwise.
+    float
+        The p-value from the binomial test.
+
+    Raises
+    ------
+    NanFrequencyMismatchError
+        An error indicating the observed frequency of NaNs does not correpsond
+        with the observed frequency in historical dataset, even allowing for a margin
+        of error defined by the standard deviation of sample-based estimates of that
+        historical frequency
+    """
+    # Select N random values
+    flat_array = np.ravel(data_array)  # necessary for random selection
+    if np.size(flat_array) < sample_size:
+        sample_size = np.prod(flat_array.shape)
+    random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
+    nan_count = np.isnan(random_values).sum()
+
+    # Calculate the confidence interval
+    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
+
+    # Check if the expected frequency falls within the confidence interval
+    if not (lower_bound <= expected_nan_frequency <= upper_bound):
+        raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:

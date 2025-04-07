@@ -12,32 +12,60 @@ if TYPE_CHECKING:  # pragma NO COVER
 
 from abc import ABC, abstractmethod
 
-from multiprocess.pool import ThreadPool
+from multiprocessing.pool import ThreadPool
 import pathlib
 import typing
 import ftplib
 import re
 import time
 import logging
+import requests
+from requests.adapters import HTTPAdapter, Retry
+from urllib.parse import urlparse, urljoin
+import os
+import collections
 
+from bs4 import BeautifulSoup
 
 log = logging.getLogger("extraction_logs")
 
 
 class Extractor(ABC):
-
     def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
-        self.dm = dm
-        self._concurrency_limit = concurrency_limit
-
-    def pool(self, batch: typing.Sequence[typing.Dict]) -> bool:
         """
-        Executes a batch of jobs concurrently using ThreadPool.
+        Create an instance of `Extrator`. `Extractor` is an abstract base class, so this should not be called directly.
+        Use a specific type of extractor below instead.
 
         Parameters
         ----------
-        batch : typing.Sequence[typing.Sequence])
-            A sequence of job arguments.
+        dm
+            Source data for this dataset manager will be extracted
+        concurrency_limit
+            Number of simultaneous request threads to run
+        """
+        self.dm = dm
+        self._concurrency_limit = concurrency_limit
+
+    def pool(self, batch: typing.Sequence) -> bool:
+        """
+        Run the `Extractor.request` function multiple times in parallel using `ThreadPool`. Wait for all requests to
+        complete, then return a boolean indicating whether all requests were successful or not.
+
+        The batch is a sequence of arguments to be passed to `Extractor.request`. Each entry in the batch can be either
+        a single argument, in which case it is passed on its own, or a sequence of arguments to be passed.
+
+        - If a batch entry is an instance of `collections.abc.Mapping`, like `dict`, the resulting call to
+        `Extractor.request` will be `Extractor.request(**entry)`.
+
+        - If a batch entry is an instance of `list`, `tuple`, or `set`, the resulting call will be
+        `Extractor.request(*entry)`.
+
+        - Otherwise, the call will be `Extractor(entry)`.
+
+        Parameters
+        ----------
+        batch
+            A sequence of job arguments
 
         Returns
         -------
@@ -47,7 +75,6 @@ class Extractor(ABC):
         if not batch:
             log.info("No jobs submitted for downloading, exiting ETL.")
             return False
-
         with ThreadPool(self._concurrency_limit) as pool:
             results = pool.map(self._request_helper, batch)
             all_successful = all(results)
@@ -59,21 +86,30 @@ class Extractor(ABC):
             log.info("One or more requests returned no data or failed.")
             return False
 
-    def _request_helper(self, dict_arg: dict) -> bool:
+    def _request_helper(self, arg: typing.Any) -> bool:
         """
         Helper function to unpack the arguments for the request method.
 
+        - A `collection.abc.Mapping` (dict for example) becomes `Extractor.request(**arg)`
+        - An instance of `list`, `tuple`, or `set` becomes `Extractor.request(*arg)`
+        - Anything else becomes `Extractor.request(arg)`
+
         Parameters
         ----------
-        dict_arg  : dict
-            A dictionary of arguments to be passed to the request method.
+        arg
+            A single argument or list/dict of arguments to be passed to the request method
 
         Returns
         -------
         bool
             True if the request was successful, False otherwise.
         """
-        return self.request(**dict_arg)
+        if isinstance(arg, collections.abc.Mapping):
+            return self.request(**arg)
+        elif isinstance(arg, list) or isinstance(arg, tuple) or isinstance(arg, set):
+            return self.request(*arg)
+        else:
+            return self.request(arg)
 
     @abstractmethod
     def request(self, *args, **kwargs) -> bool:
@@ -84,36 +120,192 @@ class Extractor(ABC):
 
 
 class HTTPExtractor(Extractor):
+    """
+    Request data from given URLs over HTTP from within a context manager. The context manager creates a session, from
+    which all requests are made.
 
-    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
+    On 500, 502, 503, and 504 failures, requests are automatically retried a given amount of times, by a given backoff
+    factor (defaults to 10 retries with a 10s backoff factor).
+
+    URLs can be scraped from a given URL using `HTTPExtractor.get_links`. The resulting list of URLs can then be passed
+    to `HTTPExtractor.pool` for download using multiple threads.
+
+    Example
+    -------
+    with HTTPExtractor(my_dataset_manager) as extractor:
+        links = extractor.get_links("https://climate.data.gov/usa/rainfall", my_filter_function)
+        extractor.pool(links) # download all links found from get_links in parallel
+    """
+
+    session: requests.Session
+    backoff_factor: float
+    retries: int
+
+    def __init__(
+        self,
+        dm: dataset_manager.DatasetManager,
+        concurrency_limit: int = 8,
+        retries: int = 8,
+        backoff_factor: float = 1.0,
+    ):
         """
-        Set the host parameter when initializing an HTTPExtractor object
-        Initializes a session within the dataset manager if it hasn't yet been initialized,
-        so that the `request` method works as intended
+        Create a new HTTPExtractor object for a given dataset manager.
 
-        Note that `get_session` is therefore a required method for any DatasetManager using
-        the HTTPExtractor class.
+        The `retries` and `backoff_factor` parameters are used to control how failed requests are retried automatically.
+        By default, the request is retried 8 times, waiting 1 second, 2 seconds, 4 seconds, and finally 128 seconds
+        between each request if the request continues to fail.
 
         Parameters
         ----------
         dm
             Source data for this dataset manager will be extracted
         concurrency_limit
-            The maximum permitted number of concurrent requests. Use to manage throttling
-            and/or available threads.
+            Number of simultaneous threads to run while requesting data
+        retries
+            Number of times to retry a failed URL
+        backoff_factor
+            Number of seconds to wait between each request. Scales by a factor of 2**n per failed request.
         """
-        super().__init__(dm, concurrency_limit=concurrency_limit)
-        if not hasattr(dm, "session"):
-            dm.get_session()
+        super().__init__(dm, concurrency_limit)
+        self.retries = retries
+        self.backoff_factor = backoff_factor
 
-    def request(self, remote_file_path: str, local_file_path: str) -> bool:
+    def __enter__(self) -> HTTPExtractor:
         """
-        Request a file from an HTTP Server and save it to disk
-        Requires an active session within the dataset manager
+        Open a new HTTP requests session. All URL requests will be made within this session.
+
+        Returns
+        -------
+        HTTPConnection
+            this object
         """
-        self.dm.info(f"Downloading {local_file_path}")
-        with open(self.dm.local_input_path() / local_file_path, "wb") as outfile:
-            outfile.write(self.dm.session.get(remote_file_path).content)
+        retry_strategy = Retry(
+            total=self.retries, status_forcelist=[500, 502, 503, 504], backoff_factor=self.backoff_factor
+        )
+        self.session = requests.Session()
+        self.session.mount(prefix="https://", adapter=HTTPAdapter(max_retries=retry_strategy))
+        self.session.mount(prefix="http://", adapter=HTTPAdapter(max_retries=retry_strategy))
+        log.info(f"Opened a new HTTP requests session with {self.retries} automatic retries per request")
+        return self
+
+    def __exit__(self, *exception):
+        """
+        Close the HTTP requests session. This will be called automatically when exiting the connection context manager.
+
+        Parameters
+        ----------
+        *exception
+            Exception information passed automatically by Python
+        """
+        self.session.close()
+        log.info("Closed HTTP requests session")
+
+    def get_links(
+        self, url: str, filter_func: typing.Callable[[str], bool] | bool = True, timeout: int = 10
+    ) -> set[str]:
+        """
+        Return a set of links parsed from an HTML page at a given url. Relative URLs are converted to absolute using
+        `urllib.parse.urljoin`. Duplicates are removed, and a `set` type is returned.
+
+        `filter_func` is used to filter the list of links. If `filter_func` is given, the href value of each parsed link
+        is passed to the given function. If the function returns `True`, the link is kept, otherwise it is discarded.
+        The function can be used to match against a regular expression using `re.compile`, for example, or it can be any
+        arbitrary function. The BeautifulSoup documentation contains examples of filter functions
+        https://beautiful-soup-4.readthedocs.io/en/latest/#a-function.
+
+        An active session is required, so this must be called within a context manager.
+
+        Parameters
+        ----------
+        url
+            A URL to scrape links from.
+        filter_func
+            A function that accepts a link's href string and returns True if the link should be kept, or False otherwise
+        timeout
+            Number of seconds to wait for a response before a request fails
+
+        Returns
+        -------
+        set[str]
+            A list of links, in string format, from the specified URL.
+
+        Raises
+        ------
+        RuntimeError
+            If the object has not opened a session
+        RetryError
+            If the requests could not be completed after all retries
+        """
+        if not hasattr(self, "session"):
+            raise RuntimeError(
+                "Extractor object does not have a session to run the request from. Create the extractor"
+                " using the 'with' operator to create a session."
+            )
+
+        log.info(f"Getting links from {url}")
+
+        # Get a response from a given url, and raise an exception on error
+        response = self.session.get(url, timeout=10)
+        response.raise_for_status()
+
+        # Parse the returned HTML webpage with BeautifulSoup and build a list of all links on the page, filtered by a
+        # function if one was given. Relative URLs are converted to absolute URLs.
+        soup = BeautifulSoup(response.content, "html.parser")
+        href_links = set(urljoin(url, link.get("href")) for link in soup.find_all("a", href=filter_func))
+
+        return href_links
+
+    def request(self, remote_file_path: str, destination_path: pathlib.Path | None = None) -> bool:
+        """
+        Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
+        given, the file will be saved to the working directory with the same name it has on the server.
+
+        If an existing directory is given as the destination path, the file will be written to the given directory with
+        the same file name as on the server. If a destination path is given and is not a directory, the file will be
+        written to the given path.
+
+        An active session is required to make the request, so this must be called from within a context manager for this
+        object.
+
+        Parameters
+        ----------
+        remote_file_path
+            URL to a file to be downloaded
+        destination_path
+            Local path to write file to
+
+        Raises
+        ------
+        RuntimeError
+            If this is not run from within a context manager
+        RetryError
+            If the requests could not be completed after all retries
+        """
+        if not hasattr(self, "session"):
+            raise RuntimeError(
+                "Extractor object does not have a session to run the request from. Create the extractor"
+                " using the 'with' operator to create a session."
+            )
+
+        log.info(f"Downloading {remote_file_path}")
+
+        # Build a dynamic path if a full destination path hasn't been given
+        if destination_path is None or destination_path.is_dir():
+            # Extract the file name from the end of the URL
+            file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+
+            if destination_path is None:
+                destination_path = file_name
+            else:
+                destination_path /= file_name
+
+        # Open the remote file, and write it locally
+        response = self.session.get(remote_file_path)
+        response.raise_for_status()
+        with open(destination_path, "wb") as outfile:
+            outfile.write(response.content)
+
+        # If no exceptions were raised, the file was downloaded successfully
         return True
 
 
@@ -207,9 +399,12 @@ class S3Extractor(Extractor):
 
 class FTPExtractor(Extractor):
     """
-    Create an object that provides an interface to a climate data source's FTP server. The object is able to open its
-    connection within a context manager, navigate to specific working directory, match files located in subdirectories,
-    and fetch files to a given destination folder.
+    Create an object that provides an interface to a climate data source's FTP server by passing the target FTP server's
+    host address.
+
+    Use a context manager to open the connection (@see FTPExtractor.__enter__). Once connected, the object is able to
+    navigate to specific working directory, match files located in subdirectories, and fetch files to a given
+    destination folder.
 
     Currently only anonymous FTP access is supported.
     """
@@ -219,36 +414,34 @@ class FTPExtractor(Extractor):
 
     def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1):
         """
-        Set the host parameter when initializing an FTPEXtractor object
+        Set the host parameter when initializing an FTPExtractor object
 
         Parameters
         ----------
+        dm
+            Source data for this dataset manager will be extracted
         host
             Address to connect to for source data
+        concurrency_limit
+            Number of simultaneous requests. If greater than 1, multiple connections will be opened because an FTP
+            connection only supports synchronous requests.
         """
         super().__init__(dm, concurrency_limit=concurrency_limit)
         self.host = host
 
     def __enter__(self) -> FTPExtractor:
         """
-        Open a connection to the FTP server at this object's given source from within a context manager. When creating
-        a context, pass the host address unless `FTPExtractor.host` was already set.
+        Open a connection to the FTP server at `FTPExtractor.host` from within a context manager.
 
         Example
         -------
-        my_extractor = FTPExtractor(my_dataset_manager)
-        with my_extractor("ftp.cdc.noaa.gov") as extractor:
-            # get source files
+        with FTPExtractor(my_dataset_manager, "ftp.cdc.noaa.gov") as extractor:
+            # now connected to ftp.cdc.noaa.gov
 
         Returns
         -------
         FTPConnection
             this object
-
-        Raises
-        ------
-        ValueError
-            If host parameter hasn't been set
         """
         log.info(f"Opening a connection to {self.host}")
         self.ftp = ftplib.FTP(self.host)

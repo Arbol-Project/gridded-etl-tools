@@ -2,6 +2,7 @@ from enum import Enum
 import json
 import datetime
 import typing
+import zarr
 import shapely.geometry
 import numcodecs
 
@@ -15,6 +16,33 @@ from .store import IPLD
 
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
+
+XARRAY_ENCODING_FIELDS = [
+    "dtype",
+    "scale_factor",
+    "add_offset",
+    "_FillValue",
+    "missing_value",
+    "chunksizes",
+    "zlib",
+    "complevel",
+    "shuffle",
+    "fletcher32",
+    "contiguous",
+    "units",
+    "calendar",
+]
+
+ZARR_ENCODING_FIELDS = [
+    "chunks",
+    "compressor",
+    "filters",
+    "order",
+    "dtype",
+    "fill_value",
+    "object_codec",
+    "dimension_separator",
+]
 
 
 class StacType(Enum):
@@ -398,7 +426,7 @@ class Metadata(Convenience, IPFS):
         all_md = {
             **dataset.attrs,
             **dataset.encoding,
-            **dataset[self.data_var()].encoding,
+            **dataset[self.data_var].encoding,
         }
         rename_dict = {
             "preferred_chunks": "Zarr chunk size",
@@ -577,16 +605,14 @@ class Metadata(Convenience, IPFS):
         """
         # Rename data variable to desired name, if necessary.
         dataset = self.rename_data_variable(dataset)
-
         # Set all fields to uncompressed and remove filters leftover from input files
         self.remove_unwanted_fields(dataset)
-
+        # Consistently apply Blosc lz4 compression to all coordinates and the data variable
+        self.set_initial_compression(dataset)
         # Encode data types and missing value indicators for the data variable
         self.encode_vars(dataset)
-
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
-
         # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
         self.suppress_invalid_attributes(dataset)
 
@@ -612,7 +638,7 @@ class Metadata(Convenience, IPFS):
         """
         data_var = first(dataset.data_vars)
         try:
-            return dataset.rename_vars({data_var: self.data_var()})
+            return dataset.rename_vars({data_var: self.data_var})
         except ValueError:
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             return dataset
@@ -630,14 +656,14 @@ class Metadata(Convenience, IPFS):
         # Encode fields for the data variable in the main encoding dict and the data var's own encoding dict (for
         # thoroughness)
         dataset.encoding = {
-            self.data_var(): {
+            self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value,
                 # deprecated by NUG but maintained for backwards compatibility
                 "missing_value": self.missing_value,
             }
         }
-        dataset[self.data_var()].encoding.update(
+        dataset[self.data_var].encoding.update(
             {
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
@@ -684,7 +710,7 @@ class Metadata(Convenience, IPFS):
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:
-            encoding = dataset[self.data_var()].encoding
+            encoding = dataset[self.data_var].encoding
             filters = encoding.get("filters")
             if not filters:
                 encoding["filters"] = filters = []
@@ -713,10 +739,9 @@ class Metadata(Convenience, IPFS):
         # Determine date to use for "created" field. On S3 and local, use current time. On IPLD, look for an existing
         # creation time.
         if stac_metadata and "created" in stac_metadata["properties"]:
-            created = stac_metadata["properties"]["created"]
+            dataset.attrs["created"] = stac_metadata["properties"]["created"]
         else:
-            created = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
-        dataset.attrs["created"] = created
+            dataset.attrs["created"] = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()[:-7] + "Z"
 
         # Write the date range. Use existing data if possible to get the original start date. Even though the date
         # range can be parsed by opening the Zarr, it can be faster to access directly through the Zarr's `.zmetadata`
@@ -768,16 +793,29 @@ class Metadata(Convenience, IPFS):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = numcodecs.Blosc() if self.use_compression else None
-
         for coord in ["latitude", "longitude"]:
             dataset[coord].attrs.pop("chunks", None)
             dataset[coord].attrs.pop("preferred_chunks", None)
             dataset[coord].encoding.pop("_FillValue", None)
             dataset[coord].encoding.pop("missing_value", None)
-            dataset[coord].encoding["compressor"] = compressor
-        dataset[self.data_var()].encoding.pop("filters", None)
-        dataset[self.data_var()].encoding["compressor"] = compressor
+        dataset[self.data_var].encoding.pop("filters", None)
+
+    def set_initial_compression(self, dataset: xr.Dataset):
+        """
+        If the dataset is new and uses compression, compress all coordinate and data variables in the dataset.
+        Does nothing if the dataset is not new; use `update_array_encoding` to change compression in this case.
+
+        Parameters
+        ----------
+        dataset : xarray.Dataset
+            The dataset being published, pre-metadata update
+        """
+        compressor = numcodecs.Blosc() if self.use_compression else None
+
+        if not self.store.has_existing:
+            for coord in dataset.coords:
+                dataset[coord].encoding["compressor"] = compressor
+            dataset[self.data_var].encoding["compressor"] = compressor
 
     def suppress_invalid_attributes(self, dataset: xr.Dataset):
         """
@@ -793,6 +831,119 @@ class Metadata(Convenience, IPFS):
                 dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
             elif dataset.attrs[attr] is None:
                 dataset.attrs[attr] = ""
+
+    def update_array_encoding(
+        self,
+        target_array: str,
+        update_key: dict,
+    ):
+        """
+        Update an array encoding field in the dataset's Zarr store.
+
+        Parameters
+        ----------
+        target_array : str
+            The name of the array to modify
+        update_key : dict
+            A key:value pair to insert into or update in the array encoding
+        """
+        self._modify_array_encoding(target_array, update_key=update_key, remove_key=None)
+
+    def remove_array_encoding(
+        self,
+        target_array: str,
+        remove_key: str,
+    ):
+        """
+        Remove an array encoding field from the dataset's Zarr store.
+
+        Parameters
+        ----------
+        target_array : str
+            The name of the array to modify
+        remove_key : str
+            The key to remove from the array encoding
+        """
+        self._modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
+
+    def _modify_array_encoding(
+        self,
+        target_array: str,
+        update_key: dict | None = None,
+        remove_key: str | None = None,
+    ):
+        """
+        Modify the encoding of an array -- coordinate or data variable -- in the dataset's Zarr store.
+
+        NOTE this function is intended for use "gardening" production Zarrs and should be used with caution.
+        It collides with some points of incongruity between Zarr and Xarray's encoding standards.
+        Most notably, Zarr does not support the `missing_value` field in the encoding dict, unlike Xarray,
+        which does for backwards compatibility with NetCDFs, although this functionality is now deprecated.
+        Also, Zarr will silently convert "_FillValue" to "fill_value" whereas Xarray will represent it as "_FillValue".
+
+        Handling all of this is messy -- so again, this function should be used with caution. Test first!
+
+        Parameters
+        ----------
+        target_array : str
+            The name of the array to modify
+        update_key : dict | None, optional
+            A key:value pair to insert into or update in the array encoding, by default None
+        remove_key : str | None, optional
+            A key to remove from the array encoding and attributes, by default None
+        """
+        # Exit if no changes to the array encoding were specified
+        if not any([update_key, remove_key]):
+            raise ValueError("No changes to the array encoding were specified")
+
+        # If the key does not match a valid encoding field, raise an error
+        if update_key and list(update_key.keys())[0] not in XARRAY_ENCODING_FIELDS + ZARR_ENCODING_FIELDS:
+            raise ValueError(f"Invalid key {list(update_key.keys())[0]} for array encoding")
+
+        # Exit if the target array is not a coordinate dimension;
+        # any changes to data variable would involve effectively re-writing the entire Zarr
+        # and should be handled with a re-parse
+        self.set_key_dims()
+        if target_array not in self.standard_dims:
+            raise ValueError(
+                f"Target array {target_array} is not in this dataset's "
+                f"list of coordinate dimensions: {self.standard_dims}"
+            )
+
+        # Open the Zarr store and get the old array
+        root = zarr.open_group(self.store.path, mode="r+")
+        old_array = root[target_array]
+        data = old_array[:]
+
+        array_kwargs = {
+            "shape": old_array.shape,
+            "chunks": old_array.chunks,
+            "dtype": old_array.dtype,
+            "compressor": old_array.compressor,
+            "fill_value": old_array.fill_value,
+            "order": old_array.order,
+        }
+
+        # Preserve _ARRAY_DIMENSIONS in .zattrs
+        array_attrs = dict(old_array.attrs).copy()
+        if "_ARRAY_DIMENSIONS" not in array_attrs:  # pragma NO COVER
+            array_attrs["_ARRAY_DIMENSIONS"] = [target_array]
+
+        # Make changes to the array encoding (the .zarray file)
+        if update_key:
+            array_kwargs.update(update_key)
+
+        # Make changes to the array attributes (the .zattrs file)
+        if remove_key:
+            array_attrs.pop(remove_key, None)
+
+        # Populate and consolidate changes
+        del root[target_array]
+        new_array = root.create_dataset(target_array, **array_kwargs)
+        new_array[:] = data
+        new_array.attrs.update(array_attrs)
+
+        zarr.consolidate_metadata(store=self.store.path)
 
 
 def first(i: typing.Iterable):
