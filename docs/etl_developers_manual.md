@@ -226,7 +226,7 @@ Each gridded ETL can be divided into 4 stages which live under separate function
   * Optional, may not be needed for every dataset
 * etl.transform_dataset_in_memory()
   * In-memory transformations of the properties of an Xarray Dataset object
-* etl.parse()
+* etl.parse(ds)
   * Publishing
   * Metadata preparation
   * Subclass definition
