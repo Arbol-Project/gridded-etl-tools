@@ -17,8 +17,8 @@ An ETL can be run within a notebook or interactive environment (e.g. ipython) as
 
     etl = MyNewETLDataset(store='s3') # exports to S3
     etl.extract() # download the entire dataset, or just updates to the existing dataset
-    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
-    etl.parse()  # push this single Zarr it to the storage medium of choice
+    ds = etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse(ds)  # push this single Zarr it to the storage medium of choice
     
     # move onwards to retrieval (or whatever else your script demands)
 
@@ -34,8 +34,8 @@ An alternative configuration triggering a parse to Amazon's S3 cloud file store 
 
     etl = MyNewETLDataset(store='s3', s3_bucket_name='my_bucket_name') # exports to s3
     etl.extract()  # download the entire dataset, or just updates to the existing dataset
-    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
-    etl.parse()  # push this single Zarr it to the storage medium of choice
+    ds = etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse(ds)  # push this single Zarr it to the storage medium of choice
     
     # move onwards to retrieval (or whatever else your script demands)
 ```
@@ -47,8 +47,8 @@ Finally, to export to your local file system run the following
 
     etl = MyNewETLDataset(store='local') # exports to local file system
     etl.extract() # download the entire dataset, or just updates to the existing dataset
-    etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
-    etl.parse()  # push this single Zarr it to the storage medium of choice
+    ds = etl.transform()  # transform raw downloaded data into a single "virtual" Zarr of new or updated data
+    etl.parse(ds)  # push this single Zarr it to the storage medium of choice
 ```
 
 #### Passing parameters

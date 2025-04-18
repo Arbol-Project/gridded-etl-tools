@@ -62,8 +62,8 @@ After running `extract` a folder containing the original data from CHIRPS is cre
 
 Now run the `transform` method to read all the files and transform them into a single Zarr, and `parse` to place that Zarr on the desired store.
 
-    etl.transform()
-    etl.parse()
+    ds = etl.transform()
+    etl.parse(ds)
 
 #### Retrieving your dataset
 
