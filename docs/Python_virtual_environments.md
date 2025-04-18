@@ -82,9 +82,8 @@ If you want to use the specific version of Python this project is tested against
     cd ..
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
     Python-3.10.9/python get-pip.py
-    Python-3.10.9/python -m pip install virtualenv
-    cd zarr-climate-etl
-    ../Python-3.10.9/python -m virtualenv .
+    cd gridded-etl-tools
+    ../Python-3.10.9/python -m venv .
     
 ## Activate the virtual environment
 
