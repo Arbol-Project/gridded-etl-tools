@@ -367,7 +367,7 @@ class Metadata(Convenience, IPFS):
         properties_dict["start_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[0]).isoformat() + "Z"
         properties_dict["end_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[-1]).isoformat() + "Z"
         properties_dict["updated"] = (
-            datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
+            datetime.datetime.now(datetime.UTC).replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
         )
         # Populate the empty STAC Item
         minx, miny, maxx, maxy = self.bbox_coords(dataset)
