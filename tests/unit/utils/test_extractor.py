@@ -63,6 +63,21 @@ class TestExtractor:
 
         assert result is True
 
+    def test_pool_request_accept_any_success(self, caplog):
+        dm = Mock()
+        extractor = ConcreteExtractor(dm)
+
+        def mixed_request_success(*args, **kwargs):
+            return [True, False, True]
+
+        extractor.request = Mock(side_effect=mixed_request_success)
+        result = extractor.pool(
+            batch=[{"one": 1, "two": 2}, {"one": 3, "two": 4}, {"one": 5, "two": 6}], accept_any_success=True
+        )
+        assert extractor.request.call_count == 3
+        assert result is True
+        assert "Some requests succeeded, some did not. Check the logs for details of which." in caplog.text
+
     def test_pool_request_failure(self):
         dm = Mock()
         extractor = ConcreteExtractor(dm)

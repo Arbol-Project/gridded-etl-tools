@@ -46,7 +46,7 @@ class Extractor(ABC):
         self.dm = dm
         self._concurrency_limit = concurrency_limit
 
-    def pool(self, batch: typing.Sequence) -> bool:
+    def pool(self, batch: typing.Sequence, accept_any_success: bool = False) -> bool:
         """
         Run the `Extractor.request` function multiple times in parallel using `ThreadPool`. Wait for all requests to
         complete, then return a boolean indicating whether all requests were successful or not.
@@ -77,9 +77,16 @@ class Extractor(ABC):
             return False
         with ThreadPool(self._concurrency_limit) as pool:
             results = pool.map(self._request_helper, batch)
+            any_successful = any(results)
             all_successful = all(results)
 
-        if all_successful:
+        if accept_any_success and any_successful:
+            log.warning(
+                "Some requests succeeded, some did not. Check the logs for details of which. "
+                "This dataset is flagged to proceed as long as any requests succeed."
+            )
+            return True
+        elif all_successful:
             log.info("All requests succeeded.")
             return True
         else:
