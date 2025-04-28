@@ -66,11 +66,15 @@ class Extractor(ABC):
         ----------
         batch
             A sequence of job arguments
+        accept_any_success
+            If True, the function will return True if any of the jobs succeed,
+            otherwise it will return True only if ALL jobs succeed.
+            Defaults to False
 
         Returns
         -------
         bool
-            True if all of the jobs succeeded, False otherwise.
+            True if any/all of the jobs succeeded (see `accept_any_success`), False otherwise.
         """
         if not batch:
             log.info("No jobs submitted for downloading, exiting ETL.")
