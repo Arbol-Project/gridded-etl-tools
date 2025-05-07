@@ -94,8 +94,7 @@ If we had instead exported to s3, we would follow a different retrieval pattern
     s3.ls("my_bucket_name", refresh=True)
     ['my_bucket_name/chirps_final_25-daily.zarr']
 
-    mapper = s3fs.S3Map(root='s3://my_bucket_name/chirps_final_25-daily.zarr', s3=s3)
-    ds = xarray.open_zarr(mapper)
+    ds = xarray.open_zarr('s3://my_bucket_name/chirps_final_25-daily.zarr')
     ds
     <xarray.Dataset>
     Dimensions:    (latitude: 120, longitude: 300, time: 5736)

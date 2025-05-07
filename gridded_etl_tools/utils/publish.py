@@ -152,7 +152,7 @@ class Publish(Transform):
                     "update_is_append_only": dataset.get("update_is_append_only"),
                     "initial_parse": False,
                 }
-                self.store.write_metadata_only(update_attrs=update_attrs)
+                self.update_v3_metadata(update_attrs)
                 dataset.attrs.update(update_attrs)
             else:
                 dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
@@ -166,7 +166,12 @@ class Publish(Transform):
 
             # Indicate in metadata that update is complete.
             self.info("Writing metadata after writing data to indicate write is finished.")
-            self.store.write_metadata_only(update_attrs=post_parse_attrs)
+            self.update_v3_metadata(post_parse_attrs)
+
+            # Synchronize v2 metadata
+            if self.store.has_v2_metadata:
+                update_attrs, update_arrays = self.extract_v3_metadata(self.store.path)
+                self.synchronize_v2_metadata(update_attrs, update_arrays)
 
     def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """

@@ -433,3 +433,183 @@ complex_update_times = np.array(
     ],
     dtype="datetime64[ns]",
 )
+
+
+# V2 and V3 metadata fixtures
+@pytest.fixture
+def v3_zarr_json():
+    """Simplified v3 zarr.json metadata for testing."""
+    return {
+        "attributes": {
+            "Conventions": "CF-1.0",
+            "title": "Test Dataset",
+            "coordinate reference system": "EPSG:4326",
+            "spatial resolution": 0.5,
+            "temporal resolution": "daily",
+            "update cadence": "daily",
+            "publisher": "Test Publisher",
+            "unit of measurement": "test_unit",
+            "missing value": -9.99e36,
+            "created": "2023-01-01T12:00:00.00000Z",
+            "update_previous_end_date": "2023-06-30",
+            "updated": "2023-07-15T12:00:00.00000Z",
+            "date range": ["2023-01-01", "2023-07-15"],
+            "update_date_range": ["2023-07-01", "2023-07-15"],
+            "bbox": [-180.0, -90.0, 180.0, 90.0],
+            "update_is_append_only": True,
+        },
+        "zarr_format": 3,
+        "consolidated_metadata": {
+            "kind": "inline",
+            "must_understand": False,
+            "metadata": {
+                "longitude": {
+                    "shape": [720],
+                    "data_type": "float32",
+                    "chunk_grid": {"name": "regular", "configuration": {"chunks": [720]}},
+                    "zarr_format": 3,
+                    "node_type": "array",
+                },
+                "latitude": {
+                    "shape": [360],
+                    "data_type": "float32",
+                    "chunk_grid": {"name": "regular", "configuration": {"chunks": [360]}},
+                    "zarr_format": 3,
+                    "node_type": "array",
+                },
+                "time": {
+                    "shape": [200],
+                    "data_type": "float64",
+                    "chunk_grid": {"name": "regular", "configuration": {"chunks": [100]}},
+                    "zarr_format": 3,
+                    "node_type": "array",
+                },
+                "data": {
+                    "shape": [200, 360, 720],
+                    "data_type": "float32",
+                    "chunk_grid": {"name": "regular", "configuration": {"chunks": [50, 90, 90]}},
+                    "zarr_format": 3,
+                    "node_type": "array",
+                },
+            },
+        },
+    }
+
+
+@pytest.fixture
+def v2_zattrs():
+    """Simplified v2 .zattrs metadata for testing."""
+    return {
+        "Conventions": "CF-1.0",
+        "title": "Test Dataset",
+        "coordinate reference system": "EPSG:4326",
+        "spatial resolution": 0.5,
+        "temporal resolution": "daily",
+        "update cadence": "daily",
+        "publisher": "Test Publisher",
+        "unit of measurement": "test_unit",
+        "missing value": -9.99e36,
+        "created": "2023-01-01T12:00:00.00000Z",
+        "update_previous_end_date": "2023-06-30",
+        "updated": "2023-07-15T12:00:00.00000Z",
+        "date range": ["2023-01-01", "2023-07-15"],
+        "update_date_range": ["2023-07-01", "2023-07-15"],
+        "bbox": [-180.0, -90.0, 180.0, 90.0],
+        "update_is_append_only": True,
+    }
+
+
+@pytest.fixture
+def v2_zmetadata():
+    """Simplified v2 .zmetadata metadata for testing."""
+    return {
+        "metadata": {
+            ".zattrs": {
+                "Conventions": "CF-1.0",
+                "title": "Test Dataset",
+                "coordinate reference system": "EPSG:4326",
+                "spatial resolution": 0.5,
+                "temporal resolution": "daily",
+                "update cadence": "daily",
+                "publisher": "Test Publisher",
+                "unit of measurement": "test_unit",
+                "missing value": -9.99e36,
+                "created": "2023-01-01T12:00:00.00000Z",
+                "update_previous_end_date": "2023-06-30",
+                "updated": "2023-07-15T12:00:00.00000Z",
+                "date range": ["2023-01-01", "2023-07-15"],
+                "update_date_range": ["2023-07-01", "2023-07-15"],
+                "bbox": [-180.0, -90.0, 180.0, 90.0],
+                "update_is_append_only": True,
+            },
+            ".zgroup": {"zarr_format": 2},
+            "time/.zarray": {
+                "chunks": [100],
+                "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1, "blocksize": 0},
+                "dtype": "<f8",
+                "fill_value": -9.99e36,
+                "filters": None,
+                "order": "C",
+                "shape": [200],
+                "zarr_format": 2,
+            },
+            "data/.zarray": {
+                "chunks": [50, 90, 90],
+                "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1, "blocksize": 0},
+                "dtype": "<f4",
+                "fill_value": -9.99e36,
+                "filters": None,
+                "order": "C",
+                "shape": [200, 360, 720],
+                "zarr_format": 2,
+            },
+        },
+        "zarr_consolidated_format": 1,
+    }
+
+
+@pytest.fixture
+def updated_attrs():
+    """Fixture with sample updated attribute values for testing metadata update functions."""
+    return {
+        "update_previous_end_date": "2023-07-15",
+        "updated": "2023-07-31T12:00:00.00000Z",
+        "update_date_range": ["2023-07-16", "2023-07-31"],
+        "date range": ["2023-01-01", "2023-07-31"],
+    }
+
+
+@pytest.fixture
+def updated_arrays():
+    """Fixture with sample updated array information for testing array update functions."""
+    return {"time": {"chunks": [100], "shape": [220]}, "data": {"chunks": [50, 90, 90], "shape": [220, 360, 720]}}
+
+
+@pytest.fixture
+def v2_time_zarray():
+    """V2 .zarray file content for time dimension."""
+    return {
+        "chunks": [100],
+        "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1, "blocksize": 0},
+        "dtype": "<f8",
+        "fill_value": -9.99e36,
+        "filters": None,
+        "order": "C",
+        "shape": [200],
+        "zarr_format": 2,
+    }
+
+
+@pytest.fixture
+def v2_data_var_zarray():
+    """V2 .zarray file content for data variable."""
+    return {
+        "chunks": [50, 90, 90],
+        "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1, "blocksize": 0},
+        "dtype": "<f4",
+        "fill_value": -9.99e36,
+        "filters": None,
+        "order": "C",
+        "shape": [200, 360, 720],
+        "zarr_format": 2,
+    }

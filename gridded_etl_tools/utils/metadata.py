@@ -13,6 +13,7 @@ from .convenience import Convenience
 
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
+from typing import Any
 
 XARRAY_ENCODING_FIELDS = [
     "dtype",
@@ -895,6 +896,133 @@ class Metadata(Convenience):
         new_array.attrs.update(array_attrs)
 
         zarr.consolidate_metadata(store=self.store.path)
+
+    def update_v3_metadata(self, update_attrs: dict[str, Any]):
+        """
+        Update metadata within the master zarr.json file contained within v3 Zarrs
+
+        Parameters
+        ----------
+        update_attrs : dict[str, Any]
+            A dictionary of attributes to update in the zarr.json file
+        """
+        # Read current metadata from Zarr
+        with self.store.open(f"{self.store.path}/zarr.json", "r") as z_contents:
+            current_attributes = json.load(z_contents)
+
+        # Update given attributes
+        current_attributes["attributes"].update(update_attrs)
+
+        # Write back to Zarr
+        with self.store.open(f"{self.store.path}/zarr.json", "w") as z_contents:
+            json.dump(current_attributes, z_contents)
+
+    # V2 synchronization methods
+    # NOTE to be removed when we fully sunset Zarr v2 in our stack
+
+    def extract_v3_metadata(self, zarr_path: str) -> tuple[dict[str, Any], dict[str, list[int]]]:
+        """
+        Extract metadata from a v3 Zarr for insertion into v2 style metadata living in the same zarr store.
+
+        Parameters
+        ----------
+        zarr_path : str
+            The path to the v3 Zarr store
+
+        Returns
+        -------
+        tuple[dict[str, Any], dict[str, list[int]]]
+            A tuple of dictionaries containing the update attributes and arrays
+        """
+        with self.store.open(f"{zarr_path}/zarr.json", "r") as f:
+            v3_metadata = json.load(f)
+        # Extract attributes
+        update_fields = ["update_previous_end_date", "updated", "update_date_range", "date range"]
+        update_attrs = {}
+        for field in update_fields:
+            update_attrs[field] = v3_metadata["attributes"][field]
+        # Extract chunks and shapes for each array
+        update_arrays = {}
+        for dim in [self.time_dim, self.data_var]:
+            update_arrays[dim] = {}
+            update_arrays[dim]["chunks"] = v3_metadata["consolidated_metadata"]["metadata"][dim]["chunk_grid"][
+                "configuration"
+            ]["chunks"]
+            update_arrays[dim]["shape"] = v3_metadata["consolidated_metadata"]["metadata"][dim]["shape"]
+
+        return update_attrs, update_arrays
+
+    def update_v2_group_metadata(self, update_attrs: dict[str, Any]):
+        """
+        Update the group metadata for a v2 style metadata array.
+
+        Parameters
+        ----------
+        update_attrs: dict[str, Any]
+            A dictionary of attributes to update in the .zmetadata and .zattrs files
+            in the Zarr store root directory
+        """
+        for z_path in (".zmetadata", ".zattrs"):
+            # Read current metadata from Zarr
+            with self.store.open(f"{self.store.path}/{z_path}", "r") as z_contents:
+                current_attributes = json.load(z_contents)
+
+            # Update given attributes at the appropriate location depending on which z file
+            if z_path == ".zmetadata":
+                current_attributes["metadata"][".zattrs"].update(update_attrs)
+            else:
+                current_attributes.update(update_attrs)
+
+            # Write back to Zarr
+            with self.store.open(f"{self.store.path}/{z_path}", "w") as z_contents:
+                json.dump(current_attributes, z_contents)
+
+    def update_v2_arrays(self, update_arrays: dict[str, list[int]]):
+        """
+        Update the chunks/shape info for a v2 style metadata array.
+
+        Parameters
+        ----------
+        update_arrays: dict[str, list[int]]
+            A dict of dims with the following keys:
+            chunks: list[int]
+            shape: list[int]
+        """
+        # Update the chunks/shape within the zmetadata/dim/.zarray
+        with self.store.open(f"{self.store.path}/.zmetadata", "r") as f:
+            v2_metadata = json.load(f)
+
+        for dim in [self.time_dim, self.data_var]:
+            v2_metadata["metadata"][dim + "/.zarray"].update(update_arrays[dim])
+
+        with self.store.open(f"{self.store.path}/.zmetadata", "w") as f:
+            json.dump(v2_metadata, f)
+
+        # Update the chunks/shape within each dim's .zarray
+        for dim in [self.time_dim, self.data_var]:
+            with self.store.open(f"{self.store.path}/{dim}/.zarray", "r") as f:
+                zarray = json.load(f)
+
+            zarray.update(update_arrays[dim])
+
+            with self.store.open(f"{self.store.path}/{dim}/.zarray", "w") as f:
+                json.dump(zarray, f)
+
+    def synchronize_v2_metadata(self, update_attrs: dict[str, Any], update_arrays: dict[str, list[int]]):
+        """
+        Insert v2 style metadata into v2 style metadata files held within a v3 Zarr store.
+
+        Parameters
+        ----------
+        update_attrs : dict[str, Any]
+            The attributes to update in the v2 style metadata
+        update_arrays : dict[str, list[int]]
+            The arrays to update in the v2 style metadata
+        """
+        # Update core .zattrs and .zmetadata with the attrs
+        self.update_v2_group_metadata(update_attrs)
+        # Update dimension level chunks/shape info in core .zmetadata and the dimension's .zarray
+        self.update_v2_arrays(update_arrays)
 
 
 def first(i: typing.Iterable):

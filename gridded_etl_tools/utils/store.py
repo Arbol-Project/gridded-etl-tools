@@ -14,7 +14,6 @@ import s3fs
 import xarray as xr
 import pathlib
 import fsspec
-import collections
 
 from abc import abstractmethod, ABC
 from typing import Any
@@ -41,20 +40,6 @@ class StoreInterface(ABC):
         """
         self.dm = dm
 
-    @abstractmethod
-    def mapper(self, **kwargs) -> collections.abc.MutableMapping:
-        """
-        Parameters
-        ----------
-        **kwargs : dict
-            Implementation specific keywords. TODO: standardize interface across implementations
-
-        Returns
-        -------
-        collections.abc.MutableMapping
-            A key/value mapping of files to contents
-        """
-
     @property
     @abstractmethod
     def has_existing(self) -> bool:
@@ -64,6 +49,17 @@ class StoreInterface(ABC):
         bool
             Return `True` if there is existing data for this dataset on the store.
         """
+
+    @property
+    @abstractmethod
+    def has_v2_metadata(self) -> bool:
+        """
+        Returns
+        -------
+        bool
+            Return `True` if there is v2 metadata for this dataset on the store.
+        """
+        pass
 
     @abstractmethod
     def metadata_exists(self, title: str, stac_type: str) -> bool:
@@ -169,21 +165,18 @@ class StoreInterface(ABC):
             return None
 
     @abstractmethod
-    def write_metadata_only(self, attributes: dict):
+    def open(self, path: str, mode: str):
         """
-        Writes the metadata to the stored Zarr.
-
-        Open the Zarr's `.zmetadata` and `.zattr` files with the JSON library, update the values with the values in the
-        given dict, and write the files.
-
-        These changes will be reflected in the attributes dict of subsequent calls to `DatasetManager.store.dataset`
-        without needing to call `DatasetManager.to_zarr`.
+        Abstract method to open a file. Must be implemented by subclasses.
 
         Parameters
         ----------
-        attributes
-            A dict of metadata attributes to add or update to the Zarr
+        path : str
+            The path to the file.
+        mode : str
+            The mode in which to open the file.
         """
+        pass
 
 
 class S3(StoreInterface):
@@ -260,31 +253,6 @@ class S3(StoreInterface):
     def __repr__(self) -> str:
         return "S3"
 
-    def mapper(self, refresh: bool = False, **kwargs) -> fsspec.mapping.FSMap:
-        """
-        Get a `MutableMapping` representing the S3 key/value store. By default, the mapper will be created only once,
-        when this function is first called.
-
-        To force a new mapper, set `refresh` to `True`. To use an output path other than the default path returned by
-        self.path, set a `custom_output_path` when the DatasetManager is instantiated and it will be passed through to
-        here. This path must be a valid S3 destination for which you have write permissions.
-
-        Parameters
-        ----------
-        refresh : bool
-            Set to `True` to force a new mapper to be created even if this object has one already
-        **kwargs : dict
-            Arbitrary keyword args supported
-
-        Returns
-        -------
-        s3fs.S3Map
-            A `MutableMapping` which is the S3 key/value store
-        """
-        if refresh or not hasattr(self, "_mapper"):
-            self._mapper = s3fs.S3Map(root=self.path, s3=self.fs())
-        return self._mapper
-
     @property
     def has_existing(self) -> bool:
         """
@@ -294,6 +262,15 @@ class S3(StoreInterface):
             Return `True` if there is a Zarr at `S3.path`
         """
         return self.fs().exists(self.path)
+
+    @property
+    def has_v2_metadata(self) -> bool:
+        if not self.has_existing:
+            return False
+        elif self.fs().exists(self.path + "/.zmetadata"):
+            return True
+        else:
+            return False
 
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
@@ -383,49 +360,18 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
 
-    def write_metadata_only_v2(self, update_attrs: dict[str, Any]):  # pragma NO COVER
+    def open(self, path: str, mode: str) -> dict[str, Any]:
         """
-        Old method of writing metadata. Kept for backwards compatibility.
-        """
-        # Edit both .zmetadata and .zattrs
-        fs = self.fs()
-
-        for z_path in (".zmetadata", ".zattrs"):
-            # Read current metadata from Zarr
-            with fs.open(f"{self.path}/{z_path}") as z_contents:
-                current_attributes = json.load(z_contents)
-
-            # Update given attributes at the appropriate location depending on which z file
-            if z_path == ".zmetadata":
-                current_attributes["metadata"][".zattrs"].update(update_attrs)
-            else:
-                current_attributes.update(update_attrs)
-
-            # Write back to Zarr
-            with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
-                json.dump(current_attributes, z_contents)
-
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
-        """
-        Update metadata within the master zarr.json file contained within v3 Zarrs
+        Open a file on S3.
 
         Parameters
         ----------
-        update_attrs : dict[str, Any]
-            A dictionary of attributes to update in the zarr.json file
+        path : str
+            The S3 path to the file.
+        mode : str
+            The mode in which to open the file.
         """
-        fs = self.fs()
-
-        # Read current metadata from Zarr
-        with fs.open(f"{self.path}/zarr.json") as z_contents:
-            current_attributes = json.load(z_contents)
-
-        # Update given attributes
-        current_attributes["attributes"].update(update_attrs)
-
-        # Write back to Zarr
-        with fs.open(f"{self.path}/zarr.json", "w") as z_contents:
-            json.dump(current_attributes, z_contents)
+        return self.fs().open(path, mode)
 
 
 class Local(StoreInterface):
@@ -469,28 +415,6 @@ class Local(StoreInterface):
             self._fs = fsspec.filesystem("file", **kwargs)
         return self._fs
 
-    def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
-        """
-        Get a `MutableMapping` representing a local filesystem key/value store.
-        By default, the mapper will be created only once, when this function is first
-        called. To force a new mapper, set `refresh` to `True`.
-
-        Parameters
-        ----------
-        refresh : bool
-            Set to `True` to force a new mapper to be created even if this object has one already.
-        **kwargs : dict
-            Arbitrary keyword args supported
-
-        Returns
-        -------
-        fsspec.mapping.FSMap
-            A `MutableMapping` which is a key/value representation of the local filesystem
-        """
-        if refresh or not hasattr(self, "_mapper"):
-            self._mapper = self.fs().get_mapper(self.path)
-        return self._mapper
-
     def __repr__(self) -> str:
         return "Local"
 
@@ -516,6 +440,15 @@ class Local(StoreInterface):
             Return `True` if there is a local Zarr for this dataset, `False` otherwise.
         """
         return self.path.exists()
+
+    @property
+    def has_v2_metadata(self) -> bool:
+        if not self.has_existing:
+            return False
+        elif (self.path / ".zmetadata").exists():
+            return True
+        else:
+            return False
 
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
@@ -611,21 +544,15 @@ class Local(StoreInterface):
         """
         return str((pathlib.Path(self.folder) / "metadata" / stac_type / f"{title}.json").resolve())
 
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
+    def open(self, path: str, mode: str) -> dict[str, Any]:
         """
-        Update metadata within the master zarr.json file contained within v3 Zarrs
+        Open a file on the local filesystem.
 
         Parameters
         ----------
-        update_attrs : dict[str, Any]
-            A dictionary of attributes to update in the zarr.json file
+        path : str
+            The local path to the file.
+        mode : str
+            The mode in which to open the file.
         """
-        with open(f"{self.path}/zarr.json") as z_contents:
-            current_attributes = json.load(z_contents)
-
-        # Update given attributes
-        current_attributes["attributes"].update(update_attrs)
-
-        # Write back to Zarr
-        with open(f"{self.path}/zarr.json", "w") as z_contents:
-            json.dump(current_attributes, z_contents)
+        return open(path, mode)
