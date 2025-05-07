@@ -28,7 +28,6 @@ def create_input_directories(
     initial_smaller_input_path,
     appended_input_path,
     appended_input_path_with_hole,
-    qc_input_path,
 ):
     """
     The testing directories for initial, append and insert will get created before each run
@@ -39,28 +38,19 @@ def create_input_directories(
         initial_smaller_input_path,
         appended_input_path,
         appended_input_path_with_hole,
-        qc_input_path,
     ):
-        if not path.exists():
-            os.makedirs(path, 0o755, True)
-            print(f"Created {path} for testing")
-        else:
-            print(f"Found existing {path}")
+        os.makedirs(path, 0o755, exist_ok=True)
 
 
 @pytest.fixture
-def simulate_file_download(root, initial_input_path, initial_smaller_input_path, appended_input_path, qc_input_path):
+def simulate_file_download(root, initial_input_path, initial_smaller_input_path, appended_input_path):
     """
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
     """
-    # for chirps_init_fil in root.glob("*initial*"):
-    #     shutil.copy(chirps_init_fil, initial_input_path)
-    shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
-    shutil.copy(root / "chirps_initial_dataset_smaller.nc", initial_smaller_input_path)
-    shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
-    shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
-    shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
+    shutil.copy(root / "CHIRPS25_2024-12_Nevada.nc", initial_input_path)
+    shutil.copy(root / "CHIRPS25_2024-12_Nevada_subset.nc", initial_smaller_input_path)
+    shutil.copy(root / "CHIRPS25_2025-01_Nevada.nc", appended_input_path)
     print("Simulated downloading input files")
 
 
@@ -70,10 +60,8 @@ def simulate_file_download_hole(root, initial_input_path, appended_input_path_wi
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
     """
-    # for chirps_init_fil in root.glob("*initial*"):
-    #     shutil.copy(chirps_init_fil, initial_input_path)
-    shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
-    shutil.copy(root / "chirps_append_subset_with_hole.nc", appended_input_path_with_hole)
+    shutil.copy(root / "CHIRPS25_2024-12_Nevada.nc", initial_input_path)
+    shutil.copy(root / "CHIRPS25_2025-01_Nevada_with_hole.nc", appended_input_path_with_hole)
     print("Simulated downloading input files hole")
 
 
@@ -165,25 +153,26 @@ def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
     # Get the CHIRPS manager with rebuild set
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
     dm.zarr_json_path().unlink(missing_ok=True)
-    # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
-    # GRIB
     generated_dataset = dm.store.dataset()
-    lat, lon = 14.625, -91.375
+
+    # Las Vegas
+    lat, lon = 36.125, -115.625
+
     # Validate one row of data
     output_value = (
         generated_dataset[dm.data_var]
         .sel(
             latitude=lat,
             longitude=lon,
-            time=datetime.datetime(2003, 5, 12),
+            time=datetime.datetime(2024, 12, 12),
             method="nearest",
         )
         .values
     )
-    original_dataset = xarray.open_dataset(root / "chirps_initial_dataset.nc", engine="netcdf4")
+    original_dataset = xarray.open_dataset(root / "CHIRPS25_2024-12_Nevada.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
-        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 12)).values
+        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2024, 12, 12)).values
     )
     assert output_value == original_value
 
@@ -197,15 +186,15 @@ def test_prepare_input_files(manager_class, mocker, appended_input_path):
         return_value=appended_input_path,
     )
     dm = get_manager(manager_class, appended_input_path)
-    # Test that prepare_input_files successfully expands 2 files to 32
-    assert len(list(dm.input_files())) == 2
+    # Test that prepare_input_files successfully expands to 31 files
+    assert len(list(dm.input_files())) == 1
     dm.convert_to_lowest_common_time_denom(list(dm.input_files()), keep_originals=False)
-    assert len(list(dm.input_files())) == 32
-    # assert all 32 new files are NC4 files
+    assert len(list(dm.input_files())) == 31
+    # assert all 31 new files are NC4 files
     input_ncs = [pathlib.Path(file) for file in glob.glob(str(dm.local_input_path() / "*.nc"))]
     input_nc4s = dm.input_files()
     assert len(input_ncs) == 0
-    assert len(list(input_nc4s)) == 32
+    assert len(list(input_nc4s)) == 31
 
 
 def test_append_only(mocker, manager_class, test_chunks, appended_input_path, root):
@@ -214,18 +203,19 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     """
     # Get a non-rebuild manager for testing append
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False, store="local")
-    # Open the head with localstore + xarray.open_zarr and compare two data points with the same data points in a local
-    # GRIB file
     generated_dataset = dm.store.dataset()
-    lat, lon = 14.625, -91.375
+
+    # Las Vegas
+    lat, lon = 36.125, -115.625
+
     # Validate one row of data
     output_value = (
-        generated_dataset[dm.data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
+        generated_dataset[dm.data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
     )
-    original_dataset = xarray.open_dataset(root / "chirps_append_subset_0.nc", engine="netcdf4")
+    original_dataset = xarray.open_dataset(root / "CHIRPS25_2025-01_Nevada.nc", engine="netcdf4")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
-        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2003, 5, 25)).values
+        original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
     )
     assert output_value == original_value
 
@@ -241,7 +231,7 @@ def test_misaligned_zarr_dask_chunks_regression(
     If the append dataset is rechunked to the maximum chunk size in `prep_update_dataset` then this problem
     is addressed. If the test fails then the most likely suspect is a problem with rechunking here.
     """
-    # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
+    # run initial with a dataset whose time dimension is smaller (10) than the specified dask chunks (50)
     dm = get_manager(manager_class, input_path=initial_smaller_input_path, store="local")
     # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
     dm.expected_nan_frequency = 0.02
@@ -249,10 +239,8 @@ def test_misaligned_zarr_dask_chunks_regression(
     publish_dataset = dm.transform_dataset_in_memory()
     dm.parse(publish_dataset)
     dm.publish_metadata()
-    # Test an append on this curtailed dataset
-    # run_etl(manager_class, input_path=appended_input_path, store="local")
 
-    # run initial with a dataset whose time dimension is smaller (25) than the specified dask chunks (50)
+    # run initial with a dataset whose time dimension is smaller (10) than the specified dask chunks (50)
     dm = get_manager(manager_class, input_path=appended_input_path, store="local")
     # Override nan frequency defaults since the test data doesn't cover oceans, which are NaNs in CHIRPS
     dm.expected_nan_frequency = 0.02
@@ -277,7 +265,6 @@ def test_bad_append(
     run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
 
     # NOW try to parse a bad append
-    # Restore the original pre_parse_quality_check, which was patched to speed things up
     # Get a non-rebuild manager for testing appended_input_path_with_hole
     dm = get_manager(manager_class, input_path=appended_input_path_with_hole, store="local")
     dm.zarr_chunks = {}

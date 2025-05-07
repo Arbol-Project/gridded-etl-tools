@@ -31,11 +31,7 @@ def create_input_directories(initial_input_path, qc_input_path, appended_input_p
     The testing directories for initial, append and insert will get created before each run
     """
     for path in (initial_input_path, qc_input_path, appended_input_path):
-        if not path.exists():
-            os.makedirs(path, 0o755, True)
-            print(f"Created {path} for testing")
-        else:
-            print(f"Found existing {path}")
+        os.makedirs(path, 0o755, exist_ok=True)
 
 
 @pytest.fixture
@@ -44,12 +40,9 @@ def simulate_file_download(root, initial_input_path, appended_input_path, qc_inp
     Copies the default input NCs into the default input paths, simulating a download of original data. Later, the input
     directories will be deleted during clean up.
     """
-    # for chirps_init_fil in root.glob("*initial*"):
-    #     shutil.copy(chirps_init_fil, initial_input_path)
-    shutil.copy(root / "chirps_initial_dataset.nc", initial_input_path)
-    shutil.copy(root / "chirps_append_subset_0.nc", appended_input_path)
-    shutil.copy(root / "chirps_append_subset_1.nc", appended_input_path)
-    shutil.copy(root / "chirps_qc_test_2003041100.nc", qc_input_path)
+    shutil.copy(root / "CHIRPS25_2024-12_Nevada.nc", initial_input_path)
+    shutil.copy(root / "CHIRPS25_2025-01_Nevada.nc", appended_input_path)
+    shutil.copy(root / "CHIRPS25_2024-12_Nevada.nc", qc_input_path)
     print("Simulated downloading input files")
 
 
