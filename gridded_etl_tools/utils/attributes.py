@@ -325,6 +325,16 @@ class Attributes(ABC):
     minimum and maximum permissible values for common units
     """
 
+    ignorable_extraction_errors: tuple = ()
+    """
+    A tuple of errors that are ignorable during S3 extraction.
+    """
+
+    unsupported_extraction_errors: tuple = ()
+    """
+    A tuple of errors that are unsupported during S3 extraction.
+    """
+
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
 Attributes.__init_subclass__()

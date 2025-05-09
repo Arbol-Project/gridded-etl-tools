@@ -326,7 +326,7 @@ class S3Extractor(Extractor):
     be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager):
+    def __init__(self, dm: dataset_manager.DatasetManager, **kwargs):
         """
         Create a new Extractor object by associating a Dataset Manager with it.
 
@@ -335,8 +335,12 @@ class S3Extractor(Extractor):
         dm
             Source data for this dataset manager will be extracted
         """
-        super().__init__(dm)
+        super().__init__(dm, **kwargs)
         self.dm.zarr_jsons = []
+        if not isinstance(self.dm.ignorable_extraction_errors, tuple):
+            raise ValueError("ignorable_extraction_errors must be a tuple")
+        if not isinstance(self.dm.unsupported_extraction_errors, tuple):
+            raise ValueError("unsupported_extraction_errors must be a tuple")
 
     def request(
         self,
@@ -394,6 +398,12 @@ class S3Extractor(Extractor):
                 )
                 log.info(f"Finished downloading {informative_id}")
                 return True
+            except self.dm.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
+                return True
+            except self.dm.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
+                raise
             except Exception as e:
                 # Increase delay time after each failure
                 retry_delay = counter * 30
