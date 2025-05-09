@@ -256,6 +256,21 @@ class TestHTTPExtractor:
 
 class TestS3Extractor:
     @staticmethod
+    def test_s3_misspecified_extraction_errors(manager_class):
+        dm = manager_class()
+
+        # Test that misspecified ignorable extraction errors raise a ValueError
+        dm.ignorable_extraction_errors = [FileNotFoundError]
+        with pytest.raises(ValueError):
+            S3Extractor(dm)
+
+        # Ensure the same for unignorable extraction errors
+        dm.ignorable_extraction_errors = ()
+        dm.unsupported_extraction_errors = [ValueError]
+        with pytest.raises(ValueError):
+            S3Extractor(dm)
+
+    @staticmethod
     def test_s3_request(manager_class):
         extractor = S3Extractor(manager_class())
 
@@ -312,6 +327,39 @@ class TestS3Extractor:
         with pytest.raises(FileNotFoundError):
             extract.request(*args)
         assert time.sleep.call_count == 5
+
+    @staticmethod
+    def test_s3_request_permitted_fail(manager_class):
+        extract = S3Extractor(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, None]
+
+        extract.dm.ignorable_extraction_errors = (FileNotFoundError,)
+        extract.dm.unsupported_extraction_errors = (ValueError,)
+        extract.dm.kerchunkify = Mock(side_effect=FileNotFoundError("this is error is OK"))
+        time.sleep = Mock()  # avoid actually sleeping for large period of time
+
+        assert extract.request(*args)
+        assert time.sleep.call_count == 0
+
+    @staticmethod
+    def test_s3_request_unpermitted_fail(manager_class):
+        extract = S3Extractor(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = "/local/sand/depo/castle1.json"
+        args = [rfp, 0, 5, lfp, None]
+
+        extract.dm.ignorable_extraction_errors = (FileNotFoundError,)
+        extract.dm.unsupported_extraction_errors = (ValueError,)
+        extract.dm.kerchunkify = Mock(side_effect=ValueError("this error is not OK"))
+        time.sleep = Mock()  # avoid actually sleeping for large period of time
+
+        with pytest.raises(ValueError):
+            extract.request(*args)
+        assert time.sleep.call_count == 0
 
 
 class TestFTPExtractor:
