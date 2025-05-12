@@ -18,6 +18,7 @@ from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.publish import Publish
 from .utils.ipfs import IPFS
+from .utils.time import TimeSpan
 from .utils.store import Local, IPLD, S3
 
 
@@ -35,18 +36,37 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     .05 data
     """
 
-    SPAN_HALF_HOURLY = "half_hourly"
-    SPAN_HOURLY = "hourly"
-    SPAN_THREE_HOURLY = "3hourly"
-    SPAN_SIX_HOURLY = "6hourly"
-    SPAN_DAILY = "daily"
-    SPAN_WEEKLY = "weekly"
-    SPAN_MONTHLY = "monthly"
-    SPAN_YEARLY = "yearly"
-    SPAN_SEASONAL = "seasonal"
-    DATE_FORMAT_FOLDER = "%Y%m%d"
-    DATE_HOURLY_FORMAT_FOLDER = "%Y%m%d%H"
-    DATE_FORMAT_METADATA = "%Y/%m/%d"
+    # Time span constants for backward compatibility
+    SPAN_HALF_HOURLY = TimeSpan.SPAN_HALF_HOURLY
+    SPAN_HOURLY = TimeSpan.SPAN_HOURLY
+    SPAN_THREE_HOURLY = TimeSpan.SPAN_THREE_HOURLY
+    SPAN_SIX_HOURLY = TimeSpan.SPAN_SIX_HOURLY
+    SPAN_DAILY = TimeSpan.SPAN_DAILY
+    SPAN_WEEKLY = TimeSpan.SPAN_WEEKLY
+    SPAN_MONTHLY = TimeSpan.SPAN_MONTHLY
+    SPAN_YEARLY = TimeSpan.SPAN_YEARLY
+    SPAN_SEASONAL = TimeSpan.SPAN_SEASONAL
+
+    @classmethod
+    def from_time_span_string(cls, span_str: str) -> TimeSpan:
+        """Convert a string representation of a time span to the corresponding TimeSpan enum.
+
+        Parameters
+        ----------
+        span_str : str
+            String representation of the time span (e.g., "hourly", "daily")
+
+        Returns
+        -------
+        TimeSpan
+            The corresponding TimeSpan enum member
+
+        Raises
+        ------
+        ValueError
+            If the string does not correspond to a valid time span
+        """
+        return TimeSpan.from_string(span_str)
 
     def __init__(
         self,
