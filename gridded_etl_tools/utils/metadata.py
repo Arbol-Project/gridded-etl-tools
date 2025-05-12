@@ -4,6 +4,7 @@ import datetime
 import typing
 import zarr
 import shapely.geometry
+import numcodecs
 
 import numpy as np
 import xarray as xr
@@ -761,7 +762,7 @@ class Metadata(Convenience):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = (zarr.codecs.BloscCodec(cname="lz4"),) if self.use_compression else None
+        compressor = numcodecs.Blosc() if self.use_compression else None
 
         if not self.store.has_existing:
             for coord in dataset.coords:

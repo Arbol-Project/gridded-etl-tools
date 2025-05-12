@@ -126,6 +126,8 @@ class Publish(Transform):
         determined by taking the difference between the first two time entries in the dataset, so the dataset must also
         have at least two time steps worth of data.
 
+        The "zarr_format" keyword argument is not supported. The Zarr format will be forced to 2.0.
+
         Parameters
         ----------
         dataset
@@ -134,6 +136,11 @@ class Publish(Transform):
             Arguments to forward to `xr.Dataset.to_zarr`
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
+
+        Raises
+        ------
+        ValueError
+            If the zarr_format keyword is passed, and the value is not "2"
         """
         # First check that the data makes sense
         self.pre_parse_quality_check(dataset)
@@ -152,7 +159,8 @@ class Publish(Transform):
                     "update_is_append_only": dataset.get("update_is_append_only"),
                     "initial_parse": False,
                 }
-                self.store.write_metadata_only(update_attrs=update_attrs)
+                # Force v2 metadata format.
+                self.store.write_metadata_only_v2(update_attrs=update_attrs)
                 dataset.attrs.update(update_attrs)
             else:
                 dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
@@ -161,12 +169,14 @@ class Publish(Transform):
 
             # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
-            dataset.to_zarr(*args, **kwargs)
+            if kwargs.get("zarr_format", 2) != 2:
+                raise ValueError("The zarr_format must be 2.")
+            dataset.to_zarr(*args, zarr_format=2, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
-            # Indicate in metadata that update is complete.
+            # Indicate in metadata that update is complete. Force metadata to be v2 format.
             self.info("Writing metadata after writing data to indicate write is finished.")
-            self.store.write_metadata_only(update_attrs=post_parse_attrs)
+            self.store.write_metadata_only_v2(update_attrs=post_parse_attrs)
 
     def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """

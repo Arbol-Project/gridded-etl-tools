@@ -308,10 +308,12 @@ class TestPublish:
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        dataset.to_zarr.assert_called_once_with("foo", zarr_format=2, bar="baz")
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls(
+
+        # Metadata v2 function must be called
+        dm.store.write_metadata_only_v2.assert_has_calls(
             [
                 mock.call(
                     update_attrs={
@@ -325,6 +327,10 @@ class TestPublish:
         )
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
+        # If to_zarr tries to write a v3 Zarr, raise an error
+        with pytest.raises(ValueError):
+            dm.to_zarr(dataset, "foo", bar="baz", zarr_format=3)
+
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
@@ -337,9 +343,10 @@ class TestPublish:
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        # Zarr format is explicitly set to 2.0
+        dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
+        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
     @staticmethod
@@ -372,7 +379,7 @@ class TestPublish:
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
         dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+        dataset.to_zarr(dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
@@ -418,7 +425,7 @@ class TestPublish:
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
         dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(store=dm.custom_output_path)  # write out local file to test updates on
+        dataset.to_zarr(store=dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()

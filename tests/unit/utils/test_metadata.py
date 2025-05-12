@@ -3,8 +3,8 @@ from unittest import mock
 
 import pathlib
 import pytest
-import zarr
 import numpy as np
+import numcodecs
 
 # Imports used for legacy encoding change tests
 # import os
@@ -119,8 +119,8 @@ class TestMetadata:
 
         dm.set_initial_compression(dataset)
         for coord in dataset.coords:
-            assert dataset[coord].encoding["compressors"] == (zarr.codecs.BloscCodec(cname="lz4"),)
-        assert dataset["data"].encoding["compressors"] == (zarr.codecs.BloscCodec(cname="lz4"),)
+            assert dataset[coord].encoding["compressors"] == numcodecs.Blosc()
+        assert dataset["data"].encoding["compressors"] == numcodecs.Blosc()
 
     # @staticmethod
     # def test_set_initial_compression(manager_class, fake_original_dataset):
@@ -166,8 +166,8 @@ class TestMetadata:
         dataset = fake_original_dataset
         # Remove any existing compression encoding
         for coord in dataset.coords:
-            dataset[coord].encoding.pop("compressor", None)
-        dataset[dm.data_var].encoding.pop("compressor", None)
+            dataset[coord].encoding.pop("compressors", None)
+        dataset[dm.data_var].encoding.pop("compressors", None)
 
         dm.set_initial_compression(dataset)
 
