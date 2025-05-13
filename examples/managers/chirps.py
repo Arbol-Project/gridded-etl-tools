@@ -47,7 +47,7 @@ class CHIRPS(DatasetManager):
         static_metadata = {
             "coordinate reference system": "EPSG:4326",
             "update cadence": self.update_cadence,
-            "temporal resolution": self.time_resolution.__str__(),
+            "temporal resolution": str(self.time_resolution),
             "spatial resolution": self.spatial_resolution,
             "spatial precision": 0.00001,
             "provider url": "http://chg.geog.ucsb.edu/",

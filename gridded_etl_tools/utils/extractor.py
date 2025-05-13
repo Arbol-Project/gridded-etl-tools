@@ -332,7 +332,6 @@ class S3Extractor(Extractor):
         concurrency_limit: int = 8,
         ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
         unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
-        **kwargs,
     ):
         """
         Create a new Extractor object by associating a Dataset Manager with it.
@@ -350,7 +349,7 @@ class S3Extractor(Extractor):
             A list or tuple of exception types that should trigger
             the immediate failure of the entire extraction operation.
         """
-        super().__init__(dm, concurrency_limit=concurrency_limit, **kwargs)
+        super().__init__(dm, concurrency_limit=concurrency_limit)
         self.dm.zarr_jsons = []
 
         # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash

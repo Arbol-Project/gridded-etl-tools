@@ -38,7 +38,7 @@ class MyNewETL(DatasetManager, ABC):
             "coordinate reference system": "EPSG:4326",
             "spatial resolution": self.spatial_resolution,
             "spatial precision": 0.01,
-            "temporal resolution": self.temporal_resolution(),
+            "temporal resolution": str(self.temporal_resolution()),
             "update cadence": "daily",
             "provider url": "",
             "data download url": "",

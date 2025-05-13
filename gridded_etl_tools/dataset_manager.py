@@ -419,7 +419,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: TimeSpan = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -428,6 +428,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         name : str
             The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
             manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
+        time_resolution : TimeSpan, optional
+            The time resolution of the dataset to be parsed. If provided, only subclasses with the same time resolution
+            will be returned. This helps when there are multiple subclasses with the same name but different time resolutions.
 
         Returns
         -------
