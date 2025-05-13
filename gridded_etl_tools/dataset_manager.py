@@ -429,8 +429,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
             manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
         time_resolution : TimeSpan, optional
-            The time resolution of the dataset to be parsed. If provided, only subclasses with the same time resolution
-            will be returned. This helps when there are multiple subclasses with the same name but different time resolutions.
+            The time resolution of the dataset to be parsed.
+            If provided, only subclasses with the same time resolution will be returned.
+            This helps when there are multiple subclasses with the same name but different time resolutions.
 
         Returns
         -------
@@ -439,7 +440,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         """
         for source in cls.get_subclasses():
             if source.dataset_name == name:
-                if time_resolution and source.time_resolution != time_resolution:
+                if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
                     continue
                 return source
 
