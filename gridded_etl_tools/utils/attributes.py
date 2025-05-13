@@ -210,6 +210,11 @@ class Attributes(ABC):
     Indicator of a missing value in a dataset
     """
 
+    spatial_dims: list[str] = ["latitude", "longitude"]
+    """
+    Strings representing the spatial dimensions of the dataset in ["y", "x"] format.
+    """
+
     @classmethod
     @deprecation.deprecated("Use the missing_value attribute")
     def missing_value_indicator(cls) -> str:

@@ -356,9 +356,11 @@ class Metadata(Convenience, IPFS):
         # "properties" key in STAC metadata
         properties_dict = self.zarr_md_to_stac_format(dataset)
         # Include the array size
+
+        spatial_size_dict = {dim_name: dataset[dim_name].size for dim_name in self.spatial_dims}
+
         properties_dict["array_size"] = {
-            "latitude": dataset.latitude.size,
-            "longitude": dataset.longitude.size,
+            **spatial_size_dict,
             self.time_dim: dataset[self.time_dim].size,
         }
         if self.time_dim == "forecast_reference_time":
@@ -793,7 +795,7 @@ class Metadata(Convenience, IPFS):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        for coord in ["latitude", "longitude"]:
+        for coord in self.spatial_dims:
             dataset[coord].attrs.pop("chunks", None)
             dataset[coord].attrs.pop("preferred_chunks", None)
             dataset[coord].encoding.pop("_FillValue", None)
