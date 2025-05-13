@@ -935,6 +935,14 @@ class TestTransform:
         assert dm.time_dim == "time"
 
     @staticmethod
+    def test_set_key_dims_y_x(manager_y_x_class):
+        dm = manager_y_x_class()
+
+        dm.set_key_dims()
+        assert dm.standard_dims == ["time", "y", "x"]
+        assert dm.time_dim == "time"
+
+    @staticmethod
     def test_set_key_dims_hindcast(manager_class):
         dm = manager_class()
         dm.dataset_category = "hindcast"
