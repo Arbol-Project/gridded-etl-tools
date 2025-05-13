@@ -267,6 +267,7 @@ class TestDatasetManager:
     def test_get_subclass_time_resolution(manager_class):
         assert manager_class.get_subclass("Ringo") is Ringo
         assert manager_class.get_subclass("Ringo", time_resolution=TimeSpan.from_string("daily")) is RingoDaily
+        assert manager_class.get_subclass("Ringo", time_resolution=manager_class.from_time_span_string("daily")) is RingoDaily
         assert George.get_subclass("Ringo") is Ringo
 
     @staticmethod
