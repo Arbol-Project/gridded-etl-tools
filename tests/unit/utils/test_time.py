@@ -1,4 +1,5 @@
 import pytest
+from datetime import timedelta
 from gridded_etl_tools.utils.time import TimeUnit, TimeSpan
 
 
@@ -33,9 +34,6 @@ class TestTimeUnit:
             ("hours", 1, 60),
             ("days", 1, 24 * 60),
             ("weeks", 1, 7 * 24 * 60),
-            ("months", 1, 30 * 24 * 60),  # Approximation
-            ("years", 1, 365 * 24 * 60),  # Approximation
-            ("seasons", 1, 90 * 24 * 60),  # Approximation
             ("minutes", 30, 30),
             ("hours", 2, 120),
             ("days", 2, 48 * 60),
@@ -45,6 +43,23 @@ class TestTimeUnit:
         """Test conversion of various time units to minutes."""
         time_unit = TimeUnit(unit, value)
         assert time_unit.to_minutes() == expected_minutes
+
+    @pytest.mark.parametrize(
+        "unit,value,expected_minutes",
+        [
+            ("months", 1, 30 * 24 * 60),  # Approximation
+            ("years", 1, 365 * 24 * 60),  # Approximation
+            ("seasons", 1, 90 * 24 * 60),  # Approximation
+        ],
+    )
+    def test_to_minutes_invalid(self, unit, value, expected_minutes):
+        """Test conversion of various time units to minutes."""
+        time_unit = TimeUnit(unit, value)
+        with pytest.raises(
+            ValueError,
+            match=f"Cannot convert {time_unit.unit} to minutes as {time_unit.unit} is not of a fixed duration.",
+        ):
+            time_unit.to_minutes()
 
     def test_str_representation(self):
         """Test string representation of TimeUnit."""
@@ -104,7 +119,10 @@ class TestTimeSpan:
         """Test conversion of TimeSpan to minutes."""
         assert TimeSpan.SPAN_HOURLY.to_minutes() == 60
         assert TimeSpan.SPAN_DAILY.to_minutes() == 24 * 60
-        assert TimeSpan.SPAN_SEASONAL.to_minutes() == 90 * 24 * 60  # 3 months
+        with pytest.raises(
+            ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration."
+        ):
+            TimeSpan.SPAN_SEASONAL.to_minutes()
 
     def test_str_representation(self):
         """Test string representation of TimeSpan members."""
@@ -117,8 +135,14 @@ class TestTimeSpan:
         assert TimeSpan.SPAN_HALF_HOURLY < TimeSpan.SPAN_HOURLY
         assert TimeSpan.SPAN_HOURLY < TimeSpan.SPAN_DAILY
         assert TimeSpan.SPAN_DAILY < TimeSpan.SPAN_WEEKLY
-        assert TimeSpan.SPAN_WEEKLY < TimeSpan.SPAN_MONTHLY
-        assert TimeSpan.SPAN_MONTHLY < TimeSpan.SPAN_YEARLY
+        with pytest.raises(ValueError, match="Cannot convert months to minutes as months is not of a fixed duration."):
+            TimeSpan.SPAN_WEEKLY < TimeSpan.SPAN_MONTHLY
+        with pytest.raises(ValueError, match="Cannot convert months to minutes as months is not of a fixed duration."):
+            TimeSpan.SPAN_MONTHLY < TimeSpan.SPAN_YEARLY
+        with pytest.raises(
+            ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration."
+        ):
+            TimeSpan.SPAN_SEASONAL < TimeSpan.SPAN_YEARLY
 
     def test_comparison_invalid_type(self):
         """Test that comparison with invalid types returns NotImplemented."""
@@ -133,9 +157,24 @@ class TestTimeSpan:
             TimeSpan.SPAN_SIX_HOURLY,
             TimeSpan.SPAN_DAILY,
             TimeSpan.SPAN_WEEKLY,
-            TimeSpan.SPAN_MONTHLY,
-            TimeSpan.SPAN_SEASONAL,
-            TimeSpan.SPAN_YEARLY,
+            # MONTHLY, YEARLY, SEASONAL cannot be compared mathematically due to variable durations
         ]
         for i in range(len(spans) - 1):
             assert spans[i] < spans[i + 1]
+
+    def test_to_timedelta(self):
+        """Test conversion of TimeSpan to timedelta."""
+        assert TimeSpan.SPAN_HALF_HOURLY.to_timedelta() == timedelta(minutes=30)
+        assert TimeSpan.SPAN_HOURLY.to_timedelta() == timedelta(hours=1)
+        assert TimeSpan.SPAN_THREE_HOURLY.to_timedelta() == timedelta(hours=3)
+        assert TimeSpan.SPAN_SIX_HOURLY.to_timedelta() == timedelta(hours=6)
+        assert TimeSpan.SPAN_DAILY.to_timedelta() == timedelta(days=1)
+        assert TimeSpan.SPAN_WEEKLY.to_timedelta() == timedelta(weeks=1)
+        with pytest.raises(ValueError, match="Cannot convert months to minutes as months is not of a fixed duration"):
+            TimeSpan.SPAN_MONTHLY.to_timedelta()
+        with pytest.raises(ValueError, match="Cannot convert years to minutes as years is not of a fixed duration"):
+            TimeSpan.SPAN_YEARLY.to_timedelta()
+        with pytest.raises(
+            ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration"
+        ):
+            TimeSpan.SPAN_SEASONAL.to_timedelta()

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal, Dict, ClassVar, TypeVar
 from enum import Enum
+from datetime import timedelta
 
 TimeUnitType = Literal["minutes", "hours", "days", "weeks", "months", "years", "seasons"]
 
@@ -68,6 +69,12 @@ class TimeUnit:
         - years: 365 days
         - seasons: 90 days (3 months)
         """
+        if self.unit in ["months", "years", "seasons"]:
+            raise ValueError(
+                f"Cannot convert {self.unit} to minutes as {self.unit} is not of a fixed duration due to "
+                "variable month lengths, leap years, etc. "
+                "Please type manually in your code the specific duration you need"
+            )
         return self.value * self._CONVERSION_FACTORS[self.unit]
 
     def __str__(self) -> str:
@@ -203,3 +210,13 @@ class TimeSpan(Enum):
         if not isinstance(other, TimeSpan):
             return NotImplemented
         return self.to_minutes() < other.to_minutes()
+
+    def to_timedelta(self) -> timedelta:
+        """Convert this time span to a timedelta.
+
+        Returns
+        -------
+        timedelta
+            The timedelta representing this time span
+        """
+        return timedelta(minutes=self.to_minutes())
