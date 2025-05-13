@@ -105,6 +105,9 @@ class TimeSpan(Enum):
     def from_string(cls: type[T], span_str: str) -> T:
         """Convert a string representation of a time span to the corresponding TimeSpan enum.
 
+        This is useful for converting user-provided time spans to the internal representation
+        and hence maintaining backwards compatibility with existing code.
+
         Parameters
         ----------
         span_str : str
