@@ -15,6 +15,7 @@ share/
 # Climate data
 datasets
 climate
+temp/
 *.json
 static/STAC_Master_Catalog.json
 dask-worker-space/
