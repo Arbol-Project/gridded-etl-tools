@@ -46,6 +46,9 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     SPAN_MONTHLY = TimeSpan.SPAN_MONTHLY
     SPAN_YEARLY = TimeSpan.SPAN_YEARLY
     SPAN_SEASONAL = TimeSpan.SPAN_SEASONAL
+    DATE_FORMAT_FOLDER = "%Y%m%d"
+    DATE_HOURLY_FORMAT_FOLDER = "%Y%m%d%H"
+    DATE_FORMAT_METADATA = "%Y/%m/%d"
 
     @classmethod
     def from_time_span_string(cls, span_str: str) -> TimeSpan:

@@ -6,6 +6,7 @@ import pytest
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
+from gridded_etl_tools.utils.time import TimeSpan
 
 from .conftest import John, Paul, George, Ringo, RingoDaily
 
@@ -265,7 +266,7 @@ class TestDatasetManager:
     @staticmethod
     def test_get_subclass_time_resolution(manager_class):
         assert manager_class.get_subclass("Ringo") is Ringo
-        assert manager_class.get_subclass("Ringo", time_resolution="daily") is RingoDaily
+        assert manager_class.get_subclass("Ringo", time_resolution=TimeSpan.from_string("daily")) is RingoDaily
         assert George.get_subclass("Ringo") is Ringo
 
     @staticmethod

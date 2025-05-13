@@ -457,11 +457,14 @@ class Publish(Transform):
             A List of (Datetime, Datetime) tuples defining the time ranges of records to insert
         regions_indices: list[int, int]
              A List of (int, int) tuples defining the indices of records to insert
-
         """
-        # NOTE this won't work for months (returns 1 minute), we could define a more precise method with if/else
-        # statements if needed.
-        dataset_time_span = f"1{self.time_resolution[0]}"
+        # NOTE this won't work for months (returns 1 minute) because of how pandas handles timedeltas
+        # We could define a more precise method with if/else statements if needed.
+        # Get the time unit from the TimeSpan enum member
+        time_unit = self.time_resolution.get_time_unit()
+        # Create a pandas Timedelta string in the format "1h", "1d", etc.
+        dataset_time_span = f"{time_unit.value}{time_unit.unit[0]}"
+
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value,
         # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
