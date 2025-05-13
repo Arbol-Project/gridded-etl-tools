@@ -326,7 +326,7 @@ class S3Extractor(Extractor):
     be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager, **kwargs):
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8, **kwargs):
         """
         Create a new Extractor object by associating a Dataset Manager with it.
 
@@ -335,7 +335,7 @@ class S3Extractor(Extractor):
         dm
             Source data for this dataset manager will be extracted
         """
-        super().__init__(dm, **kwargs)
+        super().__init__(dm, concurrency_limit=concurrency_limit, **kwargs)
         self.dm.zarr_jsons = []
         if not isinstance(self.dm.ignorable_extraction_errors, tuple):
             raise ValueError("ignorable_extraction_errors must be a tuple")

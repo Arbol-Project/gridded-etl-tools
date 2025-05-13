@@ -325,14 +325,16 @@ class Attributes(ABC):
     minimum and maximum permissible values for common units
     """
 
-    ignorable_extraction_errors: tuple = ()
+    ignorable_extraction_errors: tuple[Exception] = ()
     """
-    A tuple of errors that are ignorable during S3 extraction.
+    A tuple of errors that are ignorable during S3 extraction and should trigger skipping the extract
+    entirely and moving to the next file.
     """
 
-    unsupported_extraction_errors: tuple = ()
+    unsupported_extraction_errors: tuple[Exception] = ()
     """
-    A tuple of errors that are unsupported during S3 extraction.
+    A tuple of errors that are unsupported during S3 extraction and should trigger immediate failure,
+    not retrying.
     """
 
 
