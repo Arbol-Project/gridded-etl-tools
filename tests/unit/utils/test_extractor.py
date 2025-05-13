@@ -259,16 +259,15 @@ class TestS3Extractor:
     def test_s3_misspecified_extraction_errors(manager_class):
         dm = manager_class()
 
-        # Test that misspecified ignorable extraction errors raise a ValueError
-        dm.ignorable_extraction_errors = [FileNotFoundError]
-        with pytest.raises(ValueError):
-            S3Extractor(dm)
+        # Test that ignorable extraction errors are converted to a tuple
+        ignorable_extraction_errors = [FileNotFoundError]
+        extractor = S3Extractor(dm, ignorable_extraction_errors=ignorable_extraction_errors)
+        assert extractor.ignorable_extraction_errors == tuple(ignorable_extraction_errors)
 
-        # Ensure the same for unignorable extraction errors
-        dm.ignorable_extraction_errors = ()
-        dm.unsupported_extraction_errors = [ValueError]
-        with pytest.raises(ValueError):
-            S3Extractor(dm)
+        # Ensure the same for unsupported extraction errors
+        unsupported_extraction_errors = [ValueError]
+        extractor = S3Extractor(dm, unsupported_extraction_errors=unsupported_extraction_errors)
+        assert extractor.unsupported_extraction_errors == tuple(unsupported_extraction_errors)
 
     @staticmethod
     def test_s3_request(manager_class):
@@ -330,14 +329,16 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_permitted_fail(manager_class):
-        extract = S3Extractor(manager_class())
+        extract = S3Extractor(
+            manager_class(),
+            ignorable_extraction_errors=[FileNotFoundError],
+            unsupported_extraction_errors=[ValueError],
+        )
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
         args = [rfp, 0, 5, lfp, None]
 
-        extract.dm.ignorable_extraction_errors = (FileNotFoundError,)
-        extract.dm.unsupported_extraction_errors = (ValueError,)
         extract.dm.kerchunkify = Mock(side_effect=FileNotFoundError("this is error is OK"))
         time.sleep = Mock()  # avoid actually sleeping for large period of time
 
@@ -346,14 +347,16 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_unpermitted_fail(manager_class):
-        extract = S3Extractor(manager_class())
+        extract = S3Extractor(
+            manager_class(),
+            ignorable_extraction_errors=[FileNotFoundError],
+            unsupported_extraction_errors=[ValueError],
+        )
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
         args = [rfp, 0, 5, lfp, None]
 
-        extract.dm.ignorable_extraction_errors = (FileNotFoundError,)
-        extract.dm.unsupported_extraction_errors = (ValueError,)
         extract.dm.kerchunkify = Mock(side_effect=ValueError("this error is not OK"))
         time.sleep = Mock()  # avoid actually sleeping for large period of time
 

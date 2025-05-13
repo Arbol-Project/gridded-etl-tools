@@ -354,8 +354,8 @@ class S3Extractor(Extractor):
         self.dm.zarr_jsons = []
 
         # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
-        ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
-        unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
+        self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
+        self.unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
 
     def request(
         self,
