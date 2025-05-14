@@ -128,7 +128,13 @@ class TestTimeSpan:
         """Test string representation of TimeSpan members."""
         assert str(TimeSpan.SPAN_HALF_HOURLY) == "half_hourly"
         assert str(TimeSpan.SPAN_HOURLY) == "hourly"
+        assert str(TimeSpan.SPAN_THREE_HOURLY) == "3hourly"
+        assert str(TimeSpan.SPAN_SIX_HOURLY) == "6hourly"
         assert str(TimeSpan.SPAN_DAILY) == "daily"
+        assert str(TimeSpan.SPAN_WEEKLY) == "weekly"
+        assert str(TimeSpan.SPAN_MONTHLY) == "monthly"
+        assert str(TimeSpan.SPAN_YEARLY) == "yearly"
+        assert str(TimeSpan.SPAN_SEASONAL) == "seasonal"
 
     def test_comparison(self):
         """Test comparison of TimeSpan members."""

@@ -186,8 +186,33 @@ class TimeSpan(Enum):
         -------
         str
             A string representation of the time span without the "SPAN_" prefix
+            and with numeric values converted from words (e.g., "THREE_" becomes "3")
         """
-        return self.name.lower().replace("span_", "")
+        # First remove the SPAN_ prefix and convert to lowercase
+        name = self.name.lower().replace("span_", "")
+
+        # Dictionary mapping word numbers to digits
+        # NOTE there are packages that do this programmatically,
+        # but installing a package for this is overkill
+        word_to_num = {
+            "one": "1",
+            "two": "2",
+            "three": "3",
+            "four": "4",
+            "five": "5",
+            "six": "6",
+            "seven": "7",
+            "eight": "8",
+            "nine": "9",
+            "ten": "10",
+        }
+
+        # Replace any word numbers with their digit equivalents
+        for word, num in word_to_num.items():
+            if name.startswith(word + "_"):
+                name = name.replace(word + "_", num)
+
+        return name
 
     def __lt__(self, other: "TimeSpan") -> bool:
         """Compare time spans based on their duration in minutes.
