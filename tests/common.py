@@ -217,7 +217,7 @@ def patched_output_root(self):
 
 
 def patched_key(self):
-    return f"{self.dataset_name}-{self.time_resolution}_test_initial"
+    return f"{self.dataset_name}-{self.time_resolution.__str__()}_test_initial"
 
 
 original_zarr_json_path = DatasetManager.zarr_json_path

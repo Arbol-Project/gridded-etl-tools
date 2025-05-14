@@ -326,7 +326,13 @@ class S3Extractor(Extractor):
     be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager):
+    def __init__(
+        self,
+        dm: dataset_manager.DatasetManager,
+        concurrency_limit: int = 8,
+        ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
+        unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
+    ):
         """
         Create a new Extractor object by associating a Dataset Manager with it.
 
@@ -334,9 +340,21 @@ class S3Extractor(Extractor):
         ----------
         dm
             Source data for this dataset manager will be extracted
+        concurrency_limit
+            Number of simultaneous threads to run while requesting data
+        ignorable_extraction_errors
+            A list or tuple of exception types that can be safely ignored during S3 extraction.
+            These will trigger skipping the current extract operation (for a given file) and requesting the next file
+        unsupported_extraction_errors
+            A list or tuple of exception types that should trigger
+            the immediate failure of the entire extraction operation.
         """
-        super().__init__(dm)
+        super().__init__(dm, concurrency_limit=concurrency_limit)
         self.dm.zarr_jsons = []
+
+        # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
+        self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
+        self.unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
 
     def request(
         self,
@@ -394,6 +412,12 @@ class S3Extractor(Extractor):
                 )
                 log.info(f"Finished downloading {informative_id}")
                 return True
+            except self.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
+                return True
+            except self.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
+                raise
             except Exception as e:
                 # Increase delay time after each failure
                 retry_delay = counter * 30

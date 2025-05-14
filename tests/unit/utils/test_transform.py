@@ -324,7 +324,7 @@ class TestTransform:
         assert md.zarr_jsons == [{"hi": "mom!"}]
 
         s3fs.S3FileSystem.assert_called_once_with()
-        s3.open.assert_called_once_with("over/here", anon=True, default_cache_type="readahead")
+        s3.open.assert_called_once_with("over/here", default_cache_type="readahead")
 
         SingleHdf5ToZarr.assert_called_once_with(h5f=infile, url="over/here")
         SingleHdf5ToZarr.return_value.translate.assert_called_once_with()
@@ -345,7 +345,7 @@ class TestTransform:
 
         scan_grib.assert_called_once_with(
             url="over/here",
-            storage_options={"anon": True, "default_cache_type": "readahead"},
+            storage_options={"default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
         )
@@ -366,7 +366,7 @@ class TestTransform:
 
         scan_grib.assert_called_once_with(
             url="over/here",
-            storage_options={"anon": True, "default_cache_type": "readahead"},
+            storage_options={"default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
         )
@@ -395,7 +395,7 @@ class TestTransform:
 
         scan_grib.assert_called_once_with(
             url="over/here",
-            storage_options={"anon": True, "default_cache_type": "readahead"},
+            storage_options={"default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
         )
@@ -416,7 +416,7 @@ class TestTransform:
 
         scan_grib.assert_called_once_with(
             url="over/here",
-            storage_options={"anon": True, "default_cache_type": "readahead"},
+            storage_options={"default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
         )

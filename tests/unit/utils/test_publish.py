@@ -971,7 +971,6 @@ class TestPublish:
         with pytest.raises(TypeError):
             dm.pre_parse_quality_check(fake_original_dataset)
 
-    @staticmethod
     def test_preparse_quality_check_nan_binomial(mocker, manager_class, fake_large_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()

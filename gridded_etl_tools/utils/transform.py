@@ -242,7 +242,7 @@ class Transform(Metadata, Convenience):
         ValueError
             Return a ValueError if the wrong file type is passed for scanning or populated to scanned_zarr_json
         """
-        s3_so = {"anon": True, "default_cache_type": "readahead"}
+        s3_so = {"default_cache_type": "readahead"}
         # Scan based on file type
         if self.file_type == "NetCDF":
             with s3fs.S3FileSystem().open(file_path, **s3_so) as infile:

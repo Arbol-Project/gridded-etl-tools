@@ -7,6 +7,7 @@ import pytest
 import xarray as xr
 
 from gridded_etl_tools import dataset_manager
+from gridded_etl_tools.utils.time import TimeSpan
 
 HERE = pathlib.Path(__file__).parent
 INPUTS = HERE / "inputs"
@@ -215,7 +216,7 @@ class DummyManager(DummyManagerBase):
     dataset_name = "DummyManager"
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
-    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+    time_resolution = TimeSpan.SPAN_DAILY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
 
@@ -252,7 +253,7 @@ class Ringo(George):
 
 class RingoDaily(DummyManager):
     dataset_name = "Ringo"
-    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+    time_resolution = TimeSpan.SPAN_DAILY
 
 
 original_times = np.array(

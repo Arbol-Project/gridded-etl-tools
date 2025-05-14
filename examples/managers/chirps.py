@@ -10,6 +10,7 @@ from abc import ABC
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 from gridded_etl_tools.utils import extractor
+from gridded_etl_tools.utils.time import TimeSpan
 
 
 class CHIRPS(DatasetManager):
@@ -46,7 +47,7 @@ class CHIRPS(DatasetManager):
         static_metadata = {
             "coordinate reference system": "EPSG:4326",
             "update cadence": self.update_cadence,
-            "temporal resolution": self.time_resolution,
+            "temporal resolution": str(self.time_resolution),
             "spatial resolution": self.spatial_resolution,
             "spatial precision": 0.00001,
             "provider url": "http://chg.geog.ucsb.edu/",
@@ -94,7 +95,7 @@ class CHIRPS(DatasetManager):
     collection_name = "CHIRPS"
     """Overall collection of data. Used for filling and referencing STAC Catalog."""
 
-    time_resolution = DatasetManager.SPAN_DAILY
+    time_resolution = TimeSpan.SPAN_DAILY
     """Increment size along the "time" coordinate axis"""
 
     data_var = "precip"
