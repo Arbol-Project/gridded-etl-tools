@@ -267,7 +267,7 @@ class TestDatasetManager:
         assert manager_class.get_subclass("Ringo") is Ringo
         assert manager_class.get_subclass("Ringo", time_resolution="daily") is RingoDaily
         assert (
-            manager_class.get_subclass("Ringo", time_resolution=manager_class.from_time_span_string("daily"))
+            manager_class.get_subclass("Ringo", time_resolution=str(manager_class.from_time_span_string("daily")))
             is RingoDaily
         )
         assert George.get_subclass("Ringo") is Ringo
