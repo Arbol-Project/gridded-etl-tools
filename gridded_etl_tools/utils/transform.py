@@ -241,7 +241,7 @@ class Transform(Metadata, Convenience):
         ValueError
             Return a ValueError if the wrong file type is passed for scanning or populated to scanned_zarr_json
         """
-        s3_so = {"anon": True, "default_cache_type": "readahead"}
+        s3_so = {"default_cache_type": "readahead"}
         # Scan based on file type
         if self.file_type == "NetCDF":
             with s3fs.S3FileSystem().open(file_path, **s3_so) as infile:
@@ -703,7 +703,7 @@ class Transform(Metadata, Convenience):
             Return a ValueError if `dataset_category` is misspecified
         """
         if self.dataset_category == "observation":
-            self.standard_dims = ["time", "latitude", "longitude"]
+            self.standard_dims = ["time"] + self.spatial_dims
             self.time_dim = "time"
         elif self.dataset_category == "hindcast":
             self.standard_dims = [
@@ -711,15 +711,13 @@ class Transform(Metadata, Convenience):
                 "forecast_reference_offset",
                 "step",
                 "ensemble",
-                "latitude",
-                "longitude",
-            ]
+            ] + self.spatial_dims
             self.time_dim = "hindcast_reference_time"
         elif self.dataset_category == "ensemble":
-            self.standard_dims = ["forecast_reference_time", "step", "ensemble", "latitude", "longitude"]
+            self.standard_dims = ["forecast_reference_time", "step", "ensemble"] + self.spatial_dims
             self.time_dim = "forecast_reference_time"
         elif self.dataset_category == "forecast":
-            self.standard_dims = ["forecast_reference_time", "step", "latitude", "longitude"]
+            self.standard_dims = ["forecast_reference_time", "step"] + self.spatial_dims
             self.time_dim = "forecast_reference_time"
         else:
             raise ValueError(

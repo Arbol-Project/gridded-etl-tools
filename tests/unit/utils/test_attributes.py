@@ -145,7 +145,7 @@ class TestAttributes:
     @staticmethod
     def test_temporal_resolution(manager_class):
         with pytest.deprecated_call():
-            assert manager_class.temporal_resolution() == "daily"
+            assert str(manager_class.temporal_resolution()) == "daily"
 
     @staticmethod
     def test_missing_value_indicator(manager_class):

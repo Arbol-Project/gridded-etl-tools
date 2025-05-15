@@ -7,6 +7,7 @@ import pytest
 import xarray as xr
 
 from gridded_etl_tools import dataset_manager
+from gridded_etl_tools.utils.time import TimeSpan
 
 HERE = pathlib.Path(__file__).parent
 INPUTS = HERE / "inputs"
@@ -28,6 +29,22 @@ def fake_original_dataset():
         np.random.randn(138, 4, 4),
         dims=("time", "latitude", "longitude"),
         coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def fake_y_x_dataset():
+    time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
+    y = xr.DataArray(np.arange(10, 50, 10), dims="y", coords={"y": np.arange(10, 50, 10)})
+    x = xr.DataArray(np.arange(100, 140, 10), dims="x", coords={"x": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(138, 4, 4),
+        dims=("time", "y", "x"),
+        coords=(time, y, x),
     )
 
     ds = xr.Dataset({"data": data})
@@ -143,6 +160,11 @@ def manager_class():
     return DummyManager
 
 
+@pytest.fixture
+def manager_y_x_class():
+    return DummyYXManager
+
+
 def unimplemented(*args, **kwargs):  # pragma NO COVER
     raise NotImplementedError
 
@@ -195,6 +217,18 @@ class DummyManager(DummyManagerBase):
     dataset_name = "DummyManager"
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
+    time_resolution = TimeSpan.SPAN_DAILY
+    final_lag_in_days = 3
+    expected_nan_frequency = 0.2
+
+
+class DummyYXManager(DummyManagerBase):
+    collection_name = "Vintage Guitars"
+    concat_dimensions = ["z", "zz"]
+    dataset_name = "DummyYXManager"
+    identical_dimensions = ["x", "y"]
+    spatial_dims = ["y", "x"]
+    protocol = "handshake"
     time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
@@ -220,7 +254,7 @@ class Ringo(George):
 
 class RingoDaily(DummyManager):
     dataset_name = "Ringo"
-    time_resolution = dataset_manager.DatasetManager.SPAN_DAILY
+    time_resolution = TimeSpan.SPAN_DAILY
 
 
 original_times = np.array(

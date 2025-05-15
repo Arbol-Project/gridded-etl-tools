@@ -338,9 +338,11 @@ class Metadata(Convenience):
         # "properties" key in STAC metadata
         properties_dict = self.zarr_md_to_stac_format(dataset)
         # Include the array size
+
+        spatial_size_dict = {dim_name: dataset[dim_name].size for dim_name in self.spatial_dims}
+
         properties_dict["array_size"] = {
-            "latitude": dataset.latitude.size,
-            "longitude": dataset.longitude.size,
+            **spatial_size_dict,
             self.time_dim: dataset[self.time_dim].size,
         }
         if self.time_dim == "forecast_reference_time":
@@ -575,8 +577,6 @@ class Metadata(Convenience):
         self.encode_vars(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
-        # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
-        self.suppress_invalid_attributes(dataset)
 
         return dataset
 
@@ -745,7 +745,7 @@ class Metadata(Convenience):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        for coord in ["latitude", "longitude"]:
+        for coord in self.spatial_dims:
             dataset[coord].attrs.pop("chunks", None)
             dataset[coord].attrs.pop("preferred_chunks", None)
             dataset[coord].encoding.pop("_FillValue", None)
@@ -768,21 +768,6 @@ class Metadata(Convenience):
             for coord in dataset.coords:
                 dataset[coord].encoding["compressors"] = compressor
             dataset[self.data_var].encoding["compressors"] = compressor
-
-    def suppress_invalid_attributes(self, dataset: xr.Dataset):
-        """
-        Remove or reconfigure attribute types unsupported in Xarray Dataset attributes
-
-        Parameters
-        ----------
-        dataset : xarray.Dataset
-            The dataset being published, pre-metadata update
-        """
-        for attr in dataset.attrs.keys():
-            if type(dataset.attrs[attr]) is dict:
-                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
-            elif dataset.attrs[attr] is None:
-                dataset.attrs[attr] = ""
 
     def update_array_encoding(
         self,

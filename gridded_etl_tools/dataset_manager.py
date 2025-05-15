@@ -17,6 +17,7 @@ import psutil
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.publish import Publish
+from .utils.time import TimeSpan
 from .utils.store import Local, S3
 
 
@@ -34,18 +35,40 @@ class DatasetManager(Logging, Publish, ABC):
     .05 data
     """
 
-    SPAN_HALF_HOURLY = "half_hourly"
-    SPAN_HOURLY = "hourly"
-    SPAN_THREE_HOURLY = "3hourly"
-    SPAN_SIX_HOURLY = "6hourly"
-    SPAN_DAILY = "daily"
-    SPAN_WEEKLY = "weekly"
-    SPAN_MONTHLY = "monthly"
-    SPAN_YEARLY = "yearly"
-    SPAN_SEASONAL = "seasonal"
+    # Time span constants for backward compatibility
+    SPAN_HALF_HOURLY = TimeSpan.SPAN_HALF_HOURLY
+    SPAN_HOURLY = TimeSpan.SPAN_HOURLY
+    SPAN_THREE_HOURLY = TimeSpan.SPAN_THREE_HOURLY
+    SPAN_SIX_HOURLY = TimeSpan.SPAN_SIX_HOURLY
+    SPAN_DAILY = TimeSpan.SPAN_DAILY
+    SPAN_WEEKLY = TimeSpan.SPAN_WEEKLY
+    SPAN_MONTHLY = TimeSpan.SPAN_MONTHLY
+    SPAN_YEARLY = TimeSpan.SPAN_YEARLY
+    SPAN_SEASONAL = TimeSpan.SPAN_SEASONAL
     DATE_FORMAT_FOLDER = "%Y%m%d"
     DATE_HOURLY_FORMAT_FOLDER = "%Y%m%d%H"
     DATE_FORMAT_METADATA = "%Y/%m/%d"
+
+    @classmethod
+    def from_time_span_string(cls, span_str: str) -> TimeSpan:
+        """Convert a string representation of a time span to the corresponding TimeSpan enum.
+
+        Parameters
+        ----------
+        span_str : str
+            String representation of the time span (e.g., "hourly", "daily")
+
+        Returns
+        -------
+        TimeSpan
+            The corresponding TimeSpan enum member
+
+        Raises
+        ------
+        ValueError
+            If the string does not correspond to a valid time span
+        """
+        return TimeSpan.from_string(span_str)
 
     def __init__(
         self,
@@ -383,7 +406,7 @@ class DatasetManager(Logging, Publish, ABC):
             yield subclass
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: TimeSpan = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -392,6 +415,10 @@ class DatasetManager(Logging, Publish, ABC):
         name : str
             The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
             manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
+        time_resolution : TimeSpan, optional
+            The time resolution of the dataset to be parsed.
+            If provided, only subclasses with the same time resolution will be returned.
+            This helps when there are multiple subclasses with the same name but different time resolutions.
 
         Returns
         -------
@@ -400,7 +427,7 @@ class DatasetManager(Logging, Publish, ABC):
         """
         for source in cls.get_subclasses():
             if source.dataset_name == name:
-                if time_resolution and source.time_resolution != time_resolution:
+                if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
                     continue
                 return source
 

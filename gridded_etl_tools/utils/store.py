@@ -493,7 +493,7 @@ class Local(StoreInterface):
         if self.dm.custom_output_path:
             return self.dm.custom_output_path
         else:
-            return self.dm.output_path().joinpath(f"{self.dm.dataset_name}.zarr")
+            return self.dm.output_path().joinpath(f"{self.dm.key()}.zarr")
 
     @property
     def has_existing(self) -> bool:
