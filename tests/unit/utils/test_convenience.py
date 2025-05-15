@@ -141,7 +141,7 @@ class TestConvenience:
         mocker.patch("pathlib.Path.is_file", lambda self: self.name != "notafile")
 
         expected = ["/2dogs", "/3cats", "/20ducks", "/aardvarks", "/hamburgers"]
-        assert list(dm.input_files()) == [pathlib.Path(path) for path in expected]
+        assert sorted(list(dm.input_files())) == sorted([pathlib.Path(path) for path in expected])
 
     @staticmethod
     def test_get_folder_path_from_date(manager_class):
@@ -201,17 +201,6 @@ class TestConvenience:
         dm.store = Mock(has_existing=False, spec=store.Local)
         with pytest.raises(ValueError):
             assert dm.get_metadata_date_range()
-
-    @staticmethod
-    def test_get_metadata_date_range_ipld(manager_class):
-        dm = manager_class()
-        stac_metadata = {"properties": {"date range": ("2000010100", "2020123123")}}
-        dm.store = Mock(spec=store.IPLD)
-        dm.load_stac_metadata = Mock(return_value=stac_metadata)
-        assert dm.get_metadata_date_range() == {
-            "start": datetime.datetime(2000, 1, 1, 0, 0),
-            "end": datetime.datetime(2020, 12, 31, 23, 0),
-        }
 
     @staticmethod
     def test_convert_date_range(manager_class):

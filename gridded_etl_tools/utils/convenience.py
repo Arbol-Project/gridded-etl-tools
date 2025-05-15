@@ -13,7 +13,6 @@ import pandas as pd
 import xarray as xr
 
 from .attributes import Attributes
-from .store import IPLD
 
 
 class Convenience(Attributes):
@@ -172,7 +171,7 @@ class Convenience(Attributes):
         """
         Returns the date range in the metadata as datetime objects in a dict with `start` and `end` keys.
 
-        On IPLD, uses STAC to get the date. On S3 and local, uses an existing Zarr.
+        On S3 and local, uses an existing Zarr to get the date range.
 
         Existing dates are assumed to be formatted as "%Y%m%d%H"
 
@@ -182,30 +181,22 @@ class Convenience(Attributes):
             Two str: datetime.datetimes representing the start and end times in a STAC Item's metadata
         """
         date_format = "%Y%m%d%H"
-        if isinstance(self.store, IPLD):
-            # Use STAC
-            metadata = self.load_stac_metadata()
-            return {
-                "start": datetime.datetime.strptime(metadata["properties"]["date range"][0], date_format),
-                "end": datetime.datetime.strptime(metadata["properties"]["date range"][1], date_format),
-            }
-        else:
-            # Use existing Zarr attrs or raise an exception if there is no usable date attribute
-            if self.store.has_existing:
-                dataset = self.store.dataset()
-                if "date range" in dataset.attrs:
-                    # Assume attr format is ['%Y%m%d%H', '%Y%m%d%H'], translate to datetime objects, then transform
-                    # into a dict with "start" and "end" keys
-                    return dict(  # pragma NO BRANCH, coverage is confused here for some reason
-                        zip(
-                            ("start", "end"),
-                            (datetime.datetime.strptime(d, date_format) for d in dataset.attrs["date range"]),
-                        )
+        # Use existing Zarr attrs or raise an exception if there is no usable date attribute
+        if self.store.has_existing:
+            dataset = self.store.dataset()
+            if "date range" in dataset.attrs:
+                # Assume attr format is ['%Y%m%d%H', '%Y%m%d%H'], translate to datetime objects, then transform
+                # into a dict with "start" and "end" keys
+                return dict(  # pragma NO BRANCH, coverage is confused here for some reason
+                    zip(
+                        ("start", "end"),
+                        (datetime.datetime.strptime(d, date_format) for d in dataset.attrs["date range"]),
                     )
-                else:
-                    raise ValueError(f"Existing date range not found in {dataset} attributes")
+                )
             else:
-                raise ValueError(f"No existing dataset found to get date range from at {self.store}")
+                raise ValueError(f"Existing date range not found in {dataset} attributes")
+        else:
+            raise ValueError(f"No existing dataset found to get date range from at {self.store}")
 
     @deprecation.deprecated("use dateutil.parser.parse")
     def convert_date_range(self, date_range: list) -> tuple[datetime.datetime, datetime.datetime]:
@@ -465,7 +456,7 @@ class Convenience(Attributes):
 
     def json_to_bytes(self, obj: dict) -> bytes:
         """
-        Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata to IPFS
+        Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata over HTTP
 
         Parameters
         ----------

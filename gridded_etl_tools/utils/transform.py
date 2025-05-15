@@ -10,8 +10,6 @@ import s3fs
 import zarr
 
 from subprocess import Popen
-from typing import Union
-from collections.abc import MutableMapping
 
 import xarray as xr
 
@@ -105,8 +103,9 @@ class Transform(Metadata, Convenience):
             # misspecified.
             if not outfile_path:
                 outfile_path = self.zarr_json_path()
+
             mzz.translate(filename=outfile_path)
-            self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking)/60,2)} minutes")
+            self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking) / 60, 2)} minutes")
         else:
             self.info("Existing Zarr found, using that")
 
@@ -369,9 +368,7 @@ class Transform(Metadata, Convenience):
         return refs
 
     @classmethod
-    def postprocess_kerchunk(
-        cls, out_zarr: Union[zarr._storage.store.BaseStore, MutableMapping]
-    ) -> Union[zarr._storage.store.BaseStore, MutableMapping]:
+    def postprocess_kerchunk(cls, out_zarr: zarr.storage.FsspecStore) -> zarr.storage.FsspecStore:
         """
         Class method to modify the in-memory Zarr created by Kerchunk for each file
         using Zarr methods. Useful where manipulating individual files via the reference dictionary in
@@ -538,26 +535,7 @@ class Transform(Metadata, Convenience):
 
     # LOAD RAW DATA TO IN-MEMORY DATASET
 
-    def zarr_hash_to_dataset(self, ipfs_hash: str) -> xr.Dataset:
-        """
-        Open a Zarr on IPLD at `ipfs_hash` as an `xr.Dataset` object
-
-        Parameters
-        ----------
-        ipfs_hash : str
-            The CID of the dataset
-
-        Returns
-        -------
-        dataset : xr.Dataset
-            Object representing the dataset described by the CID at `self.latest_hash()`
-        """
-        mapper = self.store.mapper(set_root=False)
-        mapper.set_root(ipfs_hash)
-        dataset = xr.open_zarr(mapper)
-        return dataset
-
-    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True) -> xr.Dataset:
+    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True, **kwargs) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying
         any desired postprocessing steps
@@ -567,9 +545,12 @@ class Transform(Metadata, Convenience):
         zarr_json_path : str, optional
             A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
             Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
-        decode_times : bool, optional
-            Choose whether to decode the times in inputs file using the CF conventions.
-            In most cases this is desirable and necessary, therefore this defaults to True.
+        kwargs : dict, optional
+            Additional keyword arguments to pass to xr.open_dataset
+            In use now:
+            - decode_times : bool, optional
+                Choose whether to decode the times in inputs file using the CF conventions.
+                In most cases this is desirable and necessary, therefore this defaults to True.
 
         Returns
         -------
@@ -582,17 +563,21 @@ class Transform(Metadata, Convenience):
         input_kwargs = {
             "filename_or_obj": "reference://",
             "engine": "zarr",
-            "chunks": {},
+            # If there is an existing dataset then the update should have no chunk info whatsoever to prevent
+            # chunk alignment issues. If new, import empty and populate later
+            "chunks": None if self.store.has_existing else {},
             "backend_kwargs": {
                 "storage_options": {
                     "fo": zarr_json_path,
                     "remote_protocol": self.protocol,
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
                 "consolidated": False,
             },
             "decode_times": decode_times,
+            **kwargs,
         }
 
         dataset = xr.open_dataset(**input_kwargs)
