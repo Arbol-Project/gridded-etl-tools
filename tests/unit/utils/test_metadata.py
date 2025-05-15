@@ -1230,7 +1230,6 @@ class TestMetadata:
         md.encode_vars = mock.Mock()
         md.set_initial_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
-        md.suppress_invalid_attributes = mock.Mock()
 
         dataset.attrs = {}
         assert md.set_zarr_metadata(dataset) is renamed
@@ -1239,17 +1238,6 @@ class TestMetadata:
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.set_initial_compression.assert_called_once_with(renamed)
         md.encode_vars.assert_called_once_with(renamed)
-        md.suppress_invalid_attributes.assert_called_once_with(renamed)
-
-    @staticmethod
-    def test_suppress_invalid_attributes(manager_class):
-        dataset = mock.Mock()
-        md = manager_class()
-
-        dataset.attrs = {"foo": "bar", "baz": None, "goo": {"gar": "gaz"}}
-        md.suppress_invalid_attributes(dataset)
-
-        assert dataset.attrs == {"foo": "bar", "baz": "", "goo": '{"gar": "gaz"}'}
 
     @staticmethod
     def test_rename_data_variable(manager_class):
