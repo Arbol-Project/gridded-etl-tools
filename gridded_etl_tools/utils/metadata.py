@@ -615,8 +615,6 @@ class Metadata(Convenience, IPFS):
         self.encode_vars(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
-        # Xarray cannot export dictionaries or None as attributes (lists and tuples are OK)
-        self.suppress_invalid_attributes(dataset)
 
         return dataset
 
@@ -818,21 +816,6 @@ class Metadata(Convenience, IPFS):
             for coord in dataset.coords:
                 dataset[coord].encoding["compressor"] = compressor
             dataset[self.data_var].encoding["compressor"] = compressor
-
-    def suppress_invalid_attributes(self, dataset: xr.Dataset):
-        """
-        Remove or reconfigure attribute types unsupported in Xarray Dataset attributes
-
-        Parameters
-        ----------
-        dataset : xarray.Dataset
-            The dataset being published, pre-metadata update
-        """
-        for attr in dataset.attrs.keys():
-            if type(dataset.attrs[attr]) is dict:
-                dataset.attrs[attr] = json.dumps(dataset.attrs[attr])
-            elif dataset.attrs[attr] is None:
-                dataset.attrs[attr] = ""
 
     def update_array_encoding(
         self,
