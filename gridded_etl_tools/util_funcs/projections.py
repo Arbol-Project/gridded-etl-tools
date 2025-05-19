@@ -11,7 +11,7 @@ def assign_lambert_crs_to_grib(dataset: xr.Dataset, earth_radius: float, data_va
     Args:
         dataset (xr.Dataset): Input dataset
         earth_radius (float): Radius of earth used in projection (depends on dataset)
-        data_var (str): xarray data varaible namet hat contains the projection attributes
+        data_var (str): xarray data variable name that contains the projection attributes
 
     Returns:
         xr.Dataset: Dataset with projected x/y dimensions and crs attrs added
@@ -30,8 +30,7 @@ def assign_lambert_crs_to_grib(dataset: xr.Dataset, earth_radius: float, data_va
         }
     )
     dataset_with_x_y = dataset_with_crs.metpy.assign_y_x()
-
-    metpy_mapping = dataset.metpy_crs.values.item()
+    metpy_mapping = dataset_with_x_y.metpy_crs.values.item()
     crs_attrs = metpy_mapping.to_dict()
     crs_attrs["crs_proj4"] = metpy_mapping.to_pyproj().to_proj4()
 
