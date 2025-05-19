@@ -1,34 +1,37 @@
+from typing import Any
+
 import xarray as xr
 
 
-def assign_lambert_crs_to_grib(dataset: xr.Dataset, earth_radius: float, data_var: str) -> xr.Dataset:
+def assign_crs_to_dataset(dataset: xr.Dataset, cf_dict: dict[str, Any]) -> xr.Dataset:
     """
-    Assigns projected x/y dimensions and crs attributes to a dataset using existing lon/lat coords.
-    Assumes the dataset uses a lambert conformal conic projection and has relevant attributes
-    from the source GRIB.
+    Assigns projected x/y dimensions and crs attributes to a dataset with existing lon/lat coords.
 
 
-    Args:
-        dataset (xr.Dataset): Input dataset
-        earth_radius (float): Radius of earth used in projection (depends on dataset)
-        data_var (str): xarray data variable name that contains the projection attributes
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        Input dataset
+    cf_dict : dict[str, Any]
+        dict with keys and values formatted according to
+        https://cfconventions.org/Data/cf-conventions/cf-conventions-1.7/cf-conventions.html
+        e.g., for a specific lambert comformal dataset:
 
-    Returns:
-        xr.Dataset: Dataset with projected x/y dimensions and crs attrs added
-    """
-    dataset_with_crs = dataset.metpy.assign_crs(
         {
-            "semi_major_axis": earth_radius,
-            "semi_minor_axis": earth_radius,
+            "semi_major_axis": 6371200.0,
+            "semi_minor_axis": 6371200.0,
             "grid_mapping_name": "lambert_conformal_conic",
-            "standard_parallel": [
-                dataset[data_var].attrs["GRIB_Latin1InDegrees"],
-                dataset[data_var].attrs["GRIB_Latin2InDegrees"],
-            ],
-            "latitude_of_projection_origin": dataset[data_var].attrs["GRIB_LaDInDegrees"],
-            "longitude_of_central_meridian": dataset[data_var].attrs["GRIB_LoVInDegrees"],
+            "standard_parallel": [25.0, 25.0],
+            "latitude_of_projection_origin": 25.0,
+            "longitude_of_central_meridian": 265.0,
         }
-    )
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with projected x/y dimensions and crs attrs added
+    """
+    dataset_with_crs = dataset.metpy.assign_crs(cf_dict)
     dataset_with_x_y = dataset_with_crs.metpy.assign_y_x()
     metpy_mapping = dataset_with_x_y.metpy_crs.values.item()
     crs_attrs = metpy_mapping.to_dict()
@@ -40,18 +43,18 @@ def assign_lambert_crs_to_grib(dataset: xr.Dataset, earth_radius: float, data_va
     return dataset_without_metpy.rename({"x": "x_projection", "y": "y_projection"})
 
 
-def drop_coord_encoding(dataset: xr.Dataset, coords: list[str]) -> xr.Dataset:
+def drop_coord_encoding(dataset: xr.Dataset, coords: list[str]):
     """
     Remove various encodings from the coords in a dataset. This happens automatically
     for dimensions due to metadata.Metadata.remove_unwanted_fields, but this function
     must be applied in postprocess to coords that aren't dims
 
-    Args:
-        dataset (xr.Dataset): Input dataset
-        coords (list[str]): Coordinates to have encoding keys dropped from
-
-    Returns:
-        xr.Dataset: Dataset without messy encodings on the specified coords
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        Input dataset
+    coords : list[str]
+        Coordinates to have encoding keys dropped from
     """
 
     for coord in coords:
@@ -60,5 +63,3 @@ def drop_coord_encoding(dataset: xr.Dataset, coords: list[str]) -> xr.Dataset:
         dataset[coord].encoding.pop("_FillValue", None)
         dataset[coord].encoding.pop("missing_value", None)
         dataset[coord].encoding.pop("filters", None)
-
-    return dataset

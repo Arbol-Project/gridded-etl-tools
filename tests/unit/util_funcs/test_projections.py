@@ -4,15 +4,15 @@ from pyproj import Transformer, CRS
 import pytest
 import xarray as xr
 
-from gridded_etl_tools.util_funcs.projections import assign_lambert_crs_to_grib, drop_coord_encoding
+from gridded_etl_tools.util_funcs.projections import assign_crs_to_dataset, drop_coord_encoding
 
 # specific to RTMA projection
 EARTH_RADIUS = 6371200.0
+GRID_MAPPING_NAME = "lambert_conformal_conic"
 
 # downloaded from s3://noaa-rtma-pds/rtma2p5.20250206/rtma2p5.2025020609.pcp.184.grb2
 # data type chosen for precip's small file size. timestamp chosen arbitrarily
 SOURCE_FILE_PATH = pathlib.Path(__file__).parents[1] / "inputs" / "rtma_pcp.grib"
-DATA_VAR = "tp"
 
 
 @pytest.fixture
@@ -24,7 +24,19 @@ def rtma_ds():
 
 
 def test_assign_lambert_crs_to_grib(rtma_ds):
-    projected_ds = assign_lambert_crs_to_grib(rtma_ds, EARTH_RADIUS, DATA_VAR)
+    data_var = list(rtma_ds.data_vars.keys())[0]
+    cf_dict = {
+        "semi_major_axis": EARTH_RADIUS,
+        "semi_minor_axis": EARTH_RADIUS,
+        "grid_mapping_name": "lambert_conformal_conic",
+        "standard_parallel": [
+            rtma_ds[data_var].attrs["GRIB_Latin1InDegrees"],
+            rtma_ds[data_var].attrs["GRIB_Latin2InDegrees"],
+        ],
+        "latitude_of_projection_origin": rtma_ds[data_var].attrs["GRIB_LaDInDegrees"],
+        "longitude_of_central_meridian": rtma_ds[data_var].attrs["GRIB_LoVInDegrees"],
+    }
+    projected_ds = assign_crs_to_dataset(rtma_ds, cf_dict)
 
     dims_mapping = {"x": "x_projection", "y": "y_projection"}
     assert set(projected_ds.dims.keys()) == set(dims_mapping.values())
@@ -50,7 +62,7 @@ def test_assign_lambert_crs_to_grib(rtma_ds):
     y_value = selected_point["y_projection"].values.item()
 
     expected_lon = selected_point["longitude"].item()
-    # standardize to [-180, 180), which pyproj and this library use
+    # standardize to [-180, 180), which pyproj and gridded_etl_tools use
     expected_lon = ((expected_lon + 180) % 360) - 180
     expected_lat = selected_point["latitude"].item()
 
@@ -60,7 +72,7 @@ def test_assign_lambert_crs_to_grib(rtma_ds):
 def test_drop_coord_encoding(rtma_ds):
     encodings_that_should_be_dropped = ["chunks", "preferred_chunks", "_FillValue", "missing_value", "filters"]
     coords_to_drop = ["latitude", "longitude"]
-    processed_ds = drop_coord_encoding(rtma_ds, coords_to_drop)
+    drop_coord_encoding(rtma_ds, coords_to_drop)
     for coord in coords_to_drop:
         for encoding in encodings_that_should_be_dropped:
-            assert processed_ds[coord].encoding.get(encoding) is None
+            assert rtma_ds[coord].encoding.get(encoding) is None
