@@ -55,40 +55,39 @@ Activate the environment whenever you're ready to run or test an ETL and you're 
 Setting up an environment on a Linux OS
 ---------------------------------------
 
-Power users will want to run this library from remote servers running Linux. This is a bit more involved as various binaries and Python 3.10.9 must be manually installed _in the correct order_ before a functioning virtual environment can be instantiated. 
+Power users will want to run this library from remote servers running Linux. This is a bit more involved as various binaries and Python 3.12.10 must be manually installed _in the correct order_ before a functioning virtual environment can be instantiated. 
 
 Follow the steps here to set up a virtual Python environment and install external dependencies on a Linux OS. 
 
 ## Set up a Virtual Environment with existing Python binaries
 
-If you already have Python 3.10.9 installed or want to try with your system's Python version, you can use `virtualenv` to create the environment.
+If you already have Python 3.12.10 installed or want to try with your system's Python version, you can use `venv` to create the environment.
 
-    pip install virtualenv
-    virtualenv --python=<path_to_python_binary> .
+    python -m venv --python=path/to/python/binary venv/
 
 ## Set up a Virtual Environment with Python binaries built from source
 
-If you want to use the specific version of Python this project is tested against or any other version of Python different from the one you have installed, download and compile Python in a separate directory. This example uses Python 3.10.9 and assumes `zarr-climate-etl` is located in the home directory.
+If you want to use the specific version of Python this project is tested against or any other version of Python different from the one you have installed, download and compile Python in a separate directory. This example uses Python 3.12.10.
 
     cd
-    sudo apt-get update && apt-get install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \ 
+    sudo apt update && apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \ 
         libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev cmake libssl-dev libffi-dev \
-        libbz2-dev liblzma-dev libreadline-dev libsqlite3-dev
-    wget https://www.python.org/ftp/python/3.10.9/Python-3.10.9.tgz
-    tar -xf Python-3.10.9.tgz
-    cd Python-3.10.9
+        libbz2-dev liblzma-dev libreadline-dev libsqlite3-dev libgdbm-compat-dev libnsl-dev
+    wget https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tgz
+    tar -xf Python-3.12.10.tgz
+    cd Python-3.12.10
     ./configure --enable-loadable-sqlite-extensions
-    make -j8
-    cd ..
+    make -j3
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-    Python-3.10.9/python get-pip.py
-    Python-3.10.9/python -m pip install virtualenv
-    cd zarr-climate-etl
-    ../Python-3.10.9/python -m virtualenv .
+    ./python get-pip.py
+    cd ..
+    git clone https://github.com/Arbol-Project/gridded-etl-tools
+    cd gridded-etl-tools
+    ../Python-3.12.10/python -m venv venv/
     
-## Activate the virtual environment
+## Use the virtual environment
 
-    source bin/activate
+    source venv/bin/activate
 
 ## Install required Python packages to the virtual environment
 
@@ -96,19 +95,10 @@ First install system wide dependencies (sometimes PIP doesn't handle this automa
 
     sudo apt install libjpeg-dev
     
-Then install all the PIP packages
+Then install all the PIP packages, along with optional testing and developer packages
 
-    pip install -r requirements.txt
+    pip install -e .[testing,dev]
     
-If PIP is failing to compile any modules because Python development headers are missing, it may be necessary to install the Python development headers to the system wide environment and link to those headers from the root of the repo.
-
-    # If the [PYTHON]/Include directory doesn't have all the necessary headers for building the
-    # pip packages, try installing the latest dev package from the distro repository and linking
-    # it into the virtual environment
-    apt install -y python3-dev
-    ln -s /usr/include/python[VERSION] include 
-    pip install -r requirements.txt
-
 ## Install climate data binaries (necessary for parsing PRISM and ERA5)
 
 Note that these packages will be installed to the system wide environment.

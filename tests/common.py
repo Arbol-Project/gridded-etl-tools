@@ -126,6 +126,8 @@ def get_manager(
             store=store,
             **kwargs,
         )
+    if repr(manager.store) == "Local":
+        manager.store.folder = "tests"
 
     # Override the default (usually very large) time chunk with the given value.
     # Intended to enable testing chunking with a smaller set of times.
@@ -181,27 +183,6 @@ def clean_up_input_paths(*args):
         if originals_path.exists():
             shutil.rmtree(originals_path, ignore_errors=True)
             print(f"Cleaned up {originals_path}")
-
-
-# Save the original IPNS publish function, so it can be mocked to force offline to True when the patched
-# IPNS publish is applied.
-
-
-original_ipns_publish = DatasetManager.ipns_publish
-
-
-def offline_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return original_ipns_publish(self, key, cid, offline=True)
-
-
-def empty_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return self.info("Skipping IPNS publish to preserve initial test dataset")
 
 
 # Change the key used by IPNS publish to clearly mark the dataset as a test in your key list
@@ -319,10 +300,11 @@ def nc4_input_files(self):
     return nc4s
 
 
-def json_input_files(self):
-    jsons = [
-        "s3://arbol-testing/gridded/chirps/json/" + fil.name
-        for fil in list(original_input_files(self))
-        if fil.suffix == ".json"
-    ]
-    return jsons
+# NOTE disabled due to regression in fsspec capabilities
+# def json_input_files(self):
+#     jsons = [
+#         "s3://arbol-testing/gridded/chirps/json/" + fil.name
+#         for fil in list(original_input_files(self))
+#         if fil.suffix == ".json"
+#     ]
+#     return jsons
