@@ -38,6 +38,8 @@ dependencies = [
     "deprecation",
     "fsspec",
     "kerchunk",
+    "metpy",
+    "multiformats",
     "natsort",
     "nest-asyncio",
     "netcdf4",
@@ -61,6 +63,7 @@ Homepage = "https://arbol.io/"
 
 [project.optional-dependencies]
 testing = [
+    "pyproj",
     "pytest",
     "pytest-cov",
     "pytest-mock",
