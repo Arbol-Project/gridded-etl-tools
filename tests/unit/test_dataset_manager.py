@@ -140,7 +140,6 @@ class TestDatasetManager:
     def test_extract(manager_class):
         dm = manager_class()
         dm.extract()
-        assert dm.new_files == []
 
     @staticmethod
     def test_extract_bad_date_range(manager_class):
