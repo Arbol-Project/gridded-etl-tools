@@ -170,7 +170,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         # call IPFS init
         super().__init__(host=ipfs_host)
         # Set member variable defaults
-        self.new_files = []
         self.custom_output_path = custom_output_path
         self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
@@ -312,7 +311,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
                 f"First datetime requested {date_range[0]} is before the start of the dataset in question. Please "
                 "request a valid datetime."
             )
-        self.new_files = []
 
     # Transformation
 
