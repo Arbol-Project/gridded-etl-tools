@@ -6,6 +6,7 @@ import pytest
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
+from gridded_etl_tools.utils.time import TimeSpan
 
 from .conftest import Beatles, John, Paul, George, Ringo, RingoDaily, Pete, Stuart, PeteBest, StuartSutcliffe
 
@@ -293,3 +294,19 @@ class TestDatasetManager:
         # Test getting class with wrong time resolution
         with pytest.warns(UserWarning, match="failed to set manager from name Ringo"):
             assert Ringo.get_subclass("Ringo", time_resolution="monthly") is None
+
+    @staticmethod
+    def test_from_time_span_string(manager_class):
+        # Test valid time spans
+        assert manager_class.from_time_span_string("hourly") == TimeSpan.SPAN_HOURLY
+        assert manager_class.from_time_span_string("daily") == TimeSpan.SPAN_DAILY
+        assert manager_class.from_time_span_string("monthly") == TimeSpan.SPAN_MONTHLY
+        assert manager_class.from_time_span_string("yearly") == TimeSpan.SPAN_YEARLY
+
+        # Test case sensitivity
+        assert manager_class.from_time_span_string("HOURLY") == TimeSpan.SPAN_HOURLY
+        assert manager_class.from_time_span_string("Daily") == TimeSpan.SPAN_DAILY
+
+        # Test invalid time span
+        with pytest.raises(ValueError):
+            manager_class.from_time_span_string("invalid_span")

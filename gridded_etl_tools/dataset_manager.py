@@ -70,7 +70,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         ValueError
             If the string does not correspond to a valid time span
         """
-        return TimeSpan.from_string(span_str)
+        return TimeSpan.from_string(span_str.lower())
 
     def __init__(
         self,
