@@ -7,6 +7,7 @@ import typing
 import warnings
 import deprecation
 import logging
+import inspect
 import multiprocessing
 import multiprocessing.pool
 import sys
@@ -415,8 +416,8 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
     def get_subclasses(cls) -> typing.Iterator:
         """Create a generator with all the subclasses and sub-subclasses of a parent class"""
         for subclass in cls.__subclasses__():
-            yield from subclass.get_subclasses()
             yield subclass
+            yield from subclass.get_subclasses()
 
     @classmethod
     def get_subclass(cls, name: str, time_resolution: TimeSpan = None) -> type:
@@ -439,9 +440,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             A dataset source class
         """
         for source in cls.get_subclasses():
-            if source.dataset_name == name:
-                if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
-                    continue
-                return source
+            # Weed out abstract classes and non-leaf classes
+            if not inspect.isabstract(source) and not source.__subclasses__():
+                # Find the matching class
+                if source.dataset_name == name:
+                    # Use time resolution, if provided, to differentiate between
+                    # otherwise identical classes with different time resolutions
+                    if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
+                        continue
+                    return source
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")
