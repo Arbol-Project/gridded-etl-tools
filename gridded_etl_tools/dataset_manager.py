@@ -7,7 +7,6 @@ import typing
 import warnings
 import deprecation
 import logging
-import inspect
 import multiprocessing
 import multiprocessing.pool
 import sys
@@ -418,7 +417,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield from subclass.get_subclasses()
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: TimeSpan = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -427,7 +426,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         name : str
             The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
             manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
-        time_resolution : TimeSpan, optional
+        time_resolution : str, optional
             The time resolution of the dataset to be parsed.
             If provided, only subclasses with the same time resolution will be returned.
             This helps when there are multiple subclasses with the same name but different time resolutions.
@@ -437,15 +436,16 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         type
             A dataset source class
         """
-        for source in cls.get_subclasses():
-            # Weed out abstract classes and non-leaf classes
-            if not inspect.isabstract(source) and not source.__subclasses__():
-                # Find the matching class
-                if source.dataset_name == name:
+
+        for subclass in cls.get_subclasses():
+            # Weed out abstract classes
+            if ABC not in subclass.__bases__:
+                # # Find the matching class
+                if subclass.dataset_name == name:
                     # Use time resolution, if provided, to differentiate between
                     # otherwise identical classes with different time resolutions
-                    if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
+                    if time_resolution and subclass.time_resolution != TimeSpan.from_string(time_resolution):
                         continue
-                    return source
+                    return subclass
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")
