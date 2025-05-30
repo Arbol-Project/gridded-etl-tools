@@ -101,7 +101,8 @@ class Transform(Metadata, Convenience):
                 mzz = MultiZarrToZarr(
                     path=self.zarr_jsons, **self.mzz_opts()
                 )  # There are no file names to pass `path` if reading remotely
-            # Raise an error if self.zarr_jsons is empty -- usually a sign that the ETL failed to download or find input files
+            # Raise an error if self.zarr_jsons is empty
+            # This is usually a sign that the ETL failed to download or find input files
             if not self.zarr_jsons:
                 raise FileNotFoundError(
                     f"No Zarr JSONs found, cannot create a MultiZarr. "
