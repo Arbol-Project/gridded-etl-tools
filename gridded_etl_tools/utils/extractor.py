@@ -94,7 +94,7 @@ class Extractor(ABC):
             log.info("All requests succeeded.")
             return True
         else:
-            log.info("One or more requests returned no data or failed.")
+            log.info("All requests returned no data or failed. Extraction was not successful.")
             return False
 
     def _request_helper(self, arg: typing.Any) -> bool:
@@ -414,7 +414,8 @@ class S3Extractor(Extractor):
                 return True
             except self.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
                 log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
-                return True
+                # Returning false allows the ETL to continue, but registers that no file was downloaded
+                return False
             except self.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
                 log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
                 raise
