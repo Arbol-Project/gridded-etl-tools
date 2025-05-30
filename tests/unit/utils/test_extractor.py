@@ -342,7 +342,7 @@ class TestS3Extractor:
         extract.dm.kerchunkify = Mock(side_effect=FileNotFoundError("this is error is OK"))
         time.sleep = Mock()  # avoid actually sleeping for large period of time
 
-        assert extract.request(*args)
+        assert not extract.request(*args)
         assert time.sleep.call_count == 0
 
     @staticmethod
