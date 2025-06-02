@@ -764,22 +764,53 @@ class Publish(Transform):
             A list of valid input files in pathlib.Path format
         """
         possible_files = list(self.input_files())
-        production_date_range = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
+        start_date, end_date = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
+        n = len(possible_files)
 
-        # Determine an upper bound using a binary search
-        left, right = 0, len(possible_files) - 1
-        upper_bound_index = -1
-
-        while left <= right:
+        # Find leftmost file >= start_date
+        left, right = 0, n
+        while left < right:
             mid = (left + right) // 2
-            if self.dataset_date_in_range(date_range=production_date_range, file_path=possible_files[mid]):
-                upper_bound_index = mid
-                right = mid - 1
-            else:
+            if self.get_file_date(possible_files[mid]) < start_date:
                 left = mid + 1
+            else:
+                right = mid
+        start_idx = left
 
-        # Return file paths within these bounds
-        return possible_files[upper_bound_index:]
+        # Find rightmost file <= end_date
+        left, right = start_idx, n
+        while left < right:
+            mid = (left + right) // 2
+            if self.get_file_date(possible_files[mid]) <= end_date:
+                left = mid + 1
+            else:
+                right = mid
+        end_idx = right - 1
+        self.info(f"Found start index: {start_idx} and end index: {end_idx}")
+
+        # If no files are found in the date range, raise an error
+        if start_idx < end_idx:
+            return possible_files[start_idx : end_idx + 1]
+        else:
+            raise ValueError(f"No files found in the date range {start_date} to {end_date}")
+
+    def get_file_date(self, file_path: pathlib.Path) -> datetime.datetime:
+        """
+        Convenience function to extract the date from a file.
+        Assumes the file is valid and corresponds to a single time step
+
+        Parameters
+        ----------
+        file_path : pathlib.Path
+            The path to the original file, on disk or remotely
+
+        Returns
+        -------
+        datetime.datetime
+            The date of the file
+        """
+        dataset = self.raw_file_to_dataset(file_path)
+        return self.numpydate_to_py(dataset[self.time_dim].values[0])
 
     def dataset_date_in_range(
         self, date_range: tuple[datetime.datetime, datetime.datetime], file_path: pathlib.Path
