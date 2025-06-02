@@ -46,11 +46,11 @@ def test_assign_lambert_crs_to_grib(rtma_ds):
 
     # test nested crs attributes
     assert "crs" in projected_ds.attrs
-    assert "crs_proj4" in projected_ds.attrs["crs"]
+    assert "crs_wkt" in projected_ds.attrs["crs"]
 
     # test we can project back to correct lat/lon
-    proj4_string = projected_ds.attrs["crs"]["crs_proj4"]
-    src_crs = CRS.from_proj4(proj4_string)
+    wkt_string = projected_ds.attrs["crs"]["crs_wkt"]
+    src_crs = CRS.from_wkt(wkt_string)
     dst_crs = CRS.from_epsg(4326)  # WGS84
     transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 

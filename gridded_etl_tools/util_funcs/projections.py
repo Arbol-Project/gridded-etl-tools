@@ -35,7 +35,7 @@ def assign_crs_to_dataset(dataset: xr.Dataset, cf_dict: dict[str, Any]) -> xr.Da
     dataset_with_x_y = dataset_with_crs.metpy.assign_y_x()
     metpy_mapping = dataset_with_x_y.metpy_crs.values.item()
     crs_attrs = metpy_mapping.to_dict()
-    crs_attrs["crs_proj4"] = metpy_mapping.to_pyproj().to_proj4()
+    crs_attrs["crs_wkt"] = metpy_mapping.to_pyproj().to_wkt()
 
     dataset_without_metpy = dataset_with_x_y.drop_vars("metpy_crs")
     dataset_without_metpy.attrs["crs"] = crs_attrs
