@@ -1438,6 +1438,53 @@ class TestPublish:
         assert len(dm.filter_search_space(hindcast_dataset)) == 2000
 
     @staticmethod
+    def test_raw_file_to_dataset_bad_protocol(manager_class):
+        dm = manager_class()
+        dm.protocol = "nopenoway"
+        with pytest.raises(ValueError):
+            dm.raw_file_to_dataset("some/path")
+
+    @staticmethod
+    def test_raw_file_to_dataset_protocol_handling(manager_class, mocker):
+        """Test handling of different protocols in raw_file_to_dataset"""
+        # Test file protocol
+        dm = manager_class()
+        dm.protocol = "file"
+        dm.preprocess_zarr = mock.Mock()
+        dm.postprocess_zarr = mock.Mock()
+        dm.reformat_orig_ds = mock.Mock()
+
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
+        xr.open_dataset.return_value = mock.Mock()
+
+        dm.raw_file_to_dataset("test/path")
+
+        xr.open_dataset.assert_called_once_with("test/path")
+        dm.preprocess_zarr.assert_called_once()
+        dm.postprocess_zarr.assert_called_once()
+        dm.reformat_orig_ds.assert_called_once()
+
+        # Test S3 protocol with local zarr jsons enabled
+        dm = manager_class()
+        dm.protocol = "s3"
+        dm.use_local_zarr_jsons = True
+        dm.load_dataset_from_disk = mock.Mock()
+        dm.reformat_orig_ds = mock.Mock()
+
+        dm.raw_file_to_dataset("s3://test/path")
+
+        dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="s3://test/path")
+        dm.reformat_orig_ds.assert_called_once()
+
+        # Test S3 protocol with local zarr jsons disabled
+        dm = manager_class()
+        dm.protocol = "s3"
+        dm.use_local_zarr_jsons = False
+
+        with pytest.raises(ValueError, match="ETL protocol is S3 but it was instantiated not to use local zarr JSONs"):
+            dm.raw_file_to_dataset("s3://test/path")
+
+    @staticmethod
     def test_raw_file_to_dataset_file(manager_class, mocker, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
         dm = manager_class()
@@ -1475,6 +1522,46 @@ class TestPublish:
         dm.protocol = "nopenoway"
         with pytest.raises(ValueError):
             dm.raw_file_to_dataset("some/path")
+
+    @staticmethod
+    def test_raw_file_to_dataset_protocol_handling(manager_class, mocker):
+        """Test handling of different protocols in raw_file_to_dataset"""
+        # Test file protocol
+        dm = manager_class()
+        dm.protocol = "file"
+        dm.preprocess_zarr = mock.Mock()
+        dm.postprocess_zarr = mock.Mock()
+        dm.reformat_orig_ds = mock.Mock()
+
+        xr = mocker.patch("gridded_etl_tools.utils.publish.xr")
+        xr.open_dataset.return_value = mock.Mock()
+
+        dm.raw_file_to_dataset("test/path")
+
+        xr.open_dataset.assert_called_once_with("test/path")
+        dm.preprocess_zarr.assert_called_once()
+        dm.postprocess_zarr.assert_called_once()
+        dm.reformat_orig_ds.assert_called_once()
+
+        # Test S3 protocol with local zarr jsons enabled
+        dm = manager_class()
+        dm.protocol = "s3"
+        dm.use_local_zarr_jsons = True
+        dm.load_dataset_from_disk = mock.Mock()
+        dm.reformat_orig_ds = mock.Mock()
+
+        dm.raw_file_to_dataset("s3://test/path")
+
+        dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="s3://test/path")
+        dm.reformat_orig_ds.assert_called_once()
+
+        # Test S3 protocol with local zarr jsons disabled
+        dm = manager_class()
+        dm.protocol = "s3"
+        dm.use_local_zarr_jsons = False
+
+        with pytest.raises(ValueError, match="ETL protocol is S3 but it was instantiated not to use local zarr JSONs"):
+            dm.raw_file_to_dataset("s3://test/path")
 
     @staticmethod
     def test_reformat_orig_ds(manager_class, fake_original_dataset):
