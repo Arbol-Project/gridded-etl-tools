@@ -784,15 +784,15 @@ class Publish(Transform):
             if self.get_file_date(possible_files[mid]) <= end_date:
                 left = mid + 1
             else:
-                right = mid
+                right = mid  # pragma NO COVER
         end_idx = right - 1
-        self.info(f"Found start index: {start_idx} and end index: {end_idx}")
 
-        # If no files are found in the date range, raise an error
-        if start_idx < end_idx:
-            return possible_files[start_idx : end_idx + 1]
-        else:
-            raise ValueError(f"No files found in the date range {start_date} to {end_date}")
+        self.debug(
+            f"Found start date: {self.get_file_date(possible_files[start_idx])} "
+            f"and end date: {self.get_file_date(possible_files[end_idx])}"
+        )
+
+        return possible_files[start_idx : end_idx + 1]
 
     def get_file_date(self, file_path: pathlib.Path) -> datetime.datetime:
         """
@@ -895,7 +895,9 @@ class Publish(Transform):
 
         # Open desired data values.
         orig_val = orig_ds[self.data_var].sel(**selection_coords).values
-        prod_val = prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=0.0001).values
+        prod_val = (
+            prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=self.check_tolerance).values
+        )
 
         # Compare values from the original dataset to the prod dataset.
         # Raise an error if the values differ more than the permitted threshold,

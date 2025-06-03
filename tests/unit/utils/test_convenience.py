@@ -409,10 +409,29 @@ class TestConvenience:
         assert dm.check_if_new_data(datetime.datetime(1066, 10, 13, 0, 0, 0)) is False
 
     @staticmethod
-    def test_standardize_longitudes(manager_class, fake_original_dataset):
+    def test_standardize_longitudes(manager_class, manager_y_x_class, fake_original_dataset):
+        # Test basic conversion from 0-360 to -180-180
         dataset = fake_original_dataset.assign_coords(longitude=[165, 175, 185, 195])
         dataset = manager_class.standardize_longitudes(dataset)
         assert np.array_equal(dataset["longitude"], np.array([-175, -165, 165, 175]))
+
+        # Test multi-dimensional longitude coordinates
+        multi_dim_lon = np.array([[165, 175], [185, 195]])
+        dataset = fake_original_dataset.assign_coords(longitude=(["x", "y"], multi_dim_lon))
+        dm = manager_y_x_class()
+        dataset = dm.standardize_longitudes(dataset)
+        expected = np.array([[-175, -165], [165, 175]])
+        assert np.array_equal(dataset["longitude"], expected)
+
+        # Test edge cases around 180/-180 boundary
+        dataset = fake_original_dataset.assign_coords(longitude=[175, 180, 185, 190])
+        dataset = manager_class.standardize_longitudes(dataset)
+        assert np.array_equal(dataset["longitude"], np.array([-180, -175, -170, 175]))
+
+        # Test sorting after conversion
+        dataset = fake_original_dataset.assign_coords(longitude=[190, 170, 180, 160])
+        dataset = manager_class.standardize_longitudes(dataset)
+        assert np.array_equal(dataset["longitude"], np.array([-180, -170, 160, 170]))
 
     @staticmethod
     def test_get_random_coords(manager_class, fake_original_dataset):

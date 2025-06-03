@@ -330,6 +330,13 @@ class Attributes(ABC):
     minimum and maximum permissible values for common units
     """
 
+    check_tolerance: float = 0.0001
+    """
+    Tolerance for matching selection coordinates within the post-parse QC `check_written_value` method.
+    In the vast majority of cases this will be sufficient, only for non-standard datasets is it necessary
+    to adjust this value
+    """
+
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
 Attributes.__init_subclass__()
