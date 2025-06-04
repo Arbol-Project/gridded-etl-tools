@@ -831,6 +831,7 @@ class TestMetadata:
                 "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
                 "[100.0, 10.0], [130.0, 10.0]]]}",
                 "properties": {
+                    "dataset_category": "observation",
                     "array_size": {"latitude": 4, "longitude": 4, "time": 138},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
@@ -846,6 +847,7 @@ class TestMetadata:
         dt_mock.timezone = datetime.timezone
 
         dm = manager_class()
+        dm.dataset_category = "forecast"
         dm.store = mock.Mock(spec=store.IPLD)
         dm.register_stac_item = mock.Mock()
         dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
@@ -873,6 +875,7 @@ class TestMetadata:
                 "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
                 "[100.0, 10.0], [130.0, 10.0]]]}",
                 "properties": {
+                    "dataset_category": "forecast",
                     "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
@@ -914,6 +917,7 @@ class TestMetadata:
                 "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
                 "[100.0, 10.0], [130.0, 10.0]]]}",
                 "properties": {
+                    "dataset_category": "observation",
                     "array_size": {"latitude": 4, "longitude": 4, "time": 138},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
