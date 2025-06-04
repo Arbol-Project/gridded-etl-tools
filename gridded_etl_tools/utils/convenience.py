@@ -529,16 +529,8 @@ class Convenience(Attributes):
         """
         # Convert longitudes from 0 - 360 to -180 to 180
         standard_lon_coords = ((dataset.longitude.values + 180) % 360) - 180
-
-        if len(dataset.longitude.dims) == 2:
-            dataset = dataset.assign_coords(longitude=(dataset.longitude.dims, standard_lon_coords))
-            lon_dim = next(dim for dim in dataset.longitude.dims if "x" in dim)  # assumes 'x' used in the name
-            dataset = dataset.sortby(lon_dim)
-        else:
-            dataset = dataset.assign_coords(longitude=standard_lon_coords)
-            dataset = dataset.sortby(cls.spatial_dims)
-
-        return dataset
+        dataset = dataset.assign_coords(longitude=(dataset.longitude.dims, standard_lon_coords))
+        return dataset.sortby(cls.spatial_dims)
 
     def get_random_coords(self, dataset: xr.Dataset) -> dict[str, Any]:
         """
