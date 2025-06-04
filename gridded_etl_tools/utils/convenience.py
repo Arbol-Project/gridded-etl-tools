@@ -532,14 +532,8 @@ class Convenience(Attributes):
 
         if len(dataset.longitude.dims) == 2:
             dataset = dataset.assign_coords(longitude=(dataset.longitude.dims, standard_lon_coords))
-            # For 2D case (y, x), take mean along y-axis (mean of X values at each point on the Y axis) to get
-            # representative x-direction values for sorting order
-            mean_lons = dataset.longitude.mean(dim=dataset.longitude.dims[0])
-            sort_indices = np.argsort(mean_lons.values)[::-1]  # invert
-
-            # Reorder dataset along the x dimension
             lon_dim = next(dim for dim in dataset.longitude.dims if "x" in dim)  # assumes 'x' used in the name
-            dataset = dataset.isel({lon_dim: sort_indices})
+            dataset = dataset.sortby(lon_dim)
         else:
             dataset = dataset.assign_coords(longitude=standard_lon_coords)
             dataset = dataset.sortby(cls.spatial_dims)

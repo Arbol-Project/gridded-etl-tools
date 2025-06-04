@@ -417,11 +417,19 @@ class TestConvenience:
 
         # Test multi-dimensional longitude coordinates
         multi_dim_lon = np.array([[165, 175], [185, 195]])
-        dataset = fake_original_dataset.assign_coords(longitude=(["x", "y"], multi_dim_lon))
+        x_projection = np.array([2000, 1000])  # 1D array matching x dimension size
+        y_projection = np.array([0, 1])  # 1D array matching y dimension size
+        dataset = fake_original_dataset.assign_coords(
+            longitude=(["x_projection", "y_projection"], multi_dim_lon),
+            x_projection=x_projection,
+            y_projection=y_projection,
+        )
         dm = manager_y_x_class()
         dataset = dm.standardize_longitudes(dataset)
-        expected = np.array([[-175, -165], [165, 175]])
-        assert np.array_equal(dataset["longitude"], expected)
+        expected_lons = np.array([[-175, -165], [165, 175]])
+        expected_x_projection = np.array([1000, 2000])
+        assert np.array_equal(dataset["longitude"], expected_lons)
+        assert np.array_equal(dataset["x_projection"], expected_x_projection)
 
         # Test edge cases around 180/-180 boundary
         dataset = fake_original_dataset.assign_coords(longitude=[175, 180, 185, 190])
