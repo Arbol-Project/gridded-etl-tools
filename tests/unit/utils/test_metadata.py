@@ -720,7 +720,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_item(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
+        dt_mock.datetime.now = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
         dt_mock.timezone = datetime.timezone
 
         dm = manager_class()
@@ -753,7 +753,7 @@ class TestMetadata:
                     "array_size": {"latitude": 4, "longitude": 4, "time": 138},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
+                    "updated": "2010-05-12T02:42:00Z",
                 },
             }
         )
@@ -791,10 +791,11 @@ class TestMetadata:
                 "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
                 "[100.0, 10.0], [130.0, 10.0]]]}",
                 "properties": {
+                    "dataset_category": "observation",
                     "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
+                    "updated": "2010-05-12T02:42:00Z",
                 },
             }
         )
