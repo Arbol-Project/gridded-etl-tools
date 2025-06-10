@@ -166,6 +166,29 @@ class TestTransform:
         mzz.return_value.translate.assert_called_once_with(filename=outfile)
 
     @staticmethod
+    def test_create_zarr_json_empty_zarr_jsons(manager_class, tmp_path, mocker):
+        mzz_translate = mocker.patch("gridded_etl_tools.utils.transform.MultiZarrToZarr.translate")
+        md = manager_class()
+        md._root_directory = tmp_path
+        md.zarr_jsons = []  # Set empty zarr_jsons list
+        md.local_input_path = mock.Mock(return_value=tmp_path / "input_files")
+        md.input_files = mock.Mock(return_value=[])  # Mock input_files to return empty list
+
+        # Mock zarr_json_path and its parent directory
+        mock_path = mock.Mock()
+        mock_path.parent.mkdir = mock.Mock()
+        md.zarr_json_path = mock.Mock(return_value=mock_path)
+
+        with pytest.raises(FileNotFoundError) as exc_info:
+            md.create_zarr_json()
+
+        assert str(exc_info.value) == (
+            f"No Zarr JSONs found, cannot create a MultiZarr. "
+            f"Are you sure there are input files in {tmp_path}/input_files?"
+        )
+        mzz_translate.assert_not_called()
+
+    @staticmethod
     def test_kerchunkify_local(manager_class):
         md = manager_class()
         md.local_kerchunk = mock.Mock()

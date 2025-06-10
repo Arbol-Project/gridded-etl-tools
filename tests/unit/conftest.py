@@ -5,6 +5,7 @@ import pathlib
 import numpy as np
 import pytest
 import xarray as xr
+from abc import ABC
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils.time import TimeSpan
@@ -235,26 +236,46 @@ class DummyYXManager(DummyManagerBase):
 
 
 # Set up overcomplicated mro for testing get_subclass(es)
-class John(DummyManager):
+class Beatles(DummyManager, ABC):
+    dataset_name = "Beatles"
+
+
+class John(Beatles):
     dataset_name = "John"
 
 
-class Paul(DummyManager):
+class Paul(Beatles):
     dataset_name = "Paul"
 
 
-class George(John, Paul):
+class George(Beatles):
     dataset_name = "George"
 
 
-class Ringo(George):
+class Ringo(Beatles):
     dataset_name = "Ringo"
     time_resolution = dataset_manager.DatasetManager.SPAN_HOURLY
 
 
-class RingoDaily(DummyManager):
+class RingoDaily(Beatles):
     dataset_name = "Ringo"
     time_resolution = TimeSpan.SPAN_DAILY
+
+
+class Pete(Beatles):
+    dataset_name = "Pete"
+
+
+class Stuart(Beatles):
+    dataset_name = "Stuart"
+
+
+class PeteBest(Beatles):
+    dataset_name = "PeteBest"
+
+
+class StuartSutcliffe(Beatles):
+    dataset_name = "StuartSutcliffe"
 
 
 original_times = np.array(

@@ -29,7 +29,7 @@ dask-worker-space/
 mypy.ini
 
 # Tests temp data
-temp/
+temp/*
 tests/local_*/
 tests/etc/local_*/
 tests/*.log

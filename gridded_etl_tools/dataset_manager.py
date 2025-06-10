@@ -68,7 +68,7 @@ class DatasetManager(Logging, Publish, ABC):
         ValueError
             If the string does not correspond to a valid time span
         """
-        return TimeSpan.from_string(span_str)
+        return TimeSpan.from_string(span_str.lower())
 
     def __init__(
         self,
@@ -159,7 +159,6 @@ class DatasetManager(Logging, Publish, ABC):
         """
         super().__init__()
         # Set member variable defaults
-        self.new_files = []
         self.custom_output_path = custom_output_path
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
@@ -299,7 +298,6 @@ class DatasetManager(Logging, Publish, ABC):
                 f"First datetime requested {date_range[0]} is before the start of the dataset in question. Please "
                 "request a valid datetime."
             )
-        self.new_files = []
 
     # Transformation
 
@@ -402,11 +400,11 @@ class DatasetManager(Logging, Publish, ABC):
     def get_subclasses(cls) -> typing.Iterator:
         """Create a generator with all the subclasses and sub-subclasses of a parent class"""
         for subclass in cls.__subclasses__():
-            yield from subclass.get_subclasses()
             yield subclass
+            yield from subclass.get_subclasses()
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: TimeSpan = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -415,7 +413,7 @@ class DatasetManager(Logging, Publish, ABC):
         name : str
             The str returned by the name() property of the dataset to be parsed. Used to return that subclass's
             manager. For example, 'chirps_final_05' will yield CHIRPSFinal05 if invoked for the CHIRPS manager
-        time_resolution : TimeSpan, optional
+        time_resolution : str, optional
             The time resolution of the dataset to be parsed.
             If provided, only subclasses with the same time resolution will be returned.
             This helps when there are multiple subclasses with the same name but different time resolutions.
@@ -425,10 +423,16 @@ class DatasetManager(Logging, Publish, ABC):
         type
             A dataset source class
         """
-        for source in cls.get_subclasses():
-            if source.dataset_name == name:
-                if time_resolution and source.time_resolution != TimeSpan.from_string(time_resolution):
-                    continue
-                return source
+
+        for subclass in cls.get_subclasses():
+            # Weed out abstract classes
+            if ABC not in subclass.__bases__:
+                # # Find the matching class
+                if subclass.dataset_name == name:
+                    # Use time resolution, if provided, to differentiate between
+                    # otherwise identical classes with different time resolutions
+                    if time_resolution and subclass.time_resolution != TimeSpan.from_string(time_resolution):
+                        continue
+                    return subclass
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")

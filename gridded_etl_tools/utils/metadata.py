@@ -337,8 +337,10 @@ class Metadata(Convenience):
         # Filter relevant existing metadata from the Zarr, flatten to a single level, and output as a dict for the
         # "properties" key in STAC metadata
         properties_dict = self.zarr_md_to_stac_format(dataset)
-        # Include the array size
 
+        properties_dict["dataset_category"] = self.dataset_category
+
+        # Include the array size
         spatial_size_dict = {dim_name: dataset[dim_name].size for dim_name in self.spatial_dims}
 
         properties_dict["array_size"] = {

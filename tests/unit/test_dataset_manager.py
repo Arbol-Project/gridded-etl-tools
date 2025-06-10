@@ -6,8 +6,9 @@ import pytest
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
+from gridded_etl_tools.utils.time import TimeSpan
 
-from .conftest import John, Paul, George, Ringo, RingoDaily
+from .conftest import Beatles, John, Paul, George, Ringo, RingoDaily, Pete, Stuart, PeteBest, StuartSutcliffe
 
 
 class TestDatasetManager:
@@ -132,7 +133,6 @@ class TestDatasetManager:
     def test_extract(manager_class):
         dm = manager_class()
         dm.extract()
-        assert dm.new_files == []
 
     @staticmethod
     def test_extract_bad_date_range(manager_class):
@@ -233,41 +233,71 @@ class TestDatasetManager:
 
     @staticmethod
     def test_get_subclasses(manager_class):
-        assert set(manager_class.get_subclasses()) == {John, Paul, George, Ringo, RingoDaily}
-        assert set(John.get_subclasses()) == {George, Ringo}
-        assert set(Paul.get_subclasses()) == {George, Ringo}
-        assert set(George.get_subclasses()) == {Ringo}
+        # Test getting all subclasses from the base class
+        subclasses = set(manager_class.get_subclasses())
+        expected = {Beatles, John, Paul, George, Ringo, RingoDaily, Pete, Stuart, PeteBest, StuartSutcliffe}
+        assert subclasses == expected
+
+        # Test getting subclasses from Beatles
+        beatles_subclasses = set(Beatles.get_subclasses())
+        assert beatles_subclasses == expected - {Beatles}
+
+        # Test getting subclasses from leaf nodes (should be empty)
+        assert set(John.get_subclasses()) == set()
+        assert set(Paul.get_subclasses()) == set()
+        assert set(George.get_subclasses()) == set()
         assert set(Ringo.get_subclasses()) == set()
+        assert set(RingoDaily.get_subclasses()) == set()
+        assert set(Pete.get_subclasses()) == set()
+        assert set(Stuart.get_subclasses()) == set()
+        assert set(PeteBest.get_subclasses()) == set()
+        assert set(StuartSutcliffe.get_subclasses()) == set()
 
     @staticmethod
     def test_get_subclass(manager_class):
+        # Test getting leaf node classes
         assert manager_class.get_subclass("John") is John
         assert manager_class.get_subclass("Paul") is Paul
         assert manager_class.get_subclass("George") is George
         assert manager_class.get_subclass("Ringo") is Ringo
+        assert manager_class.get_subclass("Pete") is Pete
+        assert manager_class.get_subclass("Stuart") is Stuart
+        assert manager_class.get_subclass("PeteBest") is PeteBest
+        assert manager_class.get_subclass("StuartSutcliffe") is StuartSutcliffe
 
-        assert John.get_subclass("George") is George
-        assert John.get_subclass("Ringo") is Ringo
-
-        assert Paul.get_subclass("George") is George
-        assert Paul.get_subclass("Ringo") is Ringo
-
-        assert George.get_subclass("Ringo") is Ringo
-
-    @staticmethod
-    def test_get_subclass_time_resolution(manager_class):
-        assert manager_class.get_subclass("Ringo") is Ringo
+        # Test getting class with time resolution
+        assert manager_class.get_subclass("Ringo", time_resolution="hourly") is Ringo
         assert manager_class.get_subclass("Ringo", time_resolution="daily") is RingoDaily
-        assert (
-            manager_class.get_subclass("Ringo", time_resolution=str(manager_class.from_time_span_string("daily")))
-            is RingoDaily
-        )
-        assert George.get_subclass("Ringo") is Ringo
 
     @staticmethod
-    def test_get_subclass_not_found():
-        with pytest.warns(UserWarning, match="John"):
+    def test_get_subclass_not_found(manager_class):
+        # Try getting an ABC
+        with pytest.warns(UserWarning, match="failed to set manager from name Beatles"):
+            assert manager_class.get_subclass("Beatles") is None
+
+        # Test getting non-existent class from leaf node
+        with pytest.warns(UserWarning, match="failed to set manager from name John"):
             assert Ringo.get_subclass("John") is None
 
-        with pytest.warns(UserWarning, match="Pete"):
+        with pytest.warns(UserWarning, match="failed to set manager from name Pete"):
             assert Ringo.get_subclass("Pete") is None
+
+        # Test getting class with wrong time resolution
+        with pytest.warns(UserWarning, match="failed to set manager from name Ringo"):
+            assert Ringo.get_subclass("Ringo", time_resolution="monthly") is None
+
+    @staticmethod
+    def test_from_time_span_string(manager_class):
+        # Test valid time spans
+        assert manager_class.from_time_span_string("hourly") == TimeSpan.SPAN_HOURLY
+        assert manager_class.from_time_span_string("daily") == TimeSpan.SPAN_DAILY
+        assert manager_class.from_time_span_string("monthly") == TimeSpan.SPAN_MONTHLY
+        assert manager_class.from_time_span_string("yearly") == TimeSpan.SPAN_YEARLY
+
+        # Test case sensitivity
+        assert manager_class.from_time_span_string("HOURLY") == TimeSpan.SPAN_HOURLY
+        assert manager_class.from_time_span_string("Daily") == TimeSpan.SPAN_DAILY
+
+        # Test invalid time span
+        with pytest.raises(ValueError):
+            manager_class.from_time_span_string("invalid_span")
