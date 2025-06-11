@@ -584,6 +584,7 @@ class Transform(Metadata, Convenience):
                 "consolidated": False,
             },
             "decode_times": decode_times,
+            "decode_timedelta": decode_times,
             **kwargs,
         }
 
