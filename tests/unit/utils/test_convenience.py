@@ -452,4 +452,4 @@ class TestConvenience:
     @staticmethod
     def test_extreme_values_by_unit(manager_class):
         dm = manager_class()
-        assert dm.extreme_values_by_unit == manager_class.EXTREME_VALUES_BY_UNIT
+        assert dm.EXTREME_VALUES_BY_UNIT == manager_class.EXTREME_VALUES_BY_UNIT
