@@ -431,7 +431,7 @@ class S3Extractor(Extractor):
         else:
             log.info(f"Couldn't find or download a remote file for {informative_id}")
             raise FileNotFoundError(
-                f"Too many ({counter}) failed download attempts from server"
+                f"Too many ({counter}) failed download attempts from server "
                 f"requesting {informative_id} at {remote_file_path}"
             )
 
