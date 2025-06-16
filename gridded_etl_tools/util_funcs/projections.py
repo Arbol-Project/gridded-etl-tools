@@ -2,6 +2,8 @@ from typing import Any
 
 import xarray as xr
 
+import metpy
+
 
 def assign_crs_to_dataset(dataset: xr.Dataset, cf_dict: dict[str, Any]) -> xr.Dataset:
     """

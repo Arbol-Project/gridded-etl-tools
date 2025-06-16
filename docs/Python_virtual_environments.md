@@ -70,9 +70,9 @@ If you already have Python 3.12.10 installed or want to try with your system's P
 If you want to use the specific version of Python this project is tested against or any other version of Python different from the one you have installed, download and compile Python in a separate directory. This example uses Python 3.12.10.
 
     cd
-    sudo apt update && apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \ 
-        libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev cmake libssl-dev libffi-dev \
-        libbz2-dev liblzma-dev libreadline-dev libsqlite3-dev libgdbm-compat-dev libnsl-dev
+    sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
+        libsqlite3-dev wget curl llvm libncurses-dev xz-utils tk-dev cmake libssl-dev libffi-dev libbz2-dev liblzma-dev \
+        libreadline-dev libsqlite3-dev libgdbm-compat-dev libnsl-dev
     wget https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tgz
     tar -xf Python-3.12.10.tgz
     cd Python-3.12.10

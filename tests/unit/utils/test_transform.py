@@ -896,6 +896,7 @@ class TestTransform:
                 "consolidated": False,
             },
             decode_times=True,
+            decode_timedelta=True
         )
 
     @staticmethod
@@ -923,6 +924,7 @@ class TestTransform:
                 "consolidated": False,
             },
             decode_times=True,
+            decode_timedelta=True
         )
 
     @staticmethod
@@ -950,6 +952,7 @@ class TestTransform:
                 "consolidated": False,
             },
             decode_times=False,
+            decode_timedelta=False,
             other_stuff=True,
         )
 
