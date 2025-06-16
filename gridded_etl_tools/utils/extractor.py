@@ -430,7 +430,10 @@ class S3Extractor(Extractor):
                 time.sleep(retry_delay)
         else:
             log.info(f"Couldn't find or download a remote file for {informative_id}")
-            raise FileNotFoundError(f"Too many ({counter}) failed download attempts from server")
+            raise FileNotFoundError(
+                f"Too many ({counter}) failed download attempts from server "
+                f"requesting {informative_id} at {remote_file_path}"
+            )
 
 
 class FTPExtractor(Extractor):

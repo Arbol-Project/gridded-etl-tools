@@ -34,7 +34,8 @@ requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4",
     "cfgrib",
-    "dask[array,diagnostics,distributed]",
+    "dag-cbor==0.2.2",
+    "dask[array,diagnostics,distributed]>=2025.5.1",
     "deprecation",
     "fsspec",
     "kerchunk",

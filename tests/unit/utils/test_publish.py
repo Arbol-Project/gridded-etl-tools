@@ -918,7 +918,7 @@ class TestPublish:
     def test_check_random_values_time_dimension_only(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dataset = fake_original_dataset.drop(dm._standard_dims_except(dm.time_dim))
+        dataset = fake_original_dataset.drop_vars(dm._standard_dims_except(dm.time_dim))
         dm.encode_vars(dataset)
         dm.check_random_values(dataset)
 
