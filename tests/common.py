@@ -2,6 +2,7 @@ import pathlib
 import shutil
 import cftime
 import numpy as np
+import typing
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 
@@ -20,11 +21,12 @@ mock_output_root = pathlib.Path("_climate_test")
 
 
 def run_etl(
-    manager_class: DatasetManager,
+    manager_class: typing.Type[DatasetManager],
     input_path: pathlib.Path,
     store: str = "local",
     s3_bucket_name: str = "zarr-dev",
     allow_overwrite: bool | None = None,
+    output_zarr3: bool = False,
     **kwargs,
 ):
     """
@@ -47,6 +49,8 @@ def run_etl(
     allow_overwrite
         Optionally assign the allow_overwrite flag of the dataset manager.
         If this is left as None, the dataset manager's default value will be used.
+    output_zarr3
+        Output to Zarr3 format instead of the default Zarr2.
 
     Returns
     -------
@@ -60,6 +64,7 @@ def run_etl(
         store=store,
         s3_bucket_name=s3_bucket_name,
         allow_overwrite=allow_overwrite,
+        output_zarr3=output_zarr3,
         **kwargs,
     )
     # Parse
@@ -71,12 +76,13 @@ def run_etl(
 
 
 def get_manager(
-    manager_class: DatasetManager,
-    input_path: str = None,
+    manager_class: typing.Type[DatasetManager],
+    input_path: pathlib.Path | None = None,
     store: str = "local",
     s3_bucket_name: str = "zarr-dev",
     time_chunk: int = 50,
     allow_overwrite: bool | None = None,
+    output_zarr3: bool = False,
     **kwargs,
 ):
     """
@@ -102,6 +108,8 @@ def get_manager(
     allow_overwrite
         Optionally assign the allow_overwrite flag of the dataset manager.
         If this is left as None, the dataset manager's default value will be used.
+    output_zarr3
+        Output to Zarr3 format instead of the default Zarr2.
 
     Returns
     -------
@@ -117,6 +125,7 @@ def get_manager(
             s3_bucket_name=s3_bucket_name,  # This will be ignored by stores other than S3
             store=store,
             allow_overwrite=allow_overwrite,
+            output_zarr3=output_zarr3,
             **kwargs,
         )
     else:
@@ -124,8 +133,11 @@ def get_manager(
             custom_input_path=input_path,
             s3_bucket_name=s3_bucket_name,  # This will be ignored by stores other than S3
             store=store,
+            output_zarr3=output_zarr3,
             **kwargs,
         )
+    if repr(manager.store) == "Local":
+        manager.store.folder = "tests"
 
     # Override the default (usually very large) time chunk with the given value.
     # Intended to enable testing chunking with a smaller set of times.
@@ -181,27 +193,6 @@ def clean_up_input_paths(*args):
         if originals_path.exists():
             shutil.rmtree(originals_path, ignore_errors=True)
             print(f"Cleaned up {originals_path}")
-
-
-# Save the original IPNS publish function, so it can be mocked to force offline to True when the patched
-# IPNS publish is applied.
-
-
-original_ipns_publish = DatasetManager.ipns_publish
-
-
-def offline_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return original_ipns_publish(self, key, cid, offline=True)
-
-
-def empty_ipns_publish(self, key, cid, offline=False):
-    """
-    A mock version of `DatasetManager.ipns_publish` which forces offline mode so tests can run faster.
-    """
-    return self.info("Skipping IPNS publish to preserve initial test dataset")
 
 
 # Change the key used by IPNS publish to clearly mark the dataset as a test in your key list
@@ -319,10 +310,11 @@ def nc4_input_files(self):
     return nc4s
 
 
-def json_input_files(self):
-    jsons = [
-        "s3://arbol-testing/gridded/chirps/json/" + fil.name
-        for fil in list(original_input_files(self))
-        if fil.suffix == ".json"
-    ]
-    return jsons
+# NOTE disabled due to regression in fsspec capabilities
+# def json_input_files(self):
+#     jsons = [
+#         "s3://arbol-testing/gridded/chirps/json/" + fil.name
+#         for fil in list(original_input_files(self))
+#         if fil.suffix == ".json"
+#     ]
+#     return jsons

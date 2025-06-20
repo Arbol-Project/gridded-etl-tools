@@ -128,6 +128,7 @@ def fake_complex_update_dataset():
     )
 
     ds = xr.Dataset({"data": data})
+    ds.chunk(None)
     ds["data"] = ds["data"].astype("<f4")
     return ds
 
