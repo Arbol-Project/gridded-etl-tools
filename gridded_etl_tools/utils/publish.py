@@ -167,15 +167,19 @@ class Publish(Transform):
             # zarr format. Prioritize kwargs if zarr_format is passed.
             start_writing = time.perf_counter()
             if "zarr_format" in kwargs:
-                dataset.to_zarr(*args, **kwargs)
+                # Remove the argument because it will be passed explicitly
+                zarr_format = kwargs.pop("zarr_format")
             else:
                 zarr_format = 3 if self.output_zarr3 else 2
-                dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
+            dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
-            # Indicate in metadata that update is complete. Force metadata to be v2 format.
+            # Indicate in metadata that update is complete. Use Zarr format to determine metadata format.
             self.info("Writing metadata after writing data to indicate write is finished.")
-            self.store.write_metadata_only_v2(update_attrs=post_parse_attrs)
+            if zarr_format == 3:
+                self.store.write_metadata_only(update_attrs=post_parse_attrs)
+            else:
+                self.store.write_metadata_only_v2(update_attrs=post_parse_attrs)
 
     def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
         """

@@ -332,15 +332,18 @@ class TestPublish:
         # Check that kwargs takes precedence over DatasetManager.output_zarr3
         dm.to_zarr(dataset, zarr_format=3)
         dataset.to_zarr.assert_called_with(zarr_format=3)
+        dm.store.write_metadata_only.assert_called()
 
         # Check that DatasetManager.output_zarr3 is applied
         dm.output_zarr3 = True
         dm.to_zarr(dataset)
         dataset.to_zarr.assert_called_with(zarr_format=3)
+        dm.store.write_metadata_only.assert_called()
 
         # Check that zarr_format=2 also works
         dm.to_zarr(dataset, zarr_format=2)
         dataset.to_zarr.assert_called_with(zarr_format=2)
+        dm.store.write_metadata_only_v2.assert_called()
 
 
     @staticmethod
