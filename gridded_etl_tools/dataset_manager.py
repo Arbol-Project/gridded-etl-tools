@@ -91,9 +91,10 @@ class DatasetManager(Logging, Publish, ABC):
         skip_pre_parse_nan_check: bool = False,
         skip_post_parse_qc: bool = False,
         skip_post_parse_api_check: bool = False,
-        encryption_key: str = None,
+        encryption_key: str | None = None,
         use_compression: bool = True,
         dry_run: bool = False,
+        output_zarr3: bool = False,
         *args,
         **kwargs,
     ):
@@ -156,6 +157,9 @@ class DatasetManager(Logging, Publish, ABC):
         dry_run: bool, optional
             Run the dataset manager all the way through but never write anything via `to_zarr`.
             Intended for development purposes
+        output_zarr3: bool
+            Although the required Zarr library version is 3.0+, Zarrs are still written in the 2.0 format by default,
+            for backward compatibility. However, if this parameter is set, the Zarr will be written in 3.0 format.
         """
         super().__init__()
         # Set member variable defaults
@@ -238,6 +242,7 @@ class DatasetManager(Logging, Publish, ABC):
 
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
         self.use_compression = use_compression
+        self.output_zarr3 = output_zarr3
 
     # SETUP
 
@@ -404,7 +409,7 @@ class DatasetManager(Logging, Publish, ABC):
             yield from subclass.get_subclasses()
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: str | None = None) -> type | None:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -436,3 +441,4 @@ class DatasetManager(Logging, Publish, ABC):
                     return subclass
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")
+        return None

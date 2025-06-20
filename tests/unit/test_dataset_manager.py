@@ -55,6 +55,7 @@ class TestDatasetManager:
             skip_prepare_input_files=True,
             encryption_key=secret_key,
             use_compression=False,
+            output_zarr3=True
         )
 
         assert dm.requested_dask_chunks == "requested_dask_chunks"
@@ -71,6 +72,7 @@ class TestDatasetManager:
         assert dm.skip_prepare_input_files is True
         assert dm.encryption_key == encryption._hash(bytes.fromhex(secret_key))
         assert dm.use_compression is False
+        assert dm.output_zarr3 is True
 
         assert isinstance(dm.store, store.Local)
 

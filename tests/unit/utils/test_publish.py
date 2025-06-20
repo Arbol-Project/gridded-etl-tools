@@ -309,6 +309,7 @@ class TestPublish:
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
+        # The behavior when DM is default and to_zarr is default is Zarr format is explicitly set to 2
         dataset.to_zarr.assert_called_once_with("foo", zarr_format=2, bar="baz")
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
@@ -328,9 +329,19 @@ class TestPublish:
         )
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
-        # If to_zarr tries to write a v3 Zarr, raise an error
-        with pytest.raises(ValueError):
-            dm.to_zarr(dataset, "foo", bar="baz", zarr_format=3)
+        # Check that kwargs takes precedence over DatasetManager.output_zarr3
+        dm.to_zarr(dataset, zarr_format=3)
+        dataset.to_zarr.assert_called_with(zarr_format=3)
+
+        # Check that DatasetManager.output_zarr3 is applied
+        dm.output_zarr3 = True
+        dm.to_zarr(dataset)
+        dataset.to_zarr.assert_called_with(zarr_format=3)
+
+        # Check that zarr_format=2 also works
+        dm.to_zarr(dataset, zarr_format=2)
+        dataset.to_zarr.assert_called_with(zarr_format=2)
+
 
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):

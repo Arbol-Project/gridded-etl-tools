@@ -146,7 +146,7 @@ def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path)
     assert not dm.store.has_existing
 
 
-def test_initial(mocker, manager_class, test_chunks, initial_input_path, root):
+def test_initial(mocker, manager_class, initial_input_path, root):
     """
     Test a parse of CHIRPS data.
     """

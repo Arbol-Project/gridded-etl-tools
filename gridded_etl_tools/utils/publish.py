@@ -126,7 +126,8 @@ class Publish(Transform):
         determined by taking the difference between the first two time entries in the dataset, so the dataset must also
         have at least two time steps worth of data.
 
-        The "zarr_format" keyword argument is not supported. The Zarr format will be forced to 2.0.
+        If "zarr_format" is included in "kwargs", use that value as the Zarr format. Otherwise, the Zarr format is
+        determined by DatasetManager.output_zarr3.
 
         Parameters
         ----------
@@ -136,11 +137,6 @@ class Publish(Transform):
             Arguments to forward to `xr.Dataset.to_zarr`
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
-
-        Raises
-        ------
-        ValueError
-            If the zarr_format keyword is passed, and the value is not "2"
         """
         # First check that the data makes sense
         self.pre_parse_quality_check(dataset)
@@ -167,11 +163,14 @@ class Publish(Transform):
             # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
             post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
-            # Write data to Zarr and log duration.
+            # Write data to Zarr and log duration. Use kwargs zarr_format or DatasetManager.output_zarr3 to determine
+            # zarr format. Prioritize kwargs if zarr_format is passed.
             start_writing = time.perf_counter()
-            if kwargs.get("zarr_format", 2) != 2:
-                raise ValueError("The zarr_format must be 2.")
-            dataset.to_zarr(*args, zarr_format=2, **kwargs)
+            if "zarr_format" in kwargs:
+                dataset.to_zarr(*args, **kwargs)
+            else:
+                zarr_format = 3 if self.output_zarr3 else 2
+                dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
             # Indicate in metadata that update is complete. Force metadata to be v2 format.
