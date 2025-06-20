@@ -764,7 +764,12 @@ class Metadata(Convenience):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = numcodecs.Blosc() if self.use_compression else None
+        if not self.use_compression:
+            compressor = None
+        elif self.output_zarr3:
+            compressor = zarr.codecs.BloscCodec(cname="lz4")
+        else:
+            compressor = numcodecs.Blosc()
 
         if not self.store.has_existing:
             for coord in dataset.coords:

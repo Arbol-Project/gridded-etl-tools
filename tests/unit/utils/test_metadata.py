@@ -5,6 +5,7 @@ import pathlib
 import pytest
 import numpy as np
 import numcodecs
+import zarr
 
 # Imports used for legacy encoding change tests
 # import os
@@ -104,10 +105,6 @@ class TestMetadata:
 
     @staticmethod
     def test_set_initial_compression(manager_class, fake_original_dataset):
-        dm = manager_class(use_compression=True)
-        dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.store.has_existing = False
-
         dataset = fake_original_dataset
         for coord in dataset.coords:
             dataset[coord].encoding = {}
@@ -122,23 +119,15 @@ class TestMetadata:
             assert dataset[coord].encoding["compressors"] == numcodecs.Blosc()
         assert dataset["data"].encoding["compressors"] == numcodecs.Blosc()
 
-    # @staticmethod
-    # def test_set_initial_compression(manager_class, fake_original_dataset):
-    #     """Test setting initial compression on a new dataset"""
-    #     dm = manager_class(use_compression=True)
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
-    #     dm.store.has_existing = False
+        dm = manager_class(use_compression=True, output_zarr3=True)
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.has_existing = False
 
-    #     dataset = fake_original_dataset
-    #     dm.set_initial_compression(dataset)
+        dm.set_initial_compression(dataset)
+        for coord in dataset.coords:
+            assert dataset[coord].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
+        assert dataset["data"].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
 
-    #     # Check that compressor was set for coordinates and data variable
-    #     for coord in dataset.coords:
-    #         assert isinstance(dataset[coord].encoding["compressor"], numcodecs.Blosc)
-    #         assert dataset[coord].encoding["compressor"].cname == "lz4"
-
-    #     assert isinstance(dataset[dm.data_var].encoding["compressor"], numcodecs.Blosc)
-    #     assert dataset[dm.data_var].encoding["compressor"].cname == "lz4"
 
     @staticmethod
     def test_set_initial_compression_no_compression(manager_class, fake_original_dataset):
