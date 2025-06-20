@@ -146,6 +146,13 @@ class Publish(Transform):
             self.info("Exiting without parsing since the dataset manager was instantiated as a dry run")
             self.info(f"Dataset final state pre-parse:\n{dataset}")
         else:
+            # Determine Zarr format
+            if "zarr_format" in kwargs:
+                # Remove the argument because it will be passed explicitly
+                zarr_format = kwargs.pop("zarr_format")
+            else:
+                zarr_format = 3 if self.output_zarr3 else 2
+
             # Update metadata on disk with new values for update_in_progress and update_is_append_only, so that if
             # a Zarr is opened during writing, there will be indicators that show the data is being edited.
             self.info("Writing metadata before writing data to indicate write is in progress.")
@@ -155,22 +162,19 @@ class Publish(Transform):
                     "update_is_append_only": dataset.get("update_is_append_only"),
                     "initial_parse": False,
                 }
-                # Force v2 metadata format.
-                self.store.write_metadata_only_v2(update_attrs=update_attrs)
+                # Use Zarr format to determine metadata format.
+                if zarr_format == 3:
+                    self.store.write_metadata_only(update_attrs=update_attrs)
+                else:
+                    self.store.write_metadata_only_v2(update_attrs=update_attrs)
                 dataset.attrs.update(update_attrs)
             else:
                 dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
             # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
             post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
-            # Write data to Zarr and log duration. Use kwargs zarr_format or DatasetManager.output_zarr3 to determine
-            # zarr format. Prioritize kwargs if zarr_format is passed.
+            # Write data to Zarr and log duration.
             start_writing = time.perf_counter()
-            if "zarr_format" in kwargs:
-                # Remove the argument because it will be passed explicitly
-                zarr_format = kwargs.pop("zarr_format")
-            else:
-                zarr_format = 3 if self.output_zarr3 else 2
             dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
 
