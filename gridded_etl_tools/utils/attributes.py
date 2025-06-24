@@ -267,7 +267,12 @@ class Attributes(ABC):
     Default value set as False
     """
 
-    open_dataset_kwargs = {}
+    kerchunk_s3_options: dict[str, str] = {}
+    """
+    Options to pass to S3FileSystem when scanning remote files with Kerchunk.
+    """
+
+    open_dataset_kwargs: dict[str, str] = {}
     """Some dataset types (e.g. HDF5) need special kwargs to open in Xarray. This will pass them automatically
     during post-parse QC so these datasets can be checked automatically without issue"""
 
