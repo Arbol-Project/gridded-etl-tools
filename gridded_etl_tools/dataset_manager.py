@@ -207,6 +207,11 @@ class DatasetManager(Logging, Publish, ABC):
         # Log key system information
         self.info(platform.platform())
         self.info(f"Python {platform.python_version()}")
+        try:
+            self.info(f"{platform.freedesktop_os_release()['NAME']} {platform.freedesktop_os_release()['VERSION']}")
+        except OSError:
+            # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
+            pass
 
         # set chunk sizes (usually specified in the ETL manager class init)
         self.requested_dask_chunks = requested_dask_chunks
