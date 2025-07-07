@@ -327,3 +327,19 @@ class TestTimeSpan:
         three_hours_from_string = TimeSpan.from_string("3hourly")  # Use legacy format
         three_hours_from_create = TimeSpan.create("hours", 3)
         assert three_hours_from_string == three_hours_from_create
+
+    def test_equality_with_non_timespan(self):
+        """Test that equality comparison with non-TimeSpan objects returns NotImplemented."""
+        timespan = TimeSpan.create("minutes", 2)
+
+        # Test with various non-TimeSpan objects
+        assert timespan.__eq__("not a timespan") == NotImplemented
+        assert timespan.__eq__(123) == NotImplemented
+        assert timespan.__eq__(None) == NotImplemented
+        assert timespan.__eq__(TimeUnit("minutes", 2)) == NotImplemented
+
+        # Test the == operator (should use __eq__)
+        assert not (timespan == "not a timespan")
+        assert not (timespan == 123)
+        assert not (timespan is None)
+        assert not (timespan == TimeUnit("minutes", 2))
