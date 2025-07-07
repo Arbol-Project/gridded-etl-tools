@@ -184,3 +184,146 @@ class TestTimeSpan:
             ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration"
         ):
             TimeSpan.SPAN_SEASONAL.to_timedelta()
+
+    def test_create_factory_method(self):
+        """Test the create factory method for arbitrary time spans."""
+        # Test various time units
+        two_minutes = TimeSpan.create("minutes", 2)
+        assert two_minutes.time_unit == TimeUnit("minutes", 2)
+        assert two_minutes.to_minutes() == 2
+        assert str(two_minutes) == "2minutes"
+
+        fifteen_minutes = TimeSpan.create("minutes", 15)
+        assert fifteen_minutes.time_unit == TimeUnit("minutes", 15)
+        assert fifteen_minutes.to_minutes() == 15
+        assert str(fifteen_minutes) == "15minutes"
+
+        three_hours = TimeSpan.create("hours", 3)
+        assert three_hours.time_unit == TimeUnit("hours", 3)
+        assert three_hours.to_minutes() == 180
+        assert str(three_hours) == "3hourly"  # Legacy format
+
+        two_days = TimeSpan.create("days", 2)
+        assert two_days.time_unit == TimeUnit("days", 2)
+        assert two_days.to_minutes() == 2880  # 2 * 24 * 60
+        assert str(two_days) == "2days"
+
+        one_week = TimeSpan.create("weeks", 1)
+        assert one_week.time_unit == TimeUnit("weeks", 1)
+        assert one_week.to_minutes() == 10080  # 7 * 24 * 60
+        assert str(one_week) == "weekly"  # Predefined format
+
+        # Test edge cases
+        one_minute = TimeSpan.create("minutes", 1)
+        assert one_minute.time_unit == TimeUnit("minutes", 1)
+        assert one_minute.to_minutes() == 1
+        assert str(one_minute) == "1minutes"
+
+        large_hours = TimeSpan.create("hours", 100)
+        assert large_hours.time_unit == TimeUnit("hours", 100)
+        assert large_hours.to_minutes() == 6000
+        assert str(large_hours) == "100hours"
+
+    def test_create_factory_method_invalid_inputs(self):
+        """Test that create factory method properly validates inputs."""
+        # Test invalid units
+        with pytest.raises(ValueError, match="Invalid time unit: invalid_unit"):
+            TimeSpan.create("invalid_unit", 1)
+
+        # Test negative values
+        with pytest.raises(ValueError, match="Time unit value must be positive"):
+            TimeSpan.create("minutes", -1)
+
+        # Test zero values
+        with pytest.raises(ValueError, match="Time unit value must be positive"):
+            TimeSpan.create("hours", 0)
+
+        # Test non-integer values (should raise TypeError)
+        with pytest.raises(TypeError):
+            TimeSpan.create("minutes", "2")  # type: ignore
+
+    def test_create_factory_method_comparison(self):
+        """Test that created TimeSpan objects can be compared."""
+        two_minutes = TimeSpan.create("minutes", 2)
+        thirty_minutes = TimeSpan.create("minutes", 30)
+        one_hour = TimeSpan.create("hours", 1)
+
+        # Test comparisons
+        assert two_minutes < thirty_minutes
+        assert thirty_minutes < one_hour
+        assert two_minutes < one_hour
+
+        # Test equality
+        assert two_minutes == TimeSpan.create("minutes", 2)
+        assert two_minutes != TimeSpan.create("minutes", 3)
+
+    def test_create_factory_method_timedelta(self):
+        """Test that created TimeSpan objects can be converted to timedelta."""
+        two_minutes = TimeSpan.create("minutes", 2)
+        three_hours = TimeSpan.create("hours", 3)
+        one_day = TimeSpan.create("days", 1)
+
+        assert two_minutes.to_timedelta() == timedelta(minutes=2)
+        assert three_hours.to_timedelta() == timedelta(hours=3)
+        assert one_day.to_timedelta() == timedelta(days=1)
+
+    def test_create_factory_method_with_variable_duration_units(self):
+        """Test create factory method with units that can't be converted to minutes."""
+        # These should raise ValueError when trying to convert to minutes
+        monthly = TimeSpan.create("months", 1)
+        yearly = TimeSpan.create("years", 1)
+        seasonal = TimeSpan.create("seasons", 1)
+
+        # They should be created successfully
+        assert monthly.time_unit == TimeUnit("months", 1)
+        assert yearly.time_unit == TimeUnit("years", 1)
+        assert seasonal.time_unit == TimeUnit("seasons", 1)
+
+        # But should raise ValueError when converting to minutes
+        with pytest.raises(ValueError, match="Cannot convert months to minutes"):
+            monthly.to_minutes()
+
+        with pytest.raises(ValueError, match="Cannot convert years to minutes"):
+            yearly.to_minutes()
+
+        with pytest.raises(ValueError, match="Cannot convert seasons to minutes"):
+            seasonal.to_minutes()
+
+    def test_create_factory_method_string_representation(self):
+        """Test that created TimeSpan objects have correct string representations."""
+        # Test arbitrary spans (not in predefined list)
+        two_minutes = TimeSpan.create("minutes", 2)
+        fifteen_minutes = TimeSpan.create("minutes", 15)
+        # Note: 3 hours is predefined, so it uses the legacy format
+        three_hours = TimeSpan.create("hours", 3)
+
+        assert str(two_minutes) == "2minutes"
+        assert str(fifteen_minutes) == "15minutes"
+        assert str(three_hours) == "3hourly"  # Legacy format
+
+        # Test predefined spans (should use predefined string)
+        thirty_minutes = TimeSpan.create("minutes", 30)
+        one_hour = TimeSpan.create("hours", 1)
+        one_day = TimeSpan.create("days", 1)
+        one_week = TimeSpan.create("weeks", 1)
+
+        assert str(thirty_minutes) == "half_hourly"
+        assert str(one_hour) == "hourly"
+        assert str(one_day) == "daily"
+        assert str(one_week) == "weekly"  # Predefined format
+
+    def test_create_factory_method_from_string_integration(self):
+        """Test integration between create factory method and from_string."""
+        # Test that from_string can parse arbitrary durations
+        two_minutes_from_string = TimeSpan.from_string("2minutes")
+        two_minutes_from_create = TimeSpan.create("minutes", 2)
+        assert two_minutes_from_string == two_minutes_from_create
+
+        fifteen_minutes_from_string = TimeSpan.from_string("15minutes")
+        fifteen_minutes_from_create = TimeSpan.create("minutes", 15)
+        assert fifteen_minutes_from_string == fifteen_minutes_from_create
+
+        # Test that 3hours uses the legacy format
+        three_hours_from_string = TimeSpan.from_string("3hourly")  # Use legacy format
+        three_hours_from_create = TimeSpan.create("hours", 3)
+        assert three_hours_from_string == three_hours_from_create
