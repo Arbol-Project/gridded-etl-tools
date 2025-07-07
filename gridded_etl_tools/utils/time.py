@@ -110,11 +110,6 @@ class TimeSpan:
     def __init__(self, time_unit: TimeUnit):
         self.time_unit = time_unit
 
-    @property
-    def value(self) -> TimeUnit:
-        """Backward compatibility: return the time unit as the 'value'."""
-        return self.time_unit
-
     @classmethod
     def create(cls, unit: TimeUnitType, value: int) -> "TimeSpan":
         """Create a TimeSpan for arbitrary duration.

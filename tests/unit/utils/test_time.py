@@ -72,15 +72,15 @@ class TestTimeSpan:
 
     def test_enum_members(self):
         """Test that all expected TimeSpan members exist with correct values."""
-        assert TimeSpan.SPAN_HALF_HOURLY.value == TimeUnit("minutes", 30)
-        assert TimeSpan.SPAN_HOURLY.value == TimeUnit("hours", 1)
-        assert TimeSpan.SPAN_THREE_HOURLY.value == TimeUnit("hours", 3)
-        assert TimeSpan.SPAN_SIX_HOURLY.value == TimeUnit("hours", 6)
-        assert TimeSpan.SPAN_DAILY.value == TimeUnit("days", 1)
-        assert TimeSpan.SPAN_WEEKLY.value == TimeUnit("weeks", 1)
-        assert TimeSpan.SPAN_MONTHLY.value == TimeUnit("months", 1)
-        assert TimeSpan.SPAN_YEARLY.value == TimeUnit("years", 1)
-        assert TimeSpan.SPAN_SEASONAL.value == TimeUnit("seasons", 1)
+        assert TimeSpan.SPAN_HALF_HOURLY.time_unit == TimeUnit("minutes", 30)
+        assert TimeSpan.SPAN_HOURLY.time_unit == TimeUnit("hours", 1)
+        assert TimeSpan.SPAN_THREE_HOURLY.time_unit == TimeUnit("hours", 3)
+        assert TimeSpan.SPAN_SIX_HOURLY.time_unit == TimeUnit("hours", 6)
+        assert TimeSpan.SPAN_DAILY.time_unit == TimeUnit("days", 1)
+        assert TimeSpan.SPAN_WEEKLY.time_unit == TimeUnit("weeks", 1)
+        assert TimeSpan.SPAN_MONTHLY.time_unit == TimeUnit("months", 1)
+        assert TimeSpan.SPAN_YEARLY.time_unit == TimeUnit("years", 1)
+        assert TimeSpan.SPAN_SEASONAL.time_unit == TimeUnit("seasons", 1)
 
     @pytest.mark.parametrize(
         "span_str,expected_span",
