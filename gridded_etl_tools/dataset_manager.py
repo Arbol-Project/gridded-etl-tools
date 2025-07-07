@@ -11,6 +11,7 @@ import multiprocessing
 import multiprocessing.pool
 import sys
 import xarray as xr
+import platform
 
 import psutil
 
@@ -202,6 +203,10 @@ class DatasetManager(Logging, Publish, ABC):
 
         # Add a custom exception handler that will print the traceback to loggers
         sys.excepthook = self.log_except_hook
+
+        # Log key system information
+        self.info(platform.platform())
+        self.info(f"Python {platform.python_version()}")
 
         # set chunk sizes (usually specified in the ETL manager class init)
         self.requested_dask_chunks = requested_dask_chunks
