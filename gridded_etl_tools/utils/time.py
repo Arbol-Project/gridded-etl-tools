@@ -98,6 +98,7 @@ class TimeSpan(Enum):
     The time spans are ordered from smallest to largest interval.
     """
 
+    SPAN_TWO_MINUTES = TimeUnit("minutes", 2)
     SPAN_HALF_HOURLY = TimeUnit("minutes", 30)
     SPAN_HOURLY = TimeUnit("hours", 1)
     SPAN_THREE_HOURLY = TimeUnit("hours", 3)
@@ -137,6 +138,7 @@ class TimeSpan(Enum):
 
         # Create mapping of string representations to enum members on the fly to avoid class variable issues
         string_map = {
+            "2minutes": cls.SPAN_TWO_MINUTES,
             "half_hourly": cls.SPAN_HALF_HOURLY,
             "hourly": cls.SPAN_HOURLY,
             "3hourly": cls.SPAN_THREE_HOURLY,
