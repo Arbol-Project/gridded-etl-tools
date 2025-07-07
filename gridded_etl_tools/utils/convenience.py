@@ -554,4 +554,4 @@ class Convenience(Attributes):
             A dict of {str : (float, float)} representing the unit name
             and corresponding lower/upper value limits
         """
-        return self.EXTREME_VALUES_BY_UNIT
+        return self.EXTREME_VALUES_BY_UNIT  # pragma NO COVER, this is a constant
