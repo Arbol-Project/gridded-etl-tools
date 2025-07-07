@@ -128,7 +128,6 @@ class TestMetadata:
             assert dataset[coord].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
         assert dataset["data"].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
 
-
     @staticmethod
     def test_set_initial_compression_no_compression(manager_class, fake_original_dataset):
         """Test that `set_initial_compression` does nothing if compression is disabled"""

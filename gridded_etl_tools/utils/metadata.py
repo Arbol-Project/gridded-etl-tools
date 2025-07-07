@@ -352,8 +352,9 @@ class Metadata(Convenience):
         # Set up date items in STAC-compliant style
         properties_dict["start_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[0]).isoformat() + "Z"
         properties_dict["end_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[-1]).isoformat() + "Z"
-        properties_dict["updated"] = datetime.datetime.now(
-            tz=datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        properties_dict["updated"] = (
+            datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        )
         # Populate the empty STAC Item
         minx, miny, maxx, maxy = self.bbox_coords(dataset)
         stac_item["bbox"] = [minx, miny, maxx, maxy]

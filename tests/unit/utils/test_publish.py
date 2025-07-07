@@ -345,7 +345,6 @@ class TestPublish:
         dataset.to_zarr.assert_called_with(zarr_format=2)
         dm.store.write_metadata_only_v2.assert_called()
 
-
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()

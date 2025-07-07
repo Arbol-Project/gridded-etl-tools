@@ -55,7 +55,7 @@ class TestDatasetManager:
             skip_prepare_input_files=True,
             encryption_key=secret_key,
             use_compression=False,
-            output_zarr3=True
+            output_zarr3=True,
         )
 
         assert dm.requested_dask_chunks == "requested_dask_chunks"
