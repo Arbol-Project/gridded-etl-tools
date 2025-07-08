@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from typing import Literal, Dict, ClassVar, TypeVar
 import re
+from dataclasses import dataclass
+from typing import Literal, Dict, ClassVar, TypeVar, get_args
 from datetime import timedelta
 
 TimeUnitType = Literal["minutes", "hours", "days", "weeks", "months", "years", "seasons"]
@@ -34,9 +34,6 @@ class TimeUnit:
         "hours": 60,
         "days": 24 * 60,
         "weeks": 7 * 24 * 60,
-        "months": 30 * 24 * 60,  # Approximation
-        "years": 365 * 24 * 60,  # Approximation
-        "seasons": 90 * 24 * 60,  # Approximation (3 months)
     }
 
     def __post_init__(self) -> None:
@@ -51,11 +48,12 @@ class TimeUnit:
         """
         if self.value <= 0:
             raise ValueError(f"Time unit value must be positive, got {self.value}")
-        if self.unit not in self._CONVERSION_FACTORS:
-            raise ValueError(f"Invalid time unit: {self.unit}. Must be one of {list(self._CONVERSION_FACTORS.keys())}")
+        if self.unit not in get_args(TimeUnitType):
+            raise ValueError(f"Invalid time unit: {self.unit}. Must be one of {get_args(TimeUnitType)}")
 
     def to_minutes(self) -> int:
-        """Convert this time unit to minutes.
+        """
+        Convert this time unit to minutes.
 
         Returns
         -------
@@ -64,10 +62,7 @@ class TimeUnit:
 
         Notes
         -----
-        Conversions for months, years, and seasons are approximations:
-        - months: 30 days
-        - years: 365 days
-        - seasons: 90 days (3 months)
+        Conversions for months, years, and seasons are rejected as they are not of a fixed duration
         """
         if self.unit in ["months", "years", "seasons"]:
             raise ValueError(
@@ -148,18 +143,7 @@ class TimeSpan:
             raise TypeError(f"Expected string, got {type(span_str).__name__}")
 
         # First try predefined spans
-        predefined_map = {
-            "half_hourly": cls.create("minutes", 30),
-            "hourly": cls.create("hours", 1),
-            "3hourly": cls.create("hours", 3),
-            "6hourly": cls.create("hours", 6),
-            "daily": cls.create("days", 1),
-            "weekly": cls.create("weeks", 1),
-            "monthly": cls.create("months", 1),
-            "yearly": cls.create("years", 1),
-            "seasonal": cls.create("seasons", 1),
-        }
-
+        predefined_map = {value: cls(key) for key, value in cls._PREDEFINED_STRINGS.items()}
         if span_str in predefined_map:
             return predefined_map[span_str]
 
