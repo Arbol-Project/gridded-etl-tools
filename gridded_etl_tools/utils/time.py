@@ -1,12 +1,12 @@
+import re
 from dataclasses import dataclass
-from typing import Literal, Dict, ClassVar, TypeVar
-from enum import Enum
+from typing import Literal, Dict, ClassVar, TypeVar, get_args
 from datetime import timedelta
 
 TimeUnitType = Literal["minutes", "hours", "days", "weeks", "months", "years", "seasons"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class TimeUnit:
     """Represents a time unit with a specific value.
 
@@ -34,9 +34,6 @@ class TimeUnit:
         "hours": 60,
         "days": 24 * 60,
         "weeks": 7 * 24 * 60,
-        "months": 30 * 24 * 60,  # Approximation
-        "years": 365 * 24 * 60,  # Approximation
-        "seasons": 90 * 24 * 60,  # Approximation (3 months)
     }
 
     def __post_init__(self) -> None:
@@ -51,11 +48,12 @@ class TimeUnit:
         """
         if self.value <= 0:
             raise ValueError(f"Time unit value must be positive, got {self.value}")
-        if self.unit not in self._CONVERSION_FACTORS:
-            raise ValueError(f"Invalid time unit: {self.unit}. Must be one of {list(self._CONVERSION_FACTORS.keys())}")
+        if self.unit not in get_args(TimeUnitType):
+            raise ValueError(f"Invalid time unit: {self.unit}. Must be one of {get_args(TimeUnitType)}")
 
     def to_minutes(self) -> int:
-        """Convert this time unit to minutes.
+        """
+        Convert this time unit to minutes.
 
         Returns
         -------
@@ -64,10 +62,7 @@ class TimeUnit:
 
         Notes
         -----
-        Conversions for months, years, and seasons are approximations:
-        - months: 30 days
-        - years: 365 days
-        - seasons: 90 days (3 months)
+        Conversions for months, years, and seasons are rejected as they are not of a fixed duration
         """
         if self.unit in ["months", "years", "seasons"]:
             raise ValueError(
@@ -91,157 +86,124 @@ class TimeUnit:
 T = TypeVar("T", bound="TimeSpan")
 
 
-class TimeSpan(Enum):
-    """Enumeration of common time spans used in climate data.
+class TimeSpan:
+    """Represents a time span with support for both predefined and arbitrary durations."""
 
-    Each span represents a specific time interval that can be used to group or aggregate data.
-    The time spans are ordered from smallest to largest interval.
-    """
+    # Mapping of predefined TimeUnits to their string representations
+    _PREDEFINED_STRINGS = {
+        TimeUnit("minutes", 30): "half_hourly",
+        TimeUnit("hours", 1): "hourly",
+        TimeUnit("hours", 3): "3hourly",  # Keep for legacy support
+        TimeUnit("hours", 6): "6hourly",  # Keep for legacy support
+        TimeUnit("days", 1): "daily",
+        TimeUnit("weeks", 1): "weekly",
+        TimeUnit("months", 1): "monthly",
+        TimeUnit("years", 1): "yearly",
+        TimeUnit("seasons", 1): "seasonal",
+    }
 
-    SPAN_HALF_HOURLY = TimeUnit("minutes", 30)
-    SPAN_HOURLY = TimeUnit("hours", 1)
-    SPAN_THREE_HOURLY = TimeUnit("hours", 3)
-    SPAN_SIX_HOURLY = TimeUnit("hours", 6)
-    SPAN_DAILY = TimeUnit("days", 1)
-    SPAN_WEEKLY = TimeUnit("weeks", 1)
-    SPAN_MONTHLY = TimeUnit("months", 1)
-    SPAN_YEARLY = TimeUnit("years", 1)
-    SPAN_SEASONAL = TimeUnit("seasons", 1)  # 3 months
+    def __init__(self, time_unit: TimeUnit):
+        self.time_unit = time_unit
 
     @classmethod
-    def from_string(cls: type[T], span_str: str) -> T:
-        """Convert a string representation of a time span to the corresponding TimeSpan enum.
-
-        This is useful for converting user-provided time spans to the internal representation
-        and hence maintaining backwards compatibility with existing code.
+    def create(cls, unit: TimeUnitType, value: int) -> "TimeSpan":
+        """Create a TimeSpan for arbitrary duration.
 
         Parameters
         ----------
-        span_str : str
-            String representation of the time span (e.g., "hourly", "daily")
+        unit : TimeUnitType
+            The time unit (minutes, hours, days, weeks, months, years, or seasons)
+        value : int
+            The number of units (must be positive)
 
         Returns
         -------
         TimeSpan
-            The corresponding TimeSpan enum member
+            A TimeSpan representing the specified duration
+        """
+        return cls(TimeUnit(unit, value))
 
-        Raises
-        ------
-        TypeError
-            If span_str is not a string
-        ValueError
-            If span_str does not correspond to a valid time span
+    @classmethod
+    def from_string(cls, span_str: str) -> "TimeSpan":
+        """Convert a string representation to a TimeSpan.
+
+        Supports both predefined spans and arbitrary durations.
+
+        Parameters
+        ----------
+        span_str : str
+            String representation (e.g., "2minutes", "hourly", "15minutes")
+
+        Returns
+        -------
+        TimeSpan
+            The corresponding TimeSpan
         """
         if not isinstance(span_str, str):
             raise TypeError(f"Expected string, got {type(span_str).__name__}")
 
-        # Create mapping of string representations to enum members on the fly to avoid class variable issues
-        string_map = {
-            "half_hourly": cls.SPAN_HALF_HOURLY,
-            "hourly": cls.SPAN_HOURLY,
-            "3hourly": cls.SPAN_THREE_HOURLY,
-            "6hourly": cls.SPAN_SIX_HOURLY,
-            "daily": cls.SPAN_DAILY,
-            "weekly": cls.SPAN_WEEKLY,
-            "monthly": cls.SPAN_MONTHLY,
-            "yearly": cls.SPAN_YEARLY,
-            "seasonal": cls.SPAN_SEASONAL,
-        }
-        if span_str not in string_map:
-            valid_spans = ", ".join(sorted(string_map.keys()))
-            raise ValueError(f"Invalid time span string: '{span_str}'. " f"Must be one of: {valid_spans}")
-        return string_map[span_str]
+        # First try predefined spans
+        predefined_map = {value: cls(key) for key, value in cls._PREDEFINED_STRINGS.items()}
+        if span_str in predefined_map:
+            return predefined_map[span_str]
+
+        # Try to parse as arbitrary duration (e.g., "15minutes", "2hours", "2minutes")
+        pattern = r"^(\d+)(minutes?|hours?|days?|weeks?|months?|years?|seasons?)$"
+        match = re.match(pattern, span_str.lower())
+
+        if match:
+            value = int(match.group(1))
+            unit_with_s = match.group(2)
+            # Ensure unit ends with 's' for consistency
+            unit = unit_with_s if unit_with_s.endswith("s") else unit_with_s + "s"
+            return cls.create(unit, value)
+
+        valid_spans = ", ".join(sorted(predefined_map.keys()))
+        raise ValueError(
+            f"Invalid time span string: '{span_str}'. Must be one of: {valid_spans} or a pattern like '15minutes'"
+        )
 
     def get_time_unit(self) -> TimeUnit:
-        """Get the TimeUnit associated with this TimeSpan.
-
-        Returns
-        -------
-        TimeUnit
-            The time unit representing this span
-        """
-        return self.value
+        """Get the TimeUnit associated with this TimeSpan."""
+        return self.time_unit
 
     def to_minutes(self) -> int:
-        """Convert this time span to minutes.
-
-        Returns
-        -------
-        int
-            The number of minutes in this time span
-
-        Notes
-        -----
-        Conversions for months, years, and seasons are approximations:
-        - months: 30 days
-        - years: 365 days
-        - seasons: 90 days (3 months)
-        """
-        return self.value.to_minutes()
+        """Convert this time span to minutes."""
+        return self.time_unit.to_minutes()
 
     def __str__(self) -> str:
-        """Return a string representation of this time span.
+        """Return a string representation of this time span."""
+        # Check if this is a predefined span
+        if self.time_unit in self._PREDEFINED_STRINGS:
+            return self._PREDEFINED_STRINGS[self.time_unit]
 
-        Returns
-        -------
-        str
-            A string representation of the time span without the "SPAN_" prefix
-            and with numeric values converted from words (e.g., "THREE_" becomes "3")
-        """
-        # First remove the SPAN_ prefix and convert to lowercase
-        name = self.name.lower().replace("span_", "")
-
-        # Dictionary mapping word numbers to digits
-        # NOTE there are packages that do this programmatically,
-        # but installing a package for this is overkill
-        word_to_num = {
-            "one": "1",
-            "two": "2",
-            "three": "3",
-            "four": "4",
-            "five": "5",
-            "six": "6",
-            "seven": "7",
-            "eight": "8",
-            "nine": "9",
-            "ten": "10",
-        }
-
-        # Replace any word numbers with their digit equivalents
-        for word, num in word_to_num.items():
-            if name.startswith(word + "_"):
-                name = name.replace(word + "_", num)
-
-        return name
+        # For arbitrary spans, return a generic format
+        return f"{self.time_unit.value}{self.time_unit.unit}"
 
     def __lt__(self, other: "TimeSpan") -> bool:
-        """Compare time spans based on their duration in minutes.
-
-        Parameters
-        ----------
-        other : TimeSpan
-            Another TimeSpan to compare with
-
-        Returns
-        -------
-        bool
-            True if this time span is shorter than the other
-
-        Raises
-        ------
-        TypeError
-            If other is not a TimeSpan
-        """
+        """Compare time spans based on their duration in minutes."""
         if not isinstance(other, TimeSpan):
             return NotImplemented
         return self.to_minutes() < other.to_minutes()
 
     def to_timedelta(self) -> timedelta:
-        """Convert this time span to a timedelta.
-
-        Returns
-        -------
-        timedelta
-            The timedelta representing this time span
-        """
+        """Convert this time span to a timedelta."""
         return timedelta(minutes=self.to_minutes())
+
+    def __eq__(self, other: object) -> bool:
+        """Compare TimeSpan objects for equality."""
+        if not isinstance(other, TimeSpan):
+            return NotImplemented
+        return self.time_unit == other.time_unit
+
+
+# Create class attributes for backward compatibility
+TimeSpan.SPAN_HALF_HOURLY = TimeSpan.create("minutes", 30)
+TimeSpan.SPAN_HOURLY = TimeSpan.create("hours", 1)
+TimeSpan.SPAN_THREE_HOURLY = TimeSpan.create("hours", 3)
+TimeSpan.SPAN_SIX_HOURLY = TimeSpan.create("hours", 6)
+TimeSpan.SPAN_DAILY = TimeSpan.create("days", 1)
+TimeSpan.SPAN_WEEKLY = TimeSpan.create("weeks", 1)
+TimeSpan.SPAN_MONTHLY = TimeSpan.create("months", 1)
+TimeSpan.SPAN_YEARLY = TimeSpan.create("years", 1)
+TimeSpan.SPAN_SEASONAL = TimeSpan.create("seasons", 1)
