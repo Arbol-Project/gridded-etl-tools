@@ -20,9 +20,9 @@ class TestDatasetManager:
         mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
         dataset_manager.multiprocessing.cpu_count.return_value = 100
 
-        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.log_to_console")
+        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.init_logging")
         dm = manager_class()
-        dm.log_to_console.assert_called_once_with()
+        dm.init_logging.assert_called_once()
         assert dm.dask_num_threads == 8
 
     @staticmethod
@@ -35,18 +35,13 @@ class TestDatasetManager:
         mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
         dataset_manager.multiprocessing.cpu_count.return_value = 100
 
-        mocker.patch("gridded_etl_tools.dataset_manager.logging.getLogger")
-        dataset_manager.logging.getLogger.return_value.level = logging.ERROR
-
-        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.log_to_console")
+        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.init_logging")
 
         dm = manager_class(
             requested_dask_chunks="requested_dask_chunks",
             requested_zarr_chunks="requested_zarr_chunks",
-            requested_ipfs_chunker="chunky chunker",
             rebuild_requested=True,
             custom_output_path="output/over/here",
-            custom_latest_hash="omghash!",
             custom_input_path="input/over/here",
             console_log=False,
             global_log_level=logging.WARN,
@@ -57,16 +52,14 @@ class TestDatasetManager:
             skip_prepare_input_files=True,
             encryption_key=secret_key,
             use_compression=False,
+            output_zarr3=True,
         )
 
         assert dm.requested_dask_chunks == "requested_dask_chunks"
         assert dm.requested_zarr_chunks == "requested_zarr_chunks"
-        assert dm.requested_ipfs_chunker == "chunky chunker"
         assert dm.rebuild_requested is True
         assert dm.custom_output_path == "output/over/here"
-        assert dm.latest_hash() == "omghash!"
-        dm.log_to_console.assert_not_called()
-        dataset_manager.logging.getLogger.return_value.setLevel.assert_called_once_with(logging.WARN)
+        dm.init_logging.assert_called_once_with(console_log=False, global_log_level=logging.WARN)
         assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
         assert dm.dask_num_threads == 4
@@ -74,13 +67,9 @@ class TestDatasetManager:
         assert dm.skip_prepare_input_files is True
         assert dm.encryption_key == encryption._hash(bytes.fromhex(secret_key))
         assert dm.use_compression is False
+        assert dm.output_zarr3 is True
 
         assert isinstance(dm.store, store.Local)
-
-    @staticmethod
-    def test_constructor_ipld_store(manager_class):
-        dm = manager_class(store="ipld")
-        assert isinstance(dm.store, dataset_manager.IPLD)
 
     @staticmethod
     def test_constructor_s3_store(manager_class):
@@ -114,6 +103,19 @@ class TestDatasetManager:
 
         dm = manager_class()
         assert dm.dask_num_threads == 1
+
+    @staticmethod
+    def test_init_logging(mocker, manager_class):
+        mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.log_to_console")
+        mocker.patch("gridded_etl_tools.dataset_manager.logging.getLogger")
+        dataset_manager.logging.getLogger.return_value.level = logging.ERROR
+
+        dm = manager_class()
+        dm.log_to_console.assert_called_once()
+        dm.init_logging(False, logging.WARN)
+        dm.log_to_console.assert_called_once()
+        dataset_manager.logging.getLogger.return_value.setLevel.assert_called_with(logging.WARN)
+        assert dataset_manager.logging.getLogger.return_value.setLevel.call_count == 4
 
     @staticmethod
     def test__str__(manager_class):
@@ -174,7 +176,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_new_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=False)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=False)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -185,7 +187,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=False)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -196,7 +198,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=True)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
@@ -207,7 +209,7 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial_but_overwrite_not_allowed(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=False)
-        dm.store = mocker.Mock(spec=store.IPLD, has_existing=True)
+        dm.store = mocker.Mock(spec=store.Local, has_existing=True)
         dm.update_ds_transform = unittest.mock.Mock()
         dm.initial_ds_transform = unittest.mock.Mock()
         with pytest.raises(RuntimeError):
