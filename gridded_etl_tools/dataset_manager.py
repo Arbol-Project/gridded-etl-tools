@@ -188,30 +188,8 @@ class DatasetManager(Logging, Publish, ABC):
         # Assign the allow overwrite flag. The value should always be either `True` or `False`.
         self.allow_overwrite = allow_overwrite
 
-        # Print log statements to console by default
-        if console_log:
-            self.log_to_console()
-
-        # Set the logging level of logger.getLogger(), which is the logging module's root logger and will control the
-        # level of log statements that are enabled globally. If this is set to `logging.DEBUG`, all log statements will
-        # be enabled by default and will be forwarded to handlers set by either `logging.Logger.addHandler`,
-        # `DatasetManager.log_to_file`, or `DatasetManager.log_to_console`.
-        logging.getLogger().setLevel(global_log_level)
-
-        # hide DEBUG spam from h5-to-zarr during kerchunking
-        logging.getLogger("h5-to-zarr").setLevel(logging.WARNING)
-
-        # Add a custom exception handler that will print the traceback to loggers
-        sys.excepthook = self.log_except_hook
-
-        # Log key system information
-        self.info(platform.platform())
-        self.info(f"Python {platform.python_version()}")
-        try:
-            self.info(f"{platform.freedesktop_os_release()['NAME']} {platform.freedesktop_os_release()['VERSION']}")
-        except OSError:
-            # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
-            pass
+        # Initialize logging and write system info to the log
+        self.init_logging(console_log=console_log, global_log_level=global_log_level)
 
         # set chunk sizes (usually specified in the ETL manager class init)
         self.requested_dask_chunks = requested_dask_chunks
@@ -255,6 +233,46 @@ class DatasetManager(Logging, Publish, ABC):
         self.output_zarr3 = output_zarr3
 
     # SETUP
+
+    def init_logging(self, console_log: bool = True, global_log_level: int = logging.DEBUG):
+        """
+        Configure the Python logging module according to the given parameters, and write some system information to the
+        log.
+
+        Parameters
+        ----------
+        console_log : bool, optional
+            Enable logging `logging.INFO` level and higher statements to console. For more customization, see
+            `DatasetManager.log_to_console`
+        global_log_level : str, optional
+            The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all
+            logging statements will be generated and then logging handlers can decide what to do with them.
+        """
+        # Print log statements to console by default
+        if console_log:
+            print("Hello, World!")
+            self.log_to_console()
+
+        # Set the logging level of logger.getLogger(), which is the logging module's root logger and will control the
+        # level of log statements that are enabled globally. If this is set to `logging.DEBUG`, all log statements will
+        # be enabled by default and will be forwarded to handlers set by either `logging.Logger.addHandler`,
+        # `DatasetManager.log_to_file`, or `DatasetManager.log_to_console`.
+        logging.getLogger().setLevel(global_log_level)
+
+        # hide DEBUG spam from h5-to-zarr during kerchunking
+        logging.getLogger("h5-to-zarr").setLevel(logging.WARNING)
+
+        # Add a custom exception handler that will print the traceback to loggers
+        sys.excepthook = self.log_except_hook
+
+        # Log key system information
+        self.info(platform.platform())
+        self.info(f"Python {platform.python_version()}")
+        try:
+            self.info(f"{platform.freedesktop_os_release()['NAME']} {platform.freedesktop_os_release()['VERSION']}")
+        except OSError:
+            # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
+            pass
 
     @deprecation.deprecated(details="Use Dataset's name attribute directly.")
     def __str__(self) -> str:
