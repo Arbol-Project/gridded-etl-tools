@@ -98,5 +98,5 @@ namespaces = false
 [tool.flake8]
 # flake8 and black disagree on E203, E701, and W503
 ignore = ["E203", "E701", "W503"]
-exclude = ["temp/*", "build/*", ".nox"]
+exclude = ["temp/*", "build/*", ".nox", ".venv"]
 max-line-length = 120
