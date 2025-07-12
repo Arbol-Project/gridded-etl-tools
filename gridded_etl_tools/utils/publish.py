@@ -130,8 +130,9 @@ class Publish(Transform):
         determined by taking the difference between the first two time entries in the dataset, so the dataset must also
         have at least two time steps worth of data.
 
-        If "zarr_format" is included in "kwargs", use that value as the Zarr format. Otherwise, the Zarr format is
-        determined by DatasetManager.output_zarr3.
+        The Zarr output format will be determined by DatasetManager.output_zarr3. If output_zarr3 is true, the output
+        format will be 3. Otherwise, it will be 2. Do not pass "zarr_format" to "kwargs", or a ValueError will be
+        raised.
 
         Parameters
         ----------
@@ -141,6 +142,11 @@ class Publish(Transform):
             Arguments to forward to `xr.Dataset.to_zarr`
         **kwargs
             Keyword arguments to forward to `xr.Dataset.to_zarr`
+
+        Raises
+        ------
+        ValueError
+            If "zarr_format" is passed as a keyword argument
         """
         # First check that the data makes sense
         self.pre_parse_quality_check(dataset)
@@ -152,8 +158,9 @@ class Publish(Transform):
         else:
             # Determine Zarr format
             if "zarr_format" in kwargs:
-                # Remove the argument because it will be passed explicitly
-                zarr_format = kwargs.pop("zarr_format")
+                raise ValueError(
+                    "zarr_format may only be controlled by setting the value of DatasetManager.output_zarr3"
+                )
             else:
                 zarr_format = 3 if self.output_zarr3 else 2
 
