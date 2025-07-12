@@ -250,7 +250,6 @@ class DatasetManager(Logging, Publish, ABC):
         """
         # Print log statements to console by default
         if console_log:
-            print("Hello, World!")
             self.log_to_console()
 
         # Set the logging level of logger.getLogger(), which is the logging module's root logger and will control the
