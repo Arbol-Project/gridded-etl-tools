@@ -542,22 +542,27 @@ class Transform(Metadata, Convenience):
 
     # LOAD RAW DATA TO IN-MEMORY DATASET
 
-    def zarr_json_to_dataset(self, zarr_json_path: str = None, decode_times: bool = True, **kwargs) -> xr.Dataset:
+    def zarr_json_to_dataset(
+        self,
+        zarr_json_path: str | None = None,
+        decode_times: bool = True,
+        **kwargs
+    ) -> xr.Dataset:
         """
-        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying
-        any desired postprocessing steps
+        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying any desired
+        post-processing steps.
 
         Parameters
         ----------
         zarr_json_path : str, optional
             A path to a specific Zarr JSON prepared by Kerchunk. Primarily intended for debugging.
             Defaults to None, which will trigger using the `zarr_json_path` for the dataset in question.
+        decode_times : bool, optional
+            Choose whether to decode the times in inputs file using the CF conventions. In most cases this is desirable
+            and necessary, therefore this defaults to True. decode_timedelta will also be set to this value. Setting
+            decode_timedelta explicitly is a recent requirement of xarray.
         kwargs : dict, optional
             Additional keyword arguments to pass to xr.open_dataset
-            In use now:
-            - decode_times : bool, optional
-                Choose whether to decode the times in inputs file using the CF conventions.
-                In most cases this is desirable and necessary, therefore this defaults to True.
 
         Returns
         -------
