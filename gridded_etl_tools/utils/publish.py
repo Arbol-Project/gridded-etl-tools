@@ -42,6 +42,10 @@ class Publish(Transform):
         all ETLs. Modify the child methods it calls or the dask configuration settings to resolve any performance or
         parsing issues.
 
+        In the case of inserting or appending data, because more recent versions of Xarray + Dask choke when updating
+        with pre-chunked update datasets, all chunking information (as well as chunking itself) will be aggressively
+        removed.
+
         Parameters
         ----------
         publish_dataset : xr.Dataset

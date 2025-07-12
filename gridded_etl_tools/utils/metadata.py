@@ -436,7 +436,7 @@ class Metadata(Convenience):
         stac_item : dict
             A dictionary of metadata prepared in `create_stac_item` for publication as a standalone STAC metadata file
         """
-        self.info("Registering STAC Item in the store a" "nd its parent STAC Collection")
+        self.info("Registering STAC Item in the store and its parent STAC Collection")
         # Generate variables of interest
         stac_coll, collection_href = self.retrieve_stac(self.collection_name, StacType.COLLECTION)
         # Register links
@@ -611,8 +611,11 @@ class Metadata(Convenience):
 
     def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """
-        Encode important data points related to the data and time variables.
-        These are useful both for reference and to control Xarray's reading/writing behavior.
+        Encode important data points related to the data and time variables. These are useful both for reference and to
+        control Xarray's reading/writing behavior.
+
+        More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets, so all chunking
+        information (as well as chunking itself) will be aggressively removed.
 
         Parameters
         ----------
