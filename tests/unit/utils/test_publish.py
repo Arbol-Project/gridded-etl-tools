@@ -329,21 +329,15 @@ class TestPublish:
         )
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
-        # Check that kwargs takes precedence over DatasetManager.output_zarr3
-        dm.to_zarr(dataset, zarr_format=3)
-        dataset.to_zarr.assert_called_with(zarr_format=3)
-        dm.store.write_metadata_only.assert_called()
-
         # Check that DatasetManager.output_zarr3 is applied
         dm.output_zarr3 = True
         dm.to_zarr(dataset)
         dataset.to_zarr.assert_called_with(zarr_format=3)
         dm.store.write_metadata_only.assert_called()
 
-        # Check that zarr_format=2 also works
-        dm.to_zarr(dataset, zarr_format=2)
-        dataset.to_zarr.assert_called_with(zarr_format=2)
-        dm.store.write_metadata_only_v2.assert_called()
+        # Check that setting zarr_format causes ValueError
+        with pytest.raises(ValueError):
+            dm.to_zarr(dataset, zarr_format=3)
 
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
