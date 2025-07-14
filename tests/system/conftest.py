@@ -1,9 +1,9 @@
-import json
 import pathlib
 
 import pytest
 
 from examples.managers.chirps import CHIRPSFinal25
+from ..common import patched_key, patched_zarr_json_path, patched_root_stac_catalog, patched_output_root
 
 
 @pytest.fixture(scope="module")
@@ -12,14 +12,6 @@ def root():
     Directory relative to tests/ where input GRIBs are and temporary input will be generated
     """
     return pathlib.Path(__file__).parent / "data"
-
-
-@pytest.fixture(scope="module")
-def heads_path(root):
-    """
-    A local heads file for use during testing
-    """
-    return root / "heads.json"
 
 
 @pytest.fixture
@@ -77,14 +69,23 @@ def test_chunks():
     return {"time": 50, "latitude": 40, "longitude": 40}
 
 
-@pytest.fixture
-def create_heads_file_for_testing(heads_path):
+@pytest.fixture(autouse=True)
+def default_mocking(mocker, module_mocker):
     """
-    Create the heads file only if it doesn't exist
+    Mockers that are common to every gridded DatasetManager test
     """
-    if not heads_path.exists():
-        with open(heads_path, "w") as heads:
-            json.dump({}, heads)
-        print(f"Created empty heads JSON at {heads_path}")
-    else:
-        print(f"Found existing heads JSON at {heads_path}")
+    module_mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
+    mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
+        patched_zarr_json_path,
+    )
+    mocker.patch(
+        "gridded_etl_tools.dataset_manager.DatasetManager.default_root_stac_catalog",
+        patched_root_stac_catalog,
+    )
+    # Mock the root output directory name, so no existing data will be overwritten and it can be easily cleaned up
+    mocker.patch(
+        "gridded_etl_tools.utils.convenience.Convenience.output_root",
+        patched_output_root,
+    )

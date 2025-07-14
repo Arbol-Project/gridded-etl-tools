@@ -5,7 +5,6 @@ import pathlib
 from unittest import mock
 
 import pytest
-
 from gridded_etl_tools.utils import store
 
 
@@ -873,25 +872,11 @@ class TestTransform:
         dm.postprocess_zarr.assert_called_once_with(dataset)
 
     @staticmethod
-    def test_zarr_hash_to_dataset(manager_class, mocker):
-        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
-        dataset = xr.open_zarr.return_value
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        mapper = dm.store.mapper.return_value
-
-        assert dm.zarr_hash_to_dataset("QmHiMom") is dataset
-
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        mapper.set_root.assert_called_once_with("QmHiMom")
-        xr.open_zarr.assert_called_once_with(mapper)
-
-    @staticmethod
     def test_zarr_json_to_dataset(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset() is dataset
@@ -904,12 +889,42 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/zarr.json",
                     "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
                 "consolidated": False,
             },
             decode_times=True,
+            decode_timedelta=True,
+        )
+
+    @staticmethod
+    def test_zarr_json_to_dataset_has_existing(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset() is dataset
+        dm.zarr_json_path.assert_called_once_with()
+        xr.open_dataset.assert_called_once_with(
+            filename_or_obj="reference://",
+            engine="zarr",
+            chunks=None,
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/zarr.json",
+                    "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                },
+                "consolidated": False,
+            },
+            decode_times=True,
+            decode_timedelta=True,
         )
 
     @staticmethod
@@ -917,9 +932,10 @@ class TestTransform:
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
-        assert dm.zarr_json_to_dataset("/path/to/different.json", False) is dataset
+        assert dm.zarr_json_to_dataset("/path/to/different.json", decode_times=False, other_stuff=True) is dataset
         dm.zarr_json_path.assert_not_called()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
@@ -929,12 +945,15 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/different.json",
                     "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
                 },
                 "consolidated": False,
             },
             decode_times=False,
+            decode_timedelta=False,
+            other_stuff=True,
         )
 
     @staticmethod
