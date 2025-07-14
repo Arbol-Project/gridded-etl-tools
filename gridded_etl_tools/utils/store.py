@@ -10,10 +10,10 @@ import datetime
 import json
 
 import shutil
-import s3fs
+import s3fs  # type: ignore[import-not-found]
 import xarray as xr
 import pathlib
-import fsspec
+import fsspec  # type: ignore[import-untyped]
 import collections
 
 from abc import abstractmethod, ABC
@@ -55,6 +55,11 @@ class StoreInterface(ABC):
             A key/value mapping of files to contents
         """
 
+    @abstractmethod
+    def fs(self, refresh: bool = False, **kwargs) -> s3fs.S3FileSystem | fsspec.implementations.local.LocalFileSystem:
+        # docstring in child classes
+        ...
+
     @property
     @abstractmethod
     def has_existing(self) -> bool:
@@ -87,8 +92,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
-        Publish metadata entity to s3 store. Tracks historical state
-        of metadata as well
+        Publish metadata. Tracks historical state of metadata as well.
 
         Parameters
         ----------
@@ -104,7 +108,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
         """
-        Retrieve metadata entity from local store
+        Retrieve metadata entity.
 
         Parameters
         ----------
@@ -123,7 +127,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def get_metadata_path(self, title: str, stac_type: str) -> str:
         """
-        Get the s3 path for a given STAC title and type
+        Get the path for a given STAC title and type
 
         Parameters
         ----------
@@ -140,14 +144,13 @@ class StoreInterface(ABC):
         """
 
     @property
-    def path(self) -> str:
+    @abstractmethod
+    def path(self) -> str | pathlib.Path:
         """
-        Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
-
         Returns
         -------
         str
-            A URL string starting with "s3://" followed by the path to the Zarr.
+            Path to the Zarr
         """
 
     def dataset(self, **kwargs) -> xr.Dataset | None:
@@ -250,7 +253,7 @@ class S3(StoreInterface):
         Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
         performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
 
-        By default, the filesystem is only created once, the first time this function is called. To force it create a
+        By default, the filesystem is only created once, the first time this function is called. To force it to create a
         new one, set `refresh` to `True`.
 
         Parameters

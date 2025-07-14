@@ -6,6 +6,7 @@ import pprint
 import dask
 import pathlib
 import random
+import os
 
 from typing import Any, Generator
 from statsmodels.stats.proportion import proportion_confint
@@ -72,6 +73,15 @@ class Publish(Transform):
                     # If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
                     # parsing and issue a warning.
                     if self.store.has_existing and not self.rebuild_requested:
+
+                        # If zarr.json is present, the format is considered 3. Otherwise, it is considered format 2.
+                        # os.path.join works for both S3 and local.
+                        if self.store.fs().exists(os.path.join(self.store.path, "zarr.json")):
+                            if not self.output_zarr3:
+                                raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
+                        elif self.output_zarr3:
+                            raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
+
                         self.info(f"Updating existing data at {self.store}")
                         self.update_zarr(publish_dataset)
                     elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):

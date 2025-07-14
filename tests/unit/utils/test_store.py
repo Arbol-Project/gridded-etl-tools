@@ -39,6 +39,9 @@ class DummyStoreImpl(store_module.StoreInterface):
     def path(self):
         return self._path()
 
+    def fs(self):
+        return mock.Mock()
+
 
 class TestStoreInterface:
     @staticmethod

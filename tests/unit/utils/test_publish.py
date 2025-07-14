@@ -86,7 +86,14 @@ class TestPublish:
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+
+        # Mock that zarr.json doesn't exist
+        class MockFS:
+            def exists(self, path):
+                return False
+
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", fs=MockFS)
+
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -177,7 +184,14 @@ class TestPublish:
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+
+        # Mock that zarr.json doesn't exist
+        class MockFS:
+            def exists(self, path):
+                return False
+
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", fs=MockFS)
+
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -197,6 +211,46 @@ class TestPublish:
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_called_once_with(cluster)
+
+    @staticmethod
+    def test_parse_zarr_version_match(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.utils.publish.Client")
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.update_zarr = mock.Mock()
+
+        # Mock that zarr.json exists
+        class MockFS:
+            def exists(self, path):
+                return True
+
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", fs=MockFS)
+
+        # The default of dm.output_zarr3 should be false, so this should fail
+        with pytest.raises(RuntimeError, match="Existing data is Zarr v3, but output_zarr3 is not set."):
+            dm.parse(mock.Mock())
+
+        # With dm.output_zarr3 set, it should pass instead
+        dm.output_zarr3 = True
+        dm.parse(mock.Mock())
+        dm.update_zarr.assert_called_once()
+
+        # Mock that zarr.json doesn't exist
+        class MockFS:
+            def exists(self, path):
+                return False
+
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", fs=MockFS)
+
+        # dm.output_zarr3 unset should pass
+        dm.output_zarr3 = False
+        dm.parse(mock.Mock())
+        assert dm.update_zarr.call_count == 2
+
+        # dm.output_zarr3 set should fail
+        with pytest.raises(RuntimeError, match="Existing data is not Zarr v3, but output_zarr3 is set."):
+            dm.output_zarr3 = True
+            dm.parse(mock.Mock())
 
     @staticmethod
     def test_publish_metadata(manager_class):
