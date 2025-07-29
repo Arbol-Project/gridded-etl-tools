@@ -8,6 +8,7 @@ if TYPE_CHECKING:  # pragma NO COVER
 
 import datetime
 import json
+import os
 
 import shutil
 import s3fs  # type: ignore[import-not-found]
@@ -149,7 +150,7 @@ class StoreInterface(ABC):
         """
         Returns
         -------
-        str
+        str | pathlib.Path
             Path to the Zarr
         """
 
@@ -219,6 +220,30 @@ class StoreInterface(ABC):
         # Write back to Zarr
         with fs.open(f"{self.path}/zarr.json", "w") as z_contents:
             json.dump(current_attributes, z_contents)
+
+    @property
+    def has_v3_metadata(self) -> bool:
+        """
+        The Zarr library does not contain a function for checking whether a given Zarr is version 2 or 3. As an
+        alternative, this function can be used to report whether a Zarr contains v3-style metadata or not. This is just
+        a quick and dirty check to see if a Zarr is intended to be used as version 2 or 3 and does not guarantee that
+        the Zarr is in any particular format.
+
+        Zarr version 3 style metadata is indicated by the presence of a zarr.json file in the root of the Zarr.
+
+        Returns
+        -------
+        bool
+            True if the dataset associated with this store object contains zarr.json, false otherwise
+
+        Raises
+        ------
+        RuntimeError
+            If there is no existing dataset to check
+        """
+        if not self.has_existing:
+            raise RuntimeError("Cannot check non-existing Zarr for metadata")
+        return self.fs().exists(os.path.join(self.path, "zarr.json"))
 
 
 class S3(StoreInterface):

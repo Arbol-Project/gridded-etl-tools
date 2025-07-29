@@ -1,8 +1,11 @@
 import datetime
 import logging
 import unittest
+import pathlib
 
 import pytest
+
+import gridded_etl_tools
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
@@ -41,8 +44,8 @@ class TestDatasetManager:
             requested_dask_chunks="requested_dask_chunks",
             requested_zarr_chunks="requested_zarr_chunks",
             rebuild_requested=True,
-            custom_output_path="output/over/here",
-            custom_input_path="input/over/here",
+            custom_output_path=pathlib.Path("output/over/here"),
+            custom_input_path=pathlib.Path("input/over/here"),
             console_log=False,
             global_log_level=logging.WARN,
             allow_overwrite=True,
@@ -58,7 +61,7 @@ class TestDatasetManager:
         assert dm.requested_dask_chunks == "requested_dask_chunks"
         assert dm.requested_zarr_chunks == "requested_zarr_chunks"
         assert dm.rebuild_requested is True
-        assert dm.custom_output_path == "output/over/here"
+        assert dm.custom_output_path == pathlib.Path("output/over/here")
         dm.init_logging.assert_called_once_with(console_log=False, global_log_level=logging.WARN)
         assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
@@ -73,9 +76,25 @@ class TestDatasetManager:
 
     @staticmethod
     def test_constructor_s3_store(manager_class):
-        dm = manager_class(store="s3", s3_bucket_name="mop water")
+        dm = manager_class(store="s3", s3_bucket_name="mop_water")
         assert isinstance(dm.store, dataset_manager.S3)
-        assert dm.store.bucket == "mop water"
+        assert dm.store.bucket == "mop_water"
+
+    @staticmethod
+    def test_constructor_match_existing_format(manager_class, mocker):
+        # Mock that the store has a v3 Zarr
+        gridded_etl_tools.utils.store.Local.has_existing = True
+        gridded_etl_tools.utils.store.Local.has_v3_metadata = True
+
+        dm = manager_class(output_zarr3=True)
+        with pytest.raises(RuntimeError, match="Existing data is Zarr v3, but output_zarr3 is not set."):
+            dm = manager_class(output_zarr3=False)
+
+        # Mock that the store has a v2 Zarr
+        gridded_etl_tools.utils.store.Local.has_v3_metadata = False
+        dm = manager_class(output_zarr3=False)
+        with pytest.raises(RuntimeError, match="Existing data is not Zarr v3, but output_zarr3 is set."):
+            dm = manager_class(output_zarr3=True)
 
     @staticmethod
     def test_constructor_bad_store(manager_class):

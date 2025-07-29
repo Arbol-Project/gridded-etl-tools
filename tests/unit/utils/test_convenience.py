@@ -55,28 +55,28 @@ class TestConvenience:
     @staticmethod
     def test_root_directory(mocker, manager_class):
         cwd = mocker.patch("pathlib.Path.cwd")
-        cwd.return_value = "/right/here/mom"
+        cwd.return_value = pathlib.Path("/right/here/mom")
         dm = manager_class()
-        assert dm.root_directory() == "/right/here/mom"
+        assert dm.root_directory() == pathlib.Path("/right/here/mom")
         cwd.assert_called_once_with()
 
     @staticmethod
     def test_root_directory_already_accessed(mocker, manager_class):
         cwd = mocker.patch("pathlib.Path.cwd")
-        cwd.return_value = "/not/here/mom"
+        cwd.return_value = pathlib.Path("/not/here/mom")
         dm = manager_class()
-        dm._root_directory = "/right/here/mom"
-        assert dm.root_directory() == "/right/here/mom"
-        cwd.assert_not_called()
+        dm._root_directory = pathlib.Path("/right/here/mom")
+        assert dm.root_directory() == pathlib.Path("/right/here/mom")
+        assert cwd.call_count == 1
 
     @staticmethod
     def test_root_directory_refresh(mocker, manager_class):
         cwd = mocker.patch("pathlib.Path.cwd")
-        cwd.return_value = "/right/here/mom"
+        cwd.return_value = pathlib.Path("/right/here/mom")
         dm = manager_class()
-        dm._root_directory = "/not/here/mom"
-        assert dm.root_directory(refresh=True) == "/right/here/mom"
-        cwd.assert_called_once_with()
+        dm._root_directory = pathlib.Path("/not/here/mom")
+        assert dm.root_directory(refresh=True) == pathlib.Path("/right/here/mom")
+        assert cwd.call_count == 2
 
     @staticmethod
     def test_local_input_root(manager_class):

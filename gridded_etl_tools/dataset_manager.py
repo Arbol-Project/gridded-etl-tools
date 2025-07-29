@@ -76,8 +76,8 @@ class DatasetManager(Logging, Publish, ABC):
         requested_dask_chunks,
         requested_zarr_chunks,
         rebuild_requested=False,
-        custom_output_path=None,
-        custom_input_path=None,
+        custom_output_path: str | pathlib.Path | None = None,
+        custom_input_path: str | pathlib.Path | None = None,
         console_log=True,
         global_log_level=logging.DEBUG,
         store=None,
@@ -107,9 +107,9 @@ class DatasetManager(Logging, Publish, ABC):
         rebuild_requested : bool, optional
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all
             available data from beginning to end.
-        custom_output_path : str, optional
+        custom_output_path : str | pathlib.Path, optional
             Overrides the default path returned by `StoreInterface.path` for Local and S3 stores.
-        custom_input_path : str, optional
+        custom_input_path : str | pathlib.Path, optional
             A path to use for input files
         console_log : bool, optional
             Enable logging `logging.INFO` level and higher statements to console. For more customization, see
@@ -231,6 +231,14 @@ class DatasetManager(Logging, Publish, ABC):
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
         self.use_compression = use_compression
         self.output_zarr3 = output_zarr3
+
+        # Check output Zarr format versus existing format before moving on with this object
+        if self.store.has_existing and not self.rebuild_requested:
+            if self.store.has_v3_metadata:
+                if not self.output_zarr3:
+                    raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
+            elif self.output_zarr3:
+                raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
 
     # SETUP
 

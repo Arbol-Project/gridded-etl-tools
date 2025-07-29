@@ -75,8 +75,7 @@ class Publish(Transform):
                     if self.store.has_existing and not self.rebuild_requested:
 
                         # If zarr.json is present, the format is considered 3. Otherwise, it is considered format 2.
-                        # os.path.join works for both S3 and local.
-                        if self.store.fs().exists(os.path.join(self.store.path, "zarr.json")):
+                        if self.store.has_v3_metadata:
                             if not self.output_zarr3:
                                 raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
                         elif self.output_zarr3:

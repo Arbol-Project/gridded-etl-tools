@@ -73,8 +73,6 @@ A full accounting of STAC's tags and standards is beyond the scope of this READM
 4. STAC Collections are instantiated for each manager and contain the properties common to that manager's datasets. Links to the individual datasets are identified as `"rel" = "item"` under `["links"]`.
 6. The Arbol Root STAC Catalog contains an overall description of Arbol and links to each STAC Collection.
 
-Integrating STAC with Zarrs required some additional tweaks to our architecture. The most notable is referencing `zmetadata` under each Item's `assets` instead of the raw `data`. This reflects that the Zarr "files" we open are actually consolidated JOSN metadata referencing all the individual chunks and [aligns with community best practices](https://github.com/radiantearth/stac-browser/issues/44). For the same reason we assign the `zmetadata` the role of `zarr-consolidated-metadata`.
-
 The Pangeo community has been further developing a `datacube` extension for STAC that better describes N-dimensional datasets (see [discussion here](https://discourse.pangeo.io/t/stac-and-earth-systems-datasets/1472)). This extension is powerful but requires additional work to implement, maintain, and read. Given that all of our N-dimensional datasets in practice only have a time dimension we elected not to implement this extension, for now at least.
 
 

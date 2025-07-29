@@ -72,6 +72,28 @@ class TestStoreInterface:
         xr.open_zarr.assert_not_called()
         store._mapper.assert_not_called()
 
+    @staticmethod
+    def test_has_v3_metadata(mocker):
+        # Mock store with no existing Zarr
+        store = DummyStoreImpl(None)
+        with pytest.raises(RuntimeError, match="Cannot check non-existing Zarr for metadata"):
+            store.has_existing = False
+            store.has_v3_metadata
+
+        # Mock store with existing Zarr
+        store.has_existing = True
+
+        # Mock that zarr.json doesn't exist
+        class MockFS:
+            def exists(self, path):
+                return False
+        store.fs = MockFS
+        assert store.has_v3_metadata is False
+
+        # Mock that zarr.json exists
+        MockFS.exists = lambda x, y: True
+        assert store.has_v3_metadata
+
 
 class TestS3:
     @staticmethod
