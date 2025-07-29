@@ -89,7 +89,8 @@ class TestPublish:
 
         # Mock that the store has a v2 Zarr
         dm.store = mock.Mock(
-            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False)
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False
+        )
 
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
@@ -184,7 +185,8 @@ class TestPublish:
 
         # Mock that the store has a v2 Zarr
         dm.store = mock.Mock(
-            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False)
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False
+        )
 
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
@@ -215,7 +217,8 @@ class TestPublish:
 
         # Mock that the store has a v3 Zarr
         dm.store = mock.Mock(
-            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=True)
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=True
+        )
 
         # The default of dm.output_zarr3 should be false, so this should fail
         with pytest.raises(RuntimeError, match="Existing data is Zarr v3, but output_zarr3 is not set."):

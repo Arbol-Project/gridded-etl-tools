@@ -87,6 +87,7 @@ class TestStoreInterface:
         class MockFS:
             def exists(self, path):
                 return False
+
         store.fs = MockFS
         assert store.has_v3_metadata is False
 
