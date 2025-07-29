@@ -82,6 +82,10 @@ class TestDatasetManager:
 
     @staticmethod
     def test_constructor_match_existing_format(manager_class, mocker):
+        # Save these functions to restore the module to initial state when done testing the DM constructor
+        restore_has_existing = gridded_etl_tools.utils.store.Local.has_existing
+        restore_has_v3_metadata = gridded_etl_tools.utils.store.Local.has_v3_metadata
+
         # Mock that the store has a v3 Zarr
         gridded_etl_tools.utils.store.Local.has_existing = True
         gridded_etl_tools.utils.store.Local.has_v3_metadata = True
@@ -95,6 +99,10 @@ class TestDatasetManager:
         dm = manager_class(output_zarr3=False)
         with pytest.raises(RuntimeError, match="Existing data is not Zarr v3, but output_zarr3 is set."):
             dm = manager_class(output_zarr3=True)
+
+        # Restore the module to initial state
+        gridded_etl_tools.utils.store.Local.has_existing = restore_has_existing
+        gridded_etl_tools.utils.store.Local.has_v3_metadata = restore_has_v3_metadata
 
     @staticmethod
     def test_constructor_bad_store(manager_class):
