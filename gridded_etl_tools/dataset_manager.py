@@ -12,6 +12,7 @@ import multiprocessing.pool
 import sys
 import xarray as xr
 import platform
+import pathlib
 
 import psutil
 

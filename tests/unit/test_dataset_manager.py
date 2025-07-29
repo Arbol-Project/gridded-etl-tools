@@ -98,7 +98,7 @@ class TestDatasetManager:
         gridded_etl_tools.utils.store.Local.has_v3_metadata = False
         dm = manager_class(output_zarr3=False)
         with pytest.raises(RuntimeError, match="Existing data is not Zarr v3, but output_zarr3 is set."):
-            dm = manager_class(output_zarr3=True)
+            dm = manager_class(output_zarr3=True)  # noqa: F841
 
         # Restore the module to initial state
         gridded_etl_tools.utils.store.Local.has_existing = restore_has_existing

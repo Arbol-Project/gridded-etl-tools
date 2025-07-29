@@ -6,7 +6,6 @@ import pprint
 import dask
 import pathlib
 import random
-import os
 
 from typing import Any, Generator
 from statsmodels.stats.proportion import proportion_confint
