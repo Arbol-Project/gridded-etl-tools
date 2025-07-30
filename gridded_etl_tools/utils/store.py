@@ -8,13 +8,13 @@ if TYPE_CHECKING:  # pragma NO COVER
 
 import datetime
 import json
+import os
 
 import shutil
-import s3fs
+import s3fs  # type: ignore[import-not-found]
 import xarray as xr
-import ipldstore
 import pathlib
-import fsspec
+import fsspec  # type: ignore[import-untyped]
 import collections
 
 from abc import abstractmethod, ABC
@@ -25,7 +25,7 @@ class StoreInterface(ABC):
     """
     Base class for an interface that can be used to access a dataset's Zarr.
 
-    Zarrs can be stored in different types of data stores, for example IPLD, S3, and the local filesystem, each of
+    Zarrs can be stored in different types of data stores, for example S3 and the local filesystem, each of
     which is accessed slightly differently in Python. This class abstracts the access to the underlying data store by
     providing functions that access the Zarr on the store in a uniform way, regardless of which is being used.
     """
@@ -55,6 +55,11 @@ class StoreInterface(ABC):
         collections.abc.MutableMapping
             A key/value mapping of files to contents
         """
+
+    @abstractmethod
+    def fs(self, refresh: bool = False, **kwargs) -> s3fs.S3FileSystem | fsspec.implementations.local.LocalFileSystem:
+        # docstring in child classes
+        ...
 
     @property
     @abstractmethod
@@ -88,8 +93,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def push_metadata(self, title: str, stac_content: dict, stac_type: str):
         """
-        Publish metadata entity to s3 store. Tracks historical state
-        of metadata as well
+        Publish metadata. Tracks historical state of metadata as well.
 
         Parameters
         ----------
@@ -105,7 +109,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
         """
-        Retrieve metadata entity from local store
+        Retrieve metadata entity.
 
         Parameters
         ----------
@@ -124,7 +128,7 @@ class StoreInterface(ABC):
     @abstractmethod
     def get_metadata_path(self, title: str, stac_type: str) -> str:
         """
-        Get the s3 path for a given STAC title and type
+        Get the path for a given STAC title and type
 
         Parameters
         ----------
@@ -141,14 +145,13 @@ class StoreInterface(ABC):
         """
 
     @property
-    def path(self) -> str:
+    @abstractmethod
+    def path(self) -> str | pathlib.Path:
         """
-        Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
-
         Returns
         -------
-        str
-            A URL string starting with "s3://" followed by the path to the Zarr.
+        str | pathlib.Path
+            Path to the Zarr
         """
 
     def dataset(self, **kwargs) -> xr.Dataset | None:
@@ -156,8 +159,8 @@ class StoreInterface(ABC):
         Parameters
         ----------
         **kwargs
-            Implementation specific keyword arguments to forward to `StoreInterface.mapper`. S3 and Local accept
-            `refresh`, and IPLD accepts `set_root`.
+            Implementation specific keyword arguments to forward to the Zarr store. S3 and Local accept
+            `refresh`.
 
         Returns
         -------
@@ -165,32 +168,82 @@ class StoreInterface(ABC):
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
         if self.has_existing:
-            return xr.open_zarr(self.mapper(**kwargs))
+            return xr.open_zarr(store=self.path, decode_timedelta=True, **kwargs)
         else:
             return None
 
-    @abstractmethod
-    def write_metadata_only(self, attributes: dict):
+    def write_metadata_only_v2(self, update_attrs: dict[str, Any]):  # pragma NO COVER
         """
-        Writes the metadata to the stored Zarr. Not available to datasets on the IPLD store. Use DatasetManager.to_zarr
-        instead.
-
-        Open the Zarr's `.zmetadata` and `.zattr` files with the JSON library, update the values with the values in the
-        given dict, and write the files.
-
-        These changes will be reflected in the attributes dict of subsequent calls to `DatasetManager.store.dataset`
-        without needing to call `DatasetManager.to_zarr`.
+        Write Zarr 2.0 format metadata - three separate JSON files.
 
         Parameters
         ----------
-        attributes
-            A dict of metadata attributes to add or update to the Zarr
+        update_attrs : dict[str, Any]
+            A dictionary of attributes to update in .zmetadata and .zattrs
+        """
+        # Edit both .zmetadata and .zattrs
+        fs = self.fs()
+
+        for z_path in (".zmetadata", ".zattrs"):
+            # Read current metadata from Zarr
+            with fs.open(f"{self.path}/{z_path}") as z_contents:
+                current_attributes = json.load(z_contents)
+
+            # Update given attributes at the appropriate location depending on which z file
+            if z_path == ".zmetadata":
+                current_attributes["metadata"][".zattrs"].update(update_attrs)
+            else:
+                current_attributes.update(update_attrs)
+
+            # Write back to Zarr
+            with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
+                json.dump(current_attributes, z_contents)
+
+    def write_metadata_only(self, update_attrs: dict[str, Any]):
+        """
+        Update metadata within the master zarr.json file contained within v3 Zarrs
+
+        Parameters
+        ----------
+        update_attrs : dict[str, Any]
+            A dictionary of attributes to update in the zarr.json file
+        """
+        fs = self.fs()
+
+        # Read current metadata from Zarr
+        with fs.open(f"{self.path}/zarr.json") as z_contents:
+            current_attributes = json.load(z_contents)
+
+        # Update given attributes
+        current_attributes["attributes"].update(update_attrs)
+
+        # Write back to Zarr
+        with fs.open(f"{self.path}/zarr.json", "w") as z_contents:
+            json.dump(current_attributes, z_contents)
+
+    @property
+    def has_v3_metadata(self) -> bool:
+        """
+        The Zarr library does not contain a function for checking whether a given Zarr is version 2 or 3. As an
+        alternative, this function can be used to report whether a Zarr contains v3-style metadata or not. This is just
+        a quick and dirty check to see if a Zarr is intended to be used as version 2 or 3 and does not guarantee that
+        the Zarr is in any particular format.
+
+        Zarr version 3 style metadata is indicated by the presence of a zarr.json file in the root of the Zarr.
+
+        Returns
+        -------
+        bool
+            True if the dataset associated with this store object contains zarr.json, false otherwise
 
         Raises
         ------
-        NotImplementedError
-            If the store is IPLD
+        RuntimeError
+            If there is no existing dataset to check
         """
+        if not self.has_existing:
+            raise RuntimeError("Cannot check non-existing Zarr for metadata")
+        return self.fs().exists(os.path.join(self.path, "zarr.json"))
 
 
 class S3(StoreInterface):
@@ -201,8 +254,7 @@ class S3(StoreInterface):
     `dataset_manager.DatasetManager` object and bucket name, and define both `AWS_ACCESS_KEY_ID` and
     `AWS_SECRET_ACCESS_KEY` in the ~/.aws/credentials file or shell environment.
 
-    After initialization, use the member functions to access the Zarr. For example, call `S3.mapper` to get a
-    `MutableMapping` that can be passed to `xarray.open_zarr` and `xarray.to_zarr`.
+    After initialization, use the member functions to access the Zarr.
     """
 
     def __init__(self, dm: dataset_manager.DatasetManager, bucket: str):
@@ -221,12 +273,12 @@ class S3(StoreInterface):
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
 
-    def fs(self, refresh: bool = False, profile: str | None = None) -> s3fs.S3FileSystem:
+    def fs(self, refresh: bool = False, profile: str | None = None, **kwargs) -> s3fs.S3FileSystem:
         """
         Get an `s3fs.S3FileSystem` object. No authentication is performed on this step. Authentication will be
         performed according to the rules at https://s3fs.readthedocs.io/en/latest/#credentials when accessing the data.
 
-        By default, the filesystem is only created once, the first time this function is called. To force it create a
+        By default, the filesystem is only created once, the first time this function is called. To force it to create a
         new one, set `refresh` to `True`.
 
         Parameters
@@ -243,7 +295,7 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = s3fs.S3FileSystem(profile=profile)
+            self._fs = s3fs.S3FileSystem(profile=profile, **kwargs)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
                 "https://s3fs.readthedocs.io/en/latest/#credentials"
@@ -265,11 +317,8 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/datasets/{self.dm.key()}.zarr"
 
-    def __str__(self) -> str:
-        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
-        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
-        # instance.
-        return self.path
+    def __repr__(self) -> str:
+        return "S3"
 
     def mapper(self, refresh: bool = False, **kwargs) -> fsspec.mapping.FSMap:
         """
@@ -285,7 +334,7 @@ class S3(StoreInterface):
         refresh : bool
             Set to `True` to force a new mapper to be created even if this object has one already
         **kwargs : dict
-            Arbitrary keyword args supported for compatibility with IPLD.
+            Arbitrary keyword args supported
 
         Returns
         -------
@@ -394,124 +443,6 @@ class S3(StoreInterface):
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
 
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
-        # Edit both .zmetadata and .zattrs
-        fs = self.fs()
-
-        for z_path in (".zmetadata", ".zattrs"):
-            # Read current metadata from Zarr
-            with fs.open(f"{self.path}/{z_path}") as z_contents:
-                current_attributes = json.load(z_contents)
-
-            # Update given attributes at the appropriate location depending on which z file
-            if z_path == ".zmetadata":
-                current_attributes["metadata"][".zattrs"].update(update_attrs)
-            else:
-                current_attributes.update(update_attrs)
-
-            # Write back to Zarr
-            with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
-                json.dump(current_attributes, z_contents)
-
-
-class IPLD(StoreInterface):
-    """
-    Provides an interface for reading and writing a dataset's Zarr on IPLD.
-
-    If there is existing data for the dataset, it is assumed to be stored at the hash returned by
-    `IPLD.dm.latest_hash`, and the mapper will return a hash that can be used to retrieve the data. If there is no
-    existing data, or the mapper is called without `set_root`, an unrooted IPFS mapper will be returned that can be
-    used to write new data to IPFS and generate a new recursive hash.
-    """
-
-    def mapper(self, set_root: bool = True, refresh: bool = False) -> ipldstore.IPLDStore:
-        """
-        Get an IPLD mapper by delegating to `ipldstore.get_ipfs_mapper`, passing along an IPFS chunker value if the
-        associated dataset's `requested_ipfs_chunker` property has been set.
-
-        If `set_root` is `False`, the root will not be set to the latest hash, so the mapper can be used to open a new
-        Zarr on the IPLD datastore. Otherwise, `DatasetManager.latest_hash` will be used to get the latest hash (which
-        is stored in the STAC at the IPNS key for the dataset).
-
-        Parameters
-        ----------
-        set_root : bool
-            Return a mapper rooted at the dataset's latest hash if `True`, otherwise return a new mapper.
-        refresh : bool
-            Force getting a new mapper by checking the latest IPNS hash. Without this set, the mapper will only be set
-            the first time this function is called.
-
-        Returns
-        -------
-        ipldstore.IPLDStore
-            An IPLD `MutableMapping`, usable, for example, to open a Zarr with `xr.open_zarr`
-        """
-        if refresh or not hasattr(self, "_mapper"):
-            if self.dm.requested_ipfs_chunker:
-                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host, chunker=self.dm.requested_ipfs_chunker)
-            else:
-                self._mapper = ipldstore.get_ipfs_mapper(host=self.dm._host)
-            self.dm.info(f"IPFS chunker is {self._mapper._store._chunker}")
-            if set_root and self.dm.latest_hash():
-                self._mapper.set_root(self.dm.latest_hash())
-        return self._mapper
-
-    def __str__(self) -> str:
-        """
-        Returns
-        -------
-        str
-            The path as "/ipfs/[hash]". If the hash has not been determined, return "/ipfs/"
-        """
-        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
-        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
-        # instance.
-        if not self.dm.latest_hash():
-            return "/ipfs/"
-        else:
-            return f"/ipfs/{self.dm.latest_hash()}"
-
-    @property
-    def path(self) -> str | None:
-        """
-        Get the IPFS-protocol hash pointing to the latest version of the parent `DatasetManager`'s Zarr,
-        or return None if there is none.
-
-        Returns
-        -------
-        str | None
-            A URL string starting with "ipfs" followed by the hash of the latest Zarr, if it exists.
-        """
-        if not self.dm.latest_hash():
-            return None
-        else:
-            return f"/ipfs/{self.dm.latest_hash()}"
-
-    @property
-    def has_existing(self) -> bool:
-        """
-        Returns
-        -------
-        bool
-            Return `True` if the dataset has a latest hash, or `False` otherwise.
-        """
-        return bool(self.dm.latest_hash())
-
-    def write_metadata_only(self, attributes: dict):
-        raise NotImplementedError("Can't write metadata-only on the IPLD store. Use DatasetManager.to_zarr instead.")
-
-    def metadata_exists(self, title: str, stac_type: str) -> bool:
-        raise NotImplementedError
-
-    def push_metadata(self, title: str, stac_content: dict, stac_type: str):
-        raise NotImplementedError
-
-    def retrieve_metadata(self, title: str, stac_type: str) -> tuple[dict, str]:
-        raise NotImplementedError
-
-    def get_metadata_path(self, title: str, stac_type: str) -> str:
-        raise NotImplementedError
-
 
 class Local(StoreInterface):
     """
@@ -534,7 +465,7 @@ class Local(StoreInterface):
         self.dm = dm
         self.folder = folder
 
-    def fs(self, refresh: bool = False) -> fsspec.implementations.local.LocalFileSystem:
+    def fs(self, refresh: bool = False, **kwargs) -> fsspec.implementations.local.LocalFileSystem:
         """
         Get an `fsspec.implementations.local.LocalFileSystem` object. By default, the filesystem is only created once,
         the first time this function is called. To force it create a new one, set `refresh` to `True`.
@@ -551,7 +482,7 @@ class Local(StoreInterface):
             A filesystem object for interfacing with the local filesystem
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = fsspec.filesystem("file")
+            self._fs = fsspec.filesystem("file", **kwargs)
         return self._fs
 
     def mapper(self, refresh=False, **kwargs) -> fsspec.mapping.FSMap:
@@ -565,7 +496,7 @@ class Local(StoreInterface):
         refresh : bool
             Set to `True` to force a new mapper to be created even if this object has one already.
         **kwargs : dict
-            Arbitrary keyword args supported for compatibility with IPLD.
+            Arbitrary keyword args supported
 
         Returns
         -------
@@ -576,11 +507,8 @@ class Local(StoreInterface):
             self._mapper = self.fs().get_mapper(self.path)
         return self._mapper
 
-    def __str__(self) -> str:
-        # TODO: Is anything relying on this? It's not super intuitive behavior. If this is for debugging in a REPL, it
-        # is more common to implement __repr__ which generally returns a string that could be code to instantiate the
-        # instance.
-        return str(self.path)
+    def __repr__(self) -> str:
+        return "Local"
 
     @property
     def path(self) -> pathlib.Path:
@@ -698,20 +626,3 @@ class Local(StoreInterface):
             The s3 path for this entity
         """
         return str((pathlib.Path(self.folder) / "metadata" / stac_type / f"{title}.json").resolve())
-
-    def write_metadata_only(self, update_attrs: dict[str, Any]):
-        # Edit both .zmetadata and .zattrs
-        for z_path in (".zmetadata", ".zattrs"):
-            # Read current metadata from Zarr
-            with open(self.path / z_path) as z_contents:
-                current_attributes = json.load(z_contents)
-
-            # Update given attributes at the appropriate location depending on which z file
-            if z_path == ".zmetadata":
-                current_attributes["metadata"][".zattrs"].update(update_attrs)
-            else:
-                current_attributes.update(update_attrs)
-
-            # Write back to Zarr
-            with open(self.path / z_path, "w") as z_contents:
-                json.dump(current_attributes, z_contents)

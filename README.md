@@ -1,14 +1,14 @@
 gridded_etl_tools
 =================
 
-gridded_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium, most notably [IPFS](https://ipfs.tech/). It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
+gridded_etl_tools is a set of utilities for retrieving publicly shared climate data, converting it to a common format, and adding it to your favorite storage medium. It is effectively a specialized web scraper for climate data that converts the data to a common [Zarr](https://zarr.readthedocs.io/en/stable/)[^1] format and lets you share it in a distributed fashion.
 
 gridded_etl_tools's utilities are combined in a DatasetManager abstract base class that can be adapted to retrieve data from a custom source. This abstract base class powers manager classes that can perform automated [data retrieval, transformation, and storage cycles](https://en.wikipedia.org/wiki/Extract,_transform,_load) (also known as ETLs) for a respective data source. The manager classes are also able to update, modify, and append to existing data in storage.
 
 How to use this repository
 --------------------------
 
-This repository provides a workflow for building climate data ETLs that output to IPFS, S3, or a local file system. This workflow utilizes a set of common methods in a predictable sequence to download raw data, transform it into suitable intermediate data files, lazily read them as Zarrs, and finally write the overall dataset to a Zarr on the desired storage medium. If a dataset already exists it will automatically update the existing dataset with any new files found during the process.
+This repository provides a workflow for building climate data ETLs that output to S3 or a local file system. This workflow utilizes a set of common methods in a predictable sequence to download raw data, transform it into suitable intermediate data files, lazily read them as Zarrs, and finally write the overall dataset to a Zarr on the desired storage medium. If a dataset already exists it will automatically update the existing dataset with any new files found during the process.
 
 Users of this library should build ETLS for a desired gridded climate dataset by importing the library within an ETL manager script, using the `DatasetManager` class from [DatasetManager](gridded_etl_tools/dataset_manager.py) as a base class, then applying its standardized workflow to the climate dataset in question. ETL child classes will need to overload one or many parent properties or methods from the [utils](gridded_etl_tools/utils) directory; the exact number depends on the intricacies of how the raw climate data is packaged. Where anticipated these methods are marked as **@abstractmethod** to prompt the user. See 
 
@@ -28,8 +28,6 @@ Requirements
 
 * A Python 3.10.9 virtual environment for developing and running ETLs set up with the [required libraries](setup.cfg). See [the virtual environment setup walkthrough](docs/Python_virtual_environments.md) for more details. Note that other Python versions may work, but this is the version developed and tested against. It is strongly recommended to use a virtual environment since there are a lot of external modules to install, but it is not strictly necessary.
 
-* [IPFS 0.10+](https://github.com/ipfs/go-ipfs/) node **with a running daemon** (see [further instructions](docs/IPFS_Node_Management.md) for installation on a Linux machine)
-
 
 Quickstart
 ----------
@@ -40,23 +38,17 @@ First install the library from the github repository using `pip`. We recommend d
 
     pip install git+https://github.com/Arbol-Project/gridded-etl-tools
 
-Next install IPFS, as per [the docs](docs/IPFS_Node_Management.md).
-
-Once the library and an IPFS node are installed, instantiate an IPFS daemon. Open a terminal and run
-
-    ipfs daemon &
-
 Keep the terminal open as you move through the rest of the quickstart
 
 #### Running the ETL
 
-With the IPFS daemon up and running manager scripts using the `gridded_etl_tools` library can be invoked within a separate script or notebook. Note you will have to first create a functioning manager script, as described in the [ETL developers manual](docs/etl_developers_manual.md). We use the CHIRPS example manager included in this repository below.
+Manager scripts using the `gridded_etl_tools` library can be invoked within a separate script or notebook. Note you will have to first create a functioning manager script, as described in the [ETL developers manual](docs/etl_developers_manual.md). We use the CHIRPS example manager included in this repository below.
 
 The CHIRPS U.S. precipitation dataset is of medium size and can be run in a few hours on a well powered machine. To run a data retrieval, transformation, and storage cycle for the `CHIRPSFinal25` class in [chirps.py](examples/managers/chirps.py), import and instantiate it within a notebook or script
 
     import datetime
     from examples.managers.chirps import CHIRPSFinal25
-    etl = CHIRPSFinal25(store='ipld')
+    etl = CHIRPSFinal25(store='s3')
 
 Now run the `extract` to download all the files for this dataset. We're going to use the **date_range** parameter to only download files for 2021 and 2022 so this example goes quickly. Note that you can skip this step if you already have your files!
 
@@ -75,17 +67,17 @@ Now run the `transform` method to read all the files and transform them into a s
 
 #### Retrieving your dataset
 
-How you find and retrieve the Zarr you just created will depend on the store used. Because we specified the IPLD store above, the output text from our ETL will specify the IPFS hash associated with the final Zarr.
+How you find and retrieve the Zarr you just created will depend on the store used. Because we specified the S3 store above, the output text from our ETL will specify the S3 path
 
-    INFO     <chirps_final_25> IPFS hash is bafyreibx5i7ovu2ed2qyh2ajezfsxvufjbihwscur5hkue4zol6fcwefjq
+    INFO     <chirps_final_25> Zarr created at s3://zarr-dev/datasets/chirps_final_25-daily.zarr/
 
-This hash can be used to open the dataset in an interactive session using `xarray` and `ipldstore` in tandem. These were installed during the virtual environment setup
+This path can be used to open the dataset in an interactive session using `xarray` (and under the hood `s3fs`).
 
 ```python
-    import xarray, ipldstore
-    mapper = ipldstore.get_ipfs_mapper()
-    mapper.set_root("bafyreibx5i7ovu2ed2qyh2ajezfsxvufjbihwscur5hkue4zol6fcwefjq") # replace with your hash
-    xarray.open_zarr(mapper, consolidated=False)
+    import xarray
+    from gridded_etl_managers.chirps import CHIRPSFinal25 as chirps_f25
+    etl = chirps_f05(s3_bucket_name="zarr-dev", store="s3", **input_kwargs)
+    xarray.open_zarr(store=etl.store.path)
     <xarray.Dataset>
     Dimensions:    (latitude: 120, longitude: 300, time: 5736)
     Coordinates:
@@ -97,7 +89,7 @@ This hash can be used to open the dataset in an interactive session using `xarra
     ...
 ```
 
-Note that the IPFS hash for a dataset can be found at any time by consulting the `assets->zmetadata->href->'/'` field in its STAC metadata. This includes previous iterations of your dataset -- just roll back to the associated STAC metadata.
+Note that the S3 path for a dataset can be found at any time by consulting the `self.store.path` property.
 
 #### Further information 
 
@@ -119,8 +111,6 @@ Documentation for how to use this repository is spread over several files. A dev
 [Understanding this repository](docs/understanding_this_repository.md)
 
 [Setting up a Python environment](docs/Python_virtual_environments.md)
-
-[Installing and managing an IPFS node](docs/IPFS_Node_Management.md)
 
 [Creating ETLs](docs/etl_developers_manual.md)
 

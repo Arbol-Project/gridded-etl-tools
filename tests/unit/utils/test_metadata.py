@@ -3,13 +3,15 @@ from unittest import mock
 
 import pathlib
 import pytest
-import numcodecs
-import os
-import json
-import zarr
-import xarray as xr
 import numpy as np
-from time import sleep
+import numcodecs
+import zarr
+
+# Imports used for legacy encoding change tests
+# import os
+# import json
+# import xarray as xr
+# from time import sleep
 
 from requests.exceptions import Timeout
 
@@ -102,43 +104,7 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_remove_unwanted_fields_w_ipld_store(manager_class):
-        dataset = mock.MagicMock()
-        dataset["data"].encoding = {"filters": "coffee"}
-        for coord in ["latitude", "longitude"]:
-            dataset[coord].attrs["chunks"] = "fudge"
-            dataset[coord].attrs["preferred_chunks"] = "chocolate"
-            dataset[coord].encoding["_FillValue"] = "pi"
-            dataset[coord].encoding["missing_value"] = "negative pi"
-        md = manager_class()
-        md.store = store.IPLD(md)
-        md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding == {}
-        assert dataset["latitude"].encoding == {}
-        assert dataset["longitude"].encoding == {}
-
-    @staticmethod
-    def test_remove_unwanted_fields_w_ipld_store_no_compression(manager_class):
-        dataset = mock.MagicMock()
-        dataset["data"].encoding = {"filters": "coffee"}
-        for coord in ["latitude", "longitude"]:
-            dataset[coord].attrs["chunks"] = "fudge"
-            dataset[coord].attrs["preferred_chunks"] = "chocolate"
-            dataset[coord].encoding["_FillValue"] = "pi"
-            dataset[coord].encoding["missing_value"] = "negative pi"
-        md = manager_class(use_compression=False)
-        md.store = store.IPLD(md)
-        md.remove_unwanted_fields(dataset)
-        assert dataset["data"].encoding == {}
-        assert dataset["latitude"].encoding == {}
-        assert dataset["longitude"].encoding == {}
-
-    @staticmethod
     def test_set_initial_compression(manager_class, fake_original_dataset):
-        dm = manager_class(use_compression=True)
-        dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.store.has_existing = False
-
         dataset = fake_original_dataset
         for coord in dataset.coords:
             dataset[coord].encoding = {}
@@ -150,28 +116,17 @@ class TestMetadata:
 
         dm.set_initial_compression(dataset)
         for coord in dataset.coords:
-            assert dataset[coord].encoding["compressor"] == numcodecs.Blosc()
-            assert dataset[coord].encoding["compressor"].cname == "lz4"
-        assert dataset["data"].encoding["compressor"] == numcodecs.Blosc()
-        assert dataset[dm.data_var].encoding["compressor"].cname == "lz4"
+            assert dataset[coord].encoding["compressors"] == numcodecs.Blosc()
+        assert dataset["data"].encoding["compressors"] == numcodecs.Blosc()
 
-    # @staticmethod
-    # def test_set_initial_compression(manager_class, fake_original_dataset):
-    #     """Test setting initial compression on a new dataset"""
-    #     dm = manager_class(use_compression=True)
-    #     dm.store = mock.Mock(spec=store.StoreInterface)
-    #     dm.store.has_existing = False
+        dm = manager_class(use_compression=True, output_zarr3=True)
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.has_existing = False
 
-    #     dataset = fake_original_dataset
-    #     dm.set_initial_compression(dataset)
-
-    #     # Check that compressor was set for coordinates and data variable
-    #     for coord in dataset.coords:
-    #         assert isinstance(dataset[coord].encoding["compressor"], numcodecs.Blosc)
-    #         assert dataset[coord].encoding["compressor"].cname == "lz4"
-
-    #     assert isinstance(dataset[dm.data_var].encoding["compressor"], numcodecs.Blosc)
-    #     assert dataset[dm.data_var].encoding["compressor"].cname == "lz4"
+        dm.set_initial_compression(dataset)
+        for coord in dataset.coords:
+            assert dataset[coord].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
+        assert dataset["data"].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
 
     @staticmethod
     def test_set_initial_compression_no_compression(manager_class, fake_original_dataset):
@@ -185,9 +140,9 @@ class TestMetadata:
 
         # Check that compressor is None for coordinates and data variable
         for coord in dataset.coords:
-            assert dataset[coord].encoding["compressor"] is None
+            assert dataset[coord].encoding["compressors"] is None
 
-        assert dataset[dm.data_var].encoding["compressor"] is None
+        assert dataset[dm.data_var].encoding["compressors"] is None
 
     @staticmethod
     def test_set_initial_compression_existing_store(manager_class, fake_original_dataset):
@@ -199,16 +154,16 @@ class TestMetadata:
         dataset = fake_original_dataset
         # Remove any existing compression encoding
         for coord in dataset.coords:
-            dataset[coord].encoding.pop("compressor", None)
-        dataset[dm.data_var].encoding.pop("compressor", None)
+            dataset[coord].encoding.pop("compressors", None)
+        dataset[dm.data_var].encoding.pop("compressors", None)
 
         dm.set_initial_compression(dataset)
 
         # Check that no compression was added
         for coord in dataset.coords:
-            assert "compressor" not in dataset[coord].encoding
+            assert "compressors" not in dataset[coord].encoding
 
-        assert "compressor" not in dataset[dm.data_var].encoding
+        assert "compressors" not in dataset[dm.data_var].encoding
 
     @staticmethod
     def test_populate_metadata(manager_class):
@@ -218,16 +173,7 @@ class TestMetadata:
         assert dm.metadata == md
 
     @staticmethod
-    def test_check_stac_exists_ipld(manager_class):
-        dm = manager_class()
-        dm.check_stac_on_ipns = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.check_stac_exists("The Jungle Book", metadata.StacType.CATALOG) is dm.check_stac_on_ipns.return_value
-        dm.check_stac_on_ipns.assert_called_once_with("The Jungle Book")
-        dm.store.metadata_exists.assert_not_called()
-
-    @staticmethod
-    def test_check_stac_exists_not_ipld(manager_class):
+    def test_check_stac_exists(manager_class):
         dm = manager_class()
         dm.check_stac_on_ipns = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
@@ -238,70 +184,31 @@ class TestMetadata:
         dm.store.metadata_exists.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
-    def test_publish_stac_ipld(manager_class):
+    def test_publish_stac(manager_class):
         dm = manager_class()
-        dm.ipns_publish = mock.Mock()
-        dm.ipfs_put = mock.Mock()
-        dm.json_to_bytes = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
-        dm.json_to_bytes.assert_called_once_with({"hi": "mom!"})
-        dm.ipfs_put.assert_called_once_with(dm.json_to_bytes.return_value)
-        dm.ipns_publish.assert_called_once_with("The Jungle Book", dm.ipfs_put.return_value)
-        dm.store.push_metadata.assert_not_called()
-
-    @staticmethod
-    def test_publish_stac_not_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_publish = mock.Mock()
-        dm.ipfs_put = mock.Mock()
         dm.json_to_bytes = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
         dm.json_to_bytes.assert_not_called()
-        dm.ipfs_put.assert_not_called()
-        dm.ipns_publish.assert_not_called()
         dm.store.push_metadata.assert_called_once_with(
             "The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG.value
         )
 
     @staticmethod
-    def test_retrieve_stac_ipld(manager_class):
+    def test_retrieve_stac(manager_class):
         dm = manager_class()
-        dm.ipns_retrieve_object = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.ipns_retrieve_object.return_value
-        dm.ipns_retrieve_object.assert_called_once_with("The Jungle Book")
-        dm.store.retrieve_metadata.assert_not_called()
-
-    @staticmethod
-    def test_retrieve_stac_not_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_retrieve_object = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert (
             dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
         )
-        dm.ipns_retrieve_object.assert_not_called()
         dm.store.retrieve_metadata.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
-    def test_get_href_ipld(manager_class):
+    def test_get_href(manager_class):
         dm = manager_class()
-        dm.ipns_generate_name = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-        assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.ipns_generate_name.return_value
-        dm.ipns_generate_name.assert_called_once_with(key="The Jungle Book")
-
-    @staticmethod
-    def test_get_href_not_ipld(manager_class):
-        dm = manager_class()
-        dm.ipns_generate_name = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
-        dm.ipns_generate_name.assert_not_called()
         dm.store.get_metadata_path.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
@@ -799,101 +706,14 @@ class TestMetadata:
         dm.update_stac_collection.assert_called_once_with(fake_original_dataset)
 
     @staticmethod
-    def test_create_stac_item_ipld(manager_class, fake_original_dataset, mocker):
+    def test_create_stac_item(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
-        dt_mock.timezone = datetime.timezone
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
-        dm.create_stac_item(fake_original_dataset)
-
-        dm.register_stac_item.assert_called_once_with(
-            {
-                "stac_version": "1.0.0",
-                "type": "Feature",
-                "id": "DummyManager",
-                "collection": "Vintage Guitars",
-                "links": [],
-                "assets": {
-                    "zmetadata": {
-                        "title": "DummyManager",
-                        "type": "application/json",
-                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
-                        "dataset by Xarray",
-                        "roles": ["metadata", "zarr-consolidated-metadata"],
-                        "href": {"/": "QmThisOneHere"},
-                    }
-                },
-                "bbox": [100.0, 10.0, 130.0, 40.0],
-                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
-                "[100.0, 10.0], [130.0, 10.0]]]}",
-                "properties": {
-                    "dataset_category": "observation",
-                    "array_size": {"latitude": 4, "longitude": 4, "time": 138},
-                    "start_datetime": "2021-09-16T00:00:00Z",
-                    "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
-                },
-            }
-        )
-
-    @staticmethod
-    def test_create_stac_item_ipld_forecast(manager_class, forecast_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
-        dt_mock.timezone = datetime.timezone
-
-        dm = manager_class()
-        dm.dataset_category = "forecast"
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
-        dm.time_dim = "forecast_reference_time"
-        dm.create_stac_item(forecast_dataset)
-
-        dm.register_stac_item.assert_called_once_with(
-            {
-                "stac_version": "1.0.0",
-                "type": "Feature",
-                "id": "DummyManager",
-                "collection": "Vintage Guitars",
-                "links": [],
-                "assets": {
-                    "zmetadata": {
-                        "title": "DummyManager",
-                        "type": "application/json",
-                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
-                        "dataset by Xarray",
-                        "roles": ["metadata", "zarr-consolidated-metadata"],
-                        "href": {"/": "QmThisOneHere"},
-                    }
-                },
-                "bbox": [100.0, 10.0, 130.0, 40.0],
-                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
-                "[100.0, 10.0], [130.0, 10.0]]]}",
-                "properties": {
-                    "dataset_category": "forecast",
-                    "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
-                    "start_datetime": "2021-09-16T00:00:00Z",
-                    "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
-                },
-            }
-        )
-
-    @staticmethod
-    def test_create_stac_item_not_ipld(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.utcnow = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
+        dt_mock.datetime.now = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
         dt_mock.timezone = datetime.timezone
 
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
         dm.register_stac_item = mock.Mock()
-        dm.latest_hash = mock.Mock(return_value="QmThisOneHere")
         dm.create_stac_item(fake_original_dataset)
 
         dm.register_stac_item.assert_called_once_with(
@@ -921,7 +741,49 @@ class TestMetadata:
                     "array_size": {"latitude": 4, "longitude": 4, "time": 138},
                     "start_datetime": "2021-09-16T00:00:00Z",
                     "end_datetime": "2022-01-31T00:00:00Z",
-                    "updated": "2010-05-12T0Z",
+                    "updated": "2010-05-12T02:42:00Z",
+                },
+            }
+        )
+
+    @staticmethod
+    def test_create_stac_item_forecast_reference_time(manager_class, forecast_dataset, mocker):
+        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
+        dt_mock.datetime.now = mock.Mock(return_value=datetime.datetime(2010, 5, 12, 2, 42))
+        dt_mock.timezone = datetime.timezone
+
+        dm = manager_class()
+        dm.time_dim = "forecast_reference_time"
+        dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
+        dm.register_stac_item = mock.Mock()
+        dm.create_stac_item(forecast_dataset)
+
+        dm.register_stac_item.assert_called_once_with(
+            {
+                "stac_version": "1.0.0",
+                "type": "Feature",
+                "id": "DummyManager",
+                "collection": "Vintage Guitars",
+                "links": [],
+                "assets": {
+                    "zmetadata": {
+                        "title": "DummyManager",
+                        "type": "application/json",
+                        "description": "Consolidated metadata file for DummyManager Zarr store, readable as a Zarr "
+                        "dataset by Xarray",
+                        "roles": ["metadata", "zarr-consolidated-metadata"],
+                        "href": "it/goes/here",
+                    }
+                },
+                "bbox": [100.0, 10.0, 130.0, 40.0],
+                "geometry": '{"type": "Polygon", "coordinates": [[[130.0, 10.0], [130.0, 40.0], [100.0, 40.0], '
+                "[100.0, 10.0], [130.0, 10.0]]]}",
+                "properties": {
+                    "dataset_category": "observation",
+                    "array_size": {"latitude": 4, "longitude": 4, "forecast_reference_time": 138, "step": 4},
+                    "start_datetime": "2021-09-16T00:00:00Z",
+                    "end_datetime": "2022-01-31T00:00:00Z",
+                    "updated": "2010-05-12T02:42:00Z",
                 },
             }
         )
@@ -929,7 +791,7 @@ class TestMetadata:
     @staticmethod
     def test_zarr_md_to_stac_format(manager_class, fake_original_dataset):
         dm = manager_class()
-        fake_original_dataset.attrs["missing_value"] = 42
+        fake_original_dataset.attrs["_FillValue"] = 42
         fake_original_dataset.attrs["temporal resolution"] = np.float32(0.125)
         fake_original_dataset.encoding["preferred_chunks"] = "chocolate and peanut"
         fake_original_dataset["data"].encoding["standard name"] = "chris"
@@ -943,7 +805,7 @@ class TestMetadata:
     @staticmethod
     def test_zarr_md_to_stac_format_with_dtype(manager_class, fake_original_dataset):
         dm = manager_class()
-        fake_original_dataset.attrs["missing_value"] = 42
+        fake_original_dataset.attrs["_FillValue"] = 42
         fake_original_dataset.attrs["dtype"] = np.dtype("float32")
         fake_original_dataset.encoding["preferred_chunks"] = "chocolate and peanut"
         fake_original_dataset["data"].encoding["standard name"] = "chris"
@@ -955,152 +817,7 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_register_stac_item_ipld(manager_class):
-        stac_collection = {
-            "title": "War and Peace",
-            "links": [],
-        }
-        stac_item = {
-            "Look": "I'm",
-            "a": "stac item",
-            "links": [],
-            "assets": {"zmetadata": {"title": "Asset and Peace"}},
-        }
-
-        md = manager_class()
-        md.publish_stac = mock.Mock()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.retrieve_stac = mock.Mock(side_effect=[(stac_collection, "/path/to/stac/collection"), Timeout])
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
-
-        md.register_stac_item(stac_item)
-
-        md.publish_stac.assert_has_calls(
-            [
-                mock.call(
-                    "DummyManager-daily",
-                    {
-                        "Look": "I'm",
-                        "a": "stac item",
-                        "links": [
-                            {
-                                "rel": "parent",
-                                "href": "/path/to/stac/collection",
-                                "type": "application/geo+json",
-                                "title": "War and Peace",
-                            },
-                            {
-                                "rel": "self",
-                                "href": "/path/to/new/item",
-                                "type": "application/geo+json",
-                                "title": "DummyManager metadata",
-                            },
-                        ],
-                        "assets": {"zmetadata": {"title": "Asset and Peace"}},
-                    },
-                    metadata.StacType.ITEM,
-                ),
-                mock.call(
-                    "Vintage Guitars",
-                    {
-                        "title": "War and Peace",
-                        "links": [
-                            {
-                                "rel": "item",
-                                "href": "/path/to/new/item",
-                                "type": "application/json",
-                                "title": "Asset and Peace",
-                            }
-                        ],
-                    },
-                    metadata.StacType.COLLECTION,
-                ),
-            ]
-        )
-        md.retrieve_stac.assert_has_calls(
-            [
-                mock.call("Vintage Guitars", metadata.StacType.COLLECTION),
-                mock.call("DummyManager-daily", metadata.StacType.ITEM),
-            ]
-        )
-        md.get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
-        md.ipns_resolve.assert_not_called()
-
-    @staticmethod
-    def test_register_stac_item_already_exists_ipld(manager_class):
-        stac_collection = {
-            "title": "War and Peace",
-            "links": [{"rel": "lol"}, {"rel": "item", "title": "Asset and Peace", "href": "/old/path/to/item"}],
-        }
-        old_stac_cid = mock.Mock(
-            spec=("set",), set=mock.Mock(return_value=mock.MagicMock(__str__=mock.Mock(return_value="QmOldStacItem")))
-        )
-        old_stac_item = {
-            "Look": "I'm",
-            "the old": "stac item",
-            "assets": {"zmetadata": {"title": "Asset and Peace", "href": old_stac_cid}},
-        }
-        stac_item = {
-            "Look": "I'm",
-            "a": "stac item",
-            "links": [],
-            "assets": {"zmetadata": {"title": "Asset and Peace"}},
-        }
-
-        md = manager_class()
-        md.publish_stac = mock.Mock()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.retrieve_stac = mock.Mock(
-            side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
-        )
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
-
-        md.register_stac_item(stac_item)
-
-        md.publish_stac.assert_called_once_with(
-            "DummyManager-daily",
-            {
-                "Look": "I'm",
-                "a": "stac item",
-                "links": [
-                    {
-                        "rel": "parent",
-                        "href": "/path/to/stac/collection",
-                        "type": "application/geo+json",
-                        "title": "War and Peace",
-                    },
-                    {
-                        "rel": "prev",
-                        "href": "QmOldStacItem",
-                        "metadata href": {"/": "QmSomeHash"},
-                        "type": "application/geo+json",
-                        "title": "Asset and Peace",
-                    },
-                    {
-                        "rel": "self",
-                        "href": "/path/to/stac/item",
-                        "type": "application/geo+json",
-                        "title": "DummyManager metadata",
-                    },
-                ],
-                "assets": {"zmetadata": {"title": "Asset and Peace"}},
-            },
-            metadata.StacType.ITEM,
-        )
-        md.retrieve_stac.assert_has_calls(
-            [
-                mock.call("Vintage Guitars", metadata.StacType.COLLECTION),
-                mock.call("DummyManager-daily", metadata.StacType.ITEM),
-            ]
-        )
-        md.get_href.assert_not_called()
-        md.ipns_resolve.assert_called_once_with("DummyManager-daily")
-        old_stac_cid.set.assert_called_once_with(base="base32")
-
-    @staticmethod
-    def test_register_stac_item_already_exists_not_ipld(manager_class):
+    def test_register_stac_item_already_exists(manager_class):
         stac_collection = {
             "title": "War and Peace",
             "links": [{"rel": "lol"}, {"rel": "item", "title": "Asset and Peace", "href": "/old/path/to/item"}],
@@ -1124,7 +841,6 @@ class TestMetadata:
             side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
         )
         md.get_href = mock.Mock(return_value="/path/to/new/item")
-        md.ipns_resolve = mock.Mock(return_value="QmSomeHash")
 
         md.register_stac_item(stac_item)
 
@@ -1158,7 +874,6 @@ class TestMetadata:
             ]
         )
         md.get_href.assert_not_called()
-        md.ipns_resolve.assert_not_called()
 
     @staticmethod
     def test_update_stac_collection(manager_class, fake_original_dataset):
@@ -1185,7 +900,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata() == "foo"
@@ -1195,7 +910,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_pass_key(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
         assert md.load_stac_metadata(key="chiave") == "foo"
@@ -1205,7 +920,7 @@ class TestMetadata:
     @staticmethod
     def test_load_stac_metadata_timeout(manager_class):
         md = manager_class()
-        md.store = mock.Mock(spec=store.IPLD)
+        md.store = mock.Mock(spec=store.Local)
         md.retrieve_stac = mock.Mock(side_effect=Timeout)
 
         assert md.load_stac_metadata() == {}
@@ -1213,14 +928,14 @@ class TestMetadata:
         md.retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
 
     @staticmethod
-    def test_load_stac_metadata_not_ipld(manager_class):
+    def test_load_stac_metadata_keyerror(manager_class):
         md = manager_class()
         md.store = mock.Mock(spec=store.StoreInterface)
-        md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
+        md.retrieve_stac = mock.Mock(side_effect=KeyError)
 
-        assert md.load_stac_metadata() is None
+        assert md.load_stac_metadata() == {}
 
-        md.retrieve_stac.assert_not_called()
+        md.retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
 
     @staticmethod
     def test_set_zarr_metadata(manager_class):
@@ -1271,6 +986,8 @@ class TestMetadata:
         assert dataset.time.encoding == {}
 
         md = manager_class()
+        md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
+        md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
@@ -1278,14 +995,45 @@ class TestMetadata:
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
+            "chunks": (1, 1, 1),
+            "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
             "missing_value": "",
-            "chunks": (),
-            "preferred_chunks": {},
         }
         assert dataset.time.encoding == {
             "long_name": "time",
             "calendar": "gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
+            "chunks": (1, 1, 1),
+            "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
+        }
+
+    @staticmethod
+    def test_encode_vars_chunks_has_existing(manager_class, fake_original_dataset):
+        dataset = fake_original_dataset
+        assert dataset.encoding == {}
+        assert dataset["data"].encoding == {}
+        assert dataset.time.encoding == {}
+
+        md = manager_class()
+        md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
+        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.encode_vars(dataset)
+
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset["data"].encoding == {
+            "dtype": "<f4",
+            "units": "parsecs",
+            "_FillValue": "",
+            "chunks": None,
+            "preferred_chunks": None,
+            "missing_value": "",
+        }
+        assert dataset.time.encoding == {
+            "long_name": "time",
+            "calendar": "gregorian",
+            "units": "days since 1975-07-07 0:0:0 0",
+            "chunks": None,
+            "preferred_chunks": None,
         }
 
     @staticmethod
@@ -1297,6 +1045,8 @@ class TestMetadata:
 
         md = manager_class()
         md.time_dim = "forecast_reference_time"
+        md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "step": 1, "forecast_reference_time": 1}
+        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
@@ -1304,15 +1054,17 @@ class TestMetadata:
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
+            "chunks": None,
+            "preferred_chunks": None,
             "missing_value": "",
-            "chunks": (),
-            "preferred_chunks": {},
         }
         assert dataset.forecast_reference_time.encoding == {
             "long_name": "initial time of forecast",
             "standard_name": "forecast_reference_time",
             "calendar": "proleptic_gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
+            "chunks": None,
+            "preferred_chunks": None,
         }
 
     @staticmethod
@@ -1324,6 +1076,14 @@ class TestMetadata:
 
         md = manager_class()
         md.time_dim = "hindcast_reference_time"
+        md.requested_zarr_chunks = {
+            "latitude": 1,
+            "longitude": 1,
+            "step": 1,
+            "forecast_reference_time": 1,
+            "hindcast_reference_time": 1,
+        }
+        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.encode_vars(dataset) is dataset
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
@@ -1331,15 +1091,17 @@ class TestMetadata:
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
+            "chunks": None,
+            "preferred_chunks": None,
             "missing_value": "",
-            "chunks": (),
-            "preferred_chunks": {},
         }
         assert dataset.hindcast_reference_time.encoding == {
             "long_name": "initial time of forecast",
             "standard_name": "hindcast_reference_time",
             "calendar": "proleptic_gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
+            "chunks": None,
+            "preferred_chunks": None,
         }
 
     @staticmethod
@@ -1381,6 +1143,8 @@ class TestMetadata:
         dataset.time.encoding = {"units": "picoseconds since the big bang"}
 
         md = manager_class()
+        md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
+        md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.encode_vars(dataset)
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
@@ -1388,18 +1152,20 @@ class TestMetadata:
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": "",
+            "chunks": None,
+            "preferred_chunks": None,
             "missing_value": "",
-            "chunks": (),
-            "preferred_chunks": {},
         }
         assert dataset.time.encoding == {
             "long_name": "time",
             "calendar": "gregorian",
             "units": "picoseconds since the big bang",
+            "chunks": None,
+            "preferred_chunks": None,
         }
 
     @staticmethod
-    def test_merge_in_outside_metadata_not_ipld(manager_class, fake_original_dataset, mocker):
+    def test_merge_in_outside_metadata(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
@@ -1409,7 +1175,10 @@ class TestMetadata:
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
         md.store = mock.Mock(spec=store.StoreInterface)
-        md.store.dataset.return_value.attrs = {"date range": ("2000010100", "2021091600")}
+        mock_dataset = mock.Mock()
+        mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
+        md.store.dataset = mock.Mock(return_value=mock_dataset)
+        md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
         assert dataset.attrs == {
@@ -1424,7 +1193,37 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_merge_in_outside_metadata_not_ipld_no_previous_dataset(manager_class, fake_original_dataset, mocker):
+    def test_merge_in_outside_metadata_new_creation_date(manager_class, fake_original_dataset, mocker):
+        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
+        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
+        dt_mock.timezone = datetime.timezone
+        dataset = fake_original_dataset
+        dataset.attrs = {"foo": "bar"}
+
+        md = manager_class(static_metadata={"bar": "baz"})
+        md.populate_metadata()
+        md.store = mock.Mock(spec=store.StoreInterface)
+        mock_dataset = mock.Mock()
+        mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
+        md.store.dataset = mock.Mock(return_value=mock_dataset)
+        md.store.retrieve_metadata = mock.Mock(
+            return_value=({"foo": "bar", "properties": {"created": "2020-01-01T0Z"}}, "foo/bar")
+        )
+        md.merge_in_outside_metadata(dataset)
+
+        assert dataset.attrs == {
+            "foo": "bar",
+            "bar": "baz",
+            "created": "2020-01-01T0Z",
+            "update_previous_end_date": "2021091600",
+            "date range": ("2000010100", "2022013100"),
+            "update_date_range": ("2021091600", "2022013100"),
+            "bbox": (100.0, 10.0, 130.0, 40.0),
+            "update_is_append_only": True,
+        }
+
+    @staticmethod
+    def test_merge_in_outside_metadata_no_previous_dataset(manager_class, fake_original_dataset, mocker):
         dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
         dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
         dt_mock.timezone = datetime.timezone
@@ -1434,6 +1233,7 @@ class TestMetadata:
         md = manager_class(static_metadata={"bar": "baz"})
         md.populate_metadata()
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
         assert dataset.attrs == {
@@ -1446,85 +1246,6 @@ class TestMetadata:
             "bbox": (100.0, 10.0, 130.0, 40.0),
             "update_is_append_only": True,
         }
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_no_existing_created(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
-        dt_mock.timezone = datetime.timezone
-
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(return_value={"properties": {"date range": ("2000010100", "2021091600")}})
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_existing_created(manager_class, fake_original_dataset, mocker):
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(
-            return_value={"properties": {"date range": ("2000010100", "2021091600"), "created": "1999-01-01T0Z"}}
-        )
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "1999-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
-
-    @staticmethod
-    def test_merge_in_outside_metadata_ipld_stac_timeout(manager_class, fake_original_dataset, mocker):
-        dt_mock = mocker.patch("gridded_etl_tools.utils.metadata.datetime")
-        dt_mock.datetime.now.return_value = datetime.datetime(2000, 1, 1, 0, 0, 0)
-        dt_mock.timezone = datetime.timezone
-
-        dataset = fake_original_dataset
-        dataset.attrs = {"foo": "bar"}
-
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
-        md.store = mock.Mock(spec=store.IPLD)
-        md.load_stac_metadata = mock.Mock(side_effect=Timeout)
-        md.merge_in_outside_metadata(dataset)
-
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "",
-            "date range": ("2021091600", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
-        md.load_stac_metadata.assert_called_once_with()
 
     @staticmethod
     @pytest.fixture
@@ -1535,190 +1256,194 @@ class TestMetadata:
         yield output_path
         clean_up_input_paths(output_path)
 
-    @staticmethod
-    def test_update_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-        """Test modifying encoding of a single coordinate using zarr library directly"""
+    # LEGACY ENCODING CHANGE TESTS DISABLED AS THEY RELY ON ZARR V2
+    # WHICH IS NOT AVAILABLE IN THE CI ENVIRONMENT
 
-        # Setup
-        dm = manager_class(store="local")
-        dm.store = mock.Mock(spec=store.StoreInterface)
+    # @staticmethod
+    # def test_update_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
+    #     """Test modifying encoding of a single coordinate using zarr library directly"""
 
-        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-        type(dm.store).path = path_mock
+    #     # Setup
+    #     dm = manager_class(="local")
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
 
-        dataset = fake_original_dataset
-        coordinate_to_change = "latitude"
+    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+    #     type(dm.store).path = path_mock
 
-        # Write dataset to zarr
-        dataset.to_zarr(dm.store.path, mode="w")
+    #     dataset = fake_original_dataset
+    #     coordinate_to_change = "latitude"
 
-        # Record initial modification times of all arrays
-        root = zarr.open_group(dm.store.path, mode="r")
-        initial_mtimes = {
-            name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
-        }
+    #     # Write dataset to zarr
+    #     dataset.to_zarr(dm.store.path, mode="w")
 
-        # Get initial encoding for selected coordinate, xarray and zarr versions
-        initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
-        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-            initial_lat_encoding_zarr = json.load(f)
+    #     # Record initial modification times of all arrays
+    #     root = zarr.open_group(dm.store.path, mode="r")
+    #     initial_mtimes = {
+    #         name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
+    #     }
 
-        # Verify initial setup changes at both Zarr and Xarray level
-        assert initial_lat_encoding_xr["compressor"].cname == "lz4"
-        assert initial_lat_encoding_zarr["compressor"]["cname"] == "lz4"
+    #     # Get initial encoding for selected coordinate, xarray and zarr versions
+    #     initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
+    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+    #         initial_lat_encoding_zarr = json.load(f)
 
-        # Wait a moment to ensure modification times would be different if files are touched
-        sleep(0.1)
+    #     # Verify initial setup changes at both Zarr and Xarray level
+    #     assert initial_lat_encoding_xr["compressor"].cname == "lz4"
+    #     assert initial_lat_encoding_zarr["compressor"]["cname"] == "lz4"
 
-        # Modify the selected coordinate's encoding
-        new_compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=zarr.Blosc.SHUFFLE)
-        dm.update_array_encoding(target_array=coordinate_to_change, update_key={"compressor": new_compressor})
+    #     # Wait a moment to ensure modification times would be different if files are touched
+    #     sleep(0.1)
 
-        # Get final modification times to show that only the selected coordinate was modified
-        root = zarr.open_group(dm.store.path, mode="r")
-        final_mtimes = {
-            name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
-        }
+    #     # Modify the selected coordinate's encoding
+    #     new_compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=zarr.Blosc.SHUFFLE)
+    #     dm.update_array_encoding(target_array=coordinate_to_change, update_key={"compressor": new_compressor})
 
-        # Get final encoding for the selected coordinate, xarray and zarr versions
-        final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
-            coordinate_to_change
-        ].encoding.copy()
-        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-            final_lat_encoding_zarr = json.load(f)
+    #     # Get final modification times to show that only the selected coordinate was modified
+    #     root = zarr.open_group(dm.store.path, mode="r")
+    #     final_mtimes = {
+    #         name: os.path.getmtime(os.path.join(dm.store.path, name, ".zarray")) for name in root.array_keys()
+    #     }
 
-        # Verify selected coordinate, and only the selected coordinate, was modified
-        for name in root.array_keys():
-            if name == coordinate_to_change:
-                assert (
-                    final_mtimes[name] > initial_mtimes[name]
-                ), "Changed coordinate .zarray should have been modified"
-                assert root[name].compressor.cname == "zstd", "Changed coordinate should have new compression settings"
-            else:
-                assert final_mtimes[name] == initial_mtimes[name], f"{name} .zarray should not have been modified"
-                assert root[name].compressor.cname != "zstd", f"{name} compression should be unchanged"
-        # Check .zarray files just to be sure
-        assert final_lat_encoding_xr["compressor"].cname == "zstd", "Xarray should show new compression type"
-        assert final_lat_encoding_zarr["compressor"]["cname"] == "zstd", "Zarr should show new compression type"
+    #     # Get final encoding for the selected coordinate, xarray and zarr versions
+    #     final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
+    #         coordinate_to_change
+    #     ].encoding.copy()
+    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+    #         final_lat_encoding_zarr = json.load(f)
 
-    @staticmethod
-    def test_remove_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-        """Test modifying encoding of a single coordinate using zarr library directly"""
+    #     # Verify selected coordinate, and only the selected coordinate, was modified
+    #     for name in root.array_keys():
+    #         if name == coordinate_to_change:
+    #             assert (
+    #                 final_mtimes[name] > initial_mtimes[name]
+    #             ), "Changed coordinate .zarray should have been modified"
+    #             assert root[name].compressor.cname == "zstd", "Changed coordinate should have new " \
+    #             "compression settings"
+    #         else:
+    #             assert final_mtimes[name] == initial_mtimes[name], f"{name} .zarray should not have been modified"
+    #             assert root[name].compressor.cname != "zstd", f"{name} compression should be unchanged"
+    #     # Check .zarray files just to be sure
+    #     assert final_lat_encoding_xr["compressor"].cname == "zstd", "Xarray should show new compression type"
+    #     assert final_lat_encoding_zarr["compressor"]["cname"] == "zstd", "Zarr should show new compression type"
 
-        # Setup
-        dm = manager_class(store="local")
-        dm.store = mock.Mock(spec=store.StoreInterface)
+    # @staticmethod
+    # def test_remove_array_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
+    #     """Test modifying encoding of a single coordinate using zarr library directly"""
 
-        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-        type(dm.store).path = path_mock
+    #     # Setup
+    #     dm = manager_class(store="local")
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
 
-        dataset = fake_original_dataset
-        coordinate_to_change = "latitude"
-        key_to_remove = "missing_value"
+    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+    #     type(dm.store).path = path_mock
 
-        # Write dataset to zarr
-        dataset[coordinate_to_change].encoding.update({key_to_remove: 42})
-        dataset.to_zarr(dm.store.path, mode="w")
+    #     dataset = fake_original_dataset
+    #     coordinate_to_change = "latitude"
+    #     key_to_remove = "missing_value"
 
-        # Record initial modification times of all arrays
-        root = zarr.open_group(dm.store.path, mode="r")
+    #     # Write dataset to zarr
+    #     dataset[coordinate_to_change].encoding.update({key_to_remove: 42})
+    #     dataset.to_zarr(dm.store.path, mode="w")
 
-        # Get initial encoding for selected coordinate, xarray and zarr versions
-        initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
-        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-            initial_lat_encoding_zarr = json.load(f)
+    #     # Record initial modification times of all arrays
+    #     root = zarr.open_group(dm.store.path, mode="r")
 
-        # Verify initial setup changes at both Zarr and Xarray level
-        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
-            assert initial_lat_encoding_xr[key_to_remove] == 42
-        if key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
-            assert initial_lat_encoding_zarr[key_to_remove] == 42
+    #     # Get initial encoding for selected coordinate, xarray and zarr versions
+    #     initial_lat_encoding_xr = xr.open_dataset(dm.store.path, engine="zarr")[coordinate_to_change].encoding.copy()
+    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+    #         initial_lat_encoding_zarr = json.load(f)
 
-        # Modify the selected coordinate's encoding
-        dm.remove_array_encoding(target_array=coordinate_to_change, remove_key=key_to_remove)
+    #     # Verify initial setup changes at both Zarr and Xarray level
+    #     if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
+    #         assert initial_lat_encoding_xr[key_to_remove] == 42
+    #     if key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
+    #         assert initial_lat_encoding_zarr[key_to_remove] == 42
 
-        # Get final modification times to show that only the selected coordinate was modified
-        root = zarr.open_group(dm.store.path, mode="r")
+    #     # Modify the selected coordinate's encoding
+    #     dm.remove_array_encoding(target_array=coordinate_to_change, remove_key=key_to_remove)
 
-        # Get final encoding for the selected coordinate, xarray and zarr versions
-        final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
-            coordinate_to_change
-        ].encoding.copy()
-        with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
-            final_lat_encoding_zarr = json.load(f)
+    #     # Get final modification times to show that only the selected coordinate was modified
+    #     root = zarr.open_group(dm.store.path, mode="r")
 
-        if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
-            assert (
-                key_to_remove in initial_lat_encoding_xr
-            ), f"Test setup should include {key_to_remove} in Xarray encoding"
-            assert (
-                key_to_remove not in final_lat_encoding_xr
-            ), f"{key_to_remove} should have been removed from Xarray encoding"
+    #     # Get final encoding for the selected coordinate, xarray and zarr versions
+    #     final_lat_encoding_xr = xr.open_dataset(dm.store.path, consolidated=True, engine="zarr")[
+    #         coordinate_to_change
+    #     ].encoding.copy()
+    #     with open(os.path.join(dm.store.path, coordinate_to_change, ".zarray"), "r") as f:
+    #         final_lat_encoding_zarr = json.load(f)
 
-        # Verify only selected coordinate was modified
-        for name in root.array_keys():
-            if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
-                assert (
-                    key_to_remove not in final_lat_encoding_zarr
-                ), f"{key_to_remove} should have been removed from encoding"
+    #     if key_to_remove in metadata.XARRAY_ENCODING_FIELDS:  # pragma NO COVER
+    #         assert (
+    #             key_to_remove in initial_lat_encoding_xr
+    #         ), f"Test setup should include {key_to_remove} in Xarray encoding"
+    #         assert (
+    #             key_to_remove not in final_lat_encoding_xr
+    #         ), f"{key_to_remove} should have been removed from Xarray encoding"
 
-    @staticmethod
-    def test_modify_array_encoding_no_changes(manager_class, fake_original_dataset, encoding_test_output):
-        """Test catching no changes specified"""
+    #     # Verify only selected coordinate was modified
+    #     for name in root.array_keys():
+    #         if name == coordinate_to_change and key_to_remove in metadata.ZARR_ENCODING_FIELDS:  # pragma NO COVER
+    #             assert (
+    #                 key_to_remove not in final_lat_encoding_zarr
+    #             ), f"{key_to_remove} should have been removed from encoding"
 
-        # Setup
-        dm = manager_class(store="local")
-        dm.store = mock.Mock(spec=store.StoreInterface)
+    # @staticmethod
+    # def test_modify_array_encoding_no_changes(manager_class, fake_original_dataset, encoding_test_output):
+    #     """Test catching no changes specified"""
 
-        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-        type(dm.store).path = path_mock
+    #     # Setup
+    #     dm = manager_class(store="local")
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
 
-        coordinate_to_change = "latitude"
+    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+    #     type(dm.store).path = path_mock
 
-        # Modify nothing
-        with pytest.raises(ValueError, match="No changes to the array encoding were specified"):
-            dm._modify_array_encoding(target_array=coordinate_to_change, update_key=None, remove_key=None)
+    #     coordinate_to_change = "latitude"
 
-    @staticmethod
-    def test_update_array_encoding_not_coordinate(manager_class, fake_original_dataset, encoding_test_output):
-        """Test catching non-coordinate array names"""
+    #     # Modify nothing
+    #     with pytest.raises(ValueError, match="No changes to the array encoding were specified"):
+    #         dm._modify_array_encoding(target_array=coordinate_to_change, update_key=None, remove_key=None)
 
-        # Setup
-        dm = manager_class(store="local")
-        dm.store = mock.Mock(spec=store.StoreInterface)
-        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-        type(dm.store).path = path_mock
+    # @staticmethod
+    # def test_update_array_encoding_not_coordinate(manager_class, fake_original_dataset, encoding_test_output):
+    #     """Test catching non-coordinate array names"""
 
-        # Pass a non-coordinate array name
-        with pytest.raises(
-            ValueError, match="Target array precipitation is not in this dataset's list of coordinate dimensions"
-        ):
-            dm.update_array_encoding(target_array="precipitation", update_key={"fill_value": 999_999_999})
+    #     # Setup
+    #     dm = manager_class(store="local")
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
+    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+    #     type(dm.store).path = path_mock
 
-        # Pass a standard coordinate name but now the standard dims are wrong
-        def mock_set_key_dims(self, *args, **kwargs):
-            self.standard_dims = ["non-standard", "other non-standard"]
+    #     # Pass a non-coordinate array name
+    #     with pytest.raises(
+    #         ValueError, match="Target array precipitation is not in this dataset's list of coordinate dimensions"
+    #     ):
+    #         dm.update_array_encoding(target_array="precipitation", update_key={"fill_value": 999_999_999})
 
-        dm.set_key_dims = mock.Mock(side_effect=mock_set_key_dims(dm))
-        with pytest.raises(
-            ValueError, match="Target array latitude is not in this dataset's list of coordinate dimensions"
-        ):
-            dm.update_array_encoding(target_array="latitude", update_key={"fill_value": 999_999_999})
+    #     # Pass a standard coordinate name but now the standard dims are wrong
+    #     def mock_set_key_dims(self, *args, **kwargs):
+    #         self.standard_dims = ["non-standard", "other non-standard"]
 
-    @staticmethod
-    def test_update_array_encoding_invalid_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
-        """Test specifying an invalid encoding field according to Xarray and Zarr standards"""
+    #     dm.set_key_dims = mock.Mock(side_effect=mock_set_key_dims(dm))
+    #     with pytest.raises(
+    #         ValueError, match="Target array latitude is not in this dataset's list of coordinate dimensions"
+    #     ):
+    #         dm.update_array_encoding(target_array="latitude", update_key={"fill_value": 999_999_999})
 
-        # Setup
-        dm = manager_class(store="local")
-        dm.standard_dims = ["latitude", "longitude", "time"]
-        dm.store = mock.Mock(spec=store.StoreInterface)
+    # @staticmethod
+    # def test_update_array_encoding_invalid_encoding_field(manager_class, fake_original_dataset, encoding_test_output):
+    #     """Test specifying an invalid encoding field according to Xarray and Zarr standards"""
 
-        path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
-        type(dm.store).path = path_mock
+    #     # Setup
+    #     dm = manager_class(store="local")
+    #     dm.standard_dims = ["latitude", "longitude", "time"]
+    #     dm.store = mock.Mock(spec=store.StoreInterface)
 
-        coordinate_to_change = "longitude"
+    #     path_mock = mock.PropertyMock(return_value=encoding_test_output / "encoding_test.zarr")
+    #     type(dm.store).path = path_mock
 
-        # Pass a non-encoding array name
-        with pytest.raises(ValueError, match="Invalid key"):
-            dm.update_array_encoding(target_array=coordinate_to_change, update_key={"fill_er_up_value": 999_999_999})
+    #     coordinate_to_change = "longitude"
+
+    #     # Pass a non-encoding array name
+    #     with pytest.raises(ValueError, match="Invalid key"):
+    #         dm.update_array_encoding(target_array=coordinate_to_change, update_key={"fill_er_up_value": 999_999_999})

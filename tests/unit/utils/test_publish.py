@@ -8,28 +8,28 @@ import datetime
 
 from unittest import mock
 
-import numpy
+import numpy as np
 import pandas as pd
-import xarray as xr
 import pytest
 
 from gridded_etl_tools.utils import publish, store
+from gridded_etl_tools.utils.publish import _is_infish
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
 def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
     # Calculate the number of NaNs and floats
-    total_elements = numpy.prod(shape)
+    total_elements = np.prod(shape)
     num_nans = int(total_elements * percent_nan)
     num_floats = total_elements - num_nans
 
     # Generate them
-    random_floats = numpy.random.random(num_floats)
-    nans = numpy.full(num_nans, numpy.nan)
+    random_floats = np.random.random(num_floats)
+    nans = np.full(num_nans, np.nan)
 
     # Combine them and shuffle them around
-    combined_array = numpy.concatenate((random_floats, nans))
-    numpy.random.shuffle(combined_array)
+    combined_array = np.concatenate((random_floats, nans))
+    np.random.shuffle(combined_array)
 
     # Reshape the array to the desired shape
     final_array = combined_array.reshape(shape)
@@ -48,16 +48,15 @@ class fake_vmem(dict):
 
 class TestPublish:
     @staticmethod
-    def test_parse_ipld_first_time(manager_class, mocker):
+    def test_parse_first_time(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
-        dm.dataset_hash = "QmHiMom!"
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=False)
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -76,19 +75,23 @@ class TestPublish:
         dm.update_zarr.assert_not_called()
         dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_ipld_update(manager_class, mocker):
+    def test_parse_update(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+
+        # Mock that the store has a v2 Zarr
+        dm.store = mock.Mock(
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False
+        )
+
         dm.update_zarr = mock.Mock()
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -107,15 +110,13 @@ class TestPublish:
         dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
 
     @staticmethod
-    def test_parse_not_ipld_rebuild(manager_class, mocker):
+    def test_parse_rebuild(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=True)
@@ -140,14 +141,12 @@ class TestPublish:
         dm.write_initial_zarr.assert_called_once_with(publish_dataset)
 
         Client.assert_called_once_with(cluster)
-        nullcontext.assert_not_called()
 
     @staticmethod
-    def test_parse_not_ipld_rebuild_but_overwrite_not_allowed(manager_class, mocker):
+    def test_parse_rebuild_but_overwrite_not_allowed(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
         cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=True, allow_overwrite=False)
@@ -173,18 +172,22 @@ class TestPublish:
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_called_once_with(cluster)
-        nullcontext.assert_not_called()
 
     @staticmethod
-    def test_parse_ipld_update_ctrl_c(manager_class, mocker):
+    def test_parse_update_ctrl_c(manager_class, mocker):
         LocalCluster = mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        cluster = LocalCluster.return_value.__enter__.return_value
         Client = mocker.patch("gridded_etl_tools.utils.publish.Client")
-        nullcontext = mocker.patch("gridded_etl_tools.utils.publish.nullcontext")
         mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
 
         dm = manager_class(rebuild_requested=False)
         dm.dask_configuration = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD, has_existing=True)
+
+        # Mock that the store has a v2 Zarr
+        dm.store = mock.Mock(
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=False
+        )
+
         dm.update_zarr = mock.Mock(side_effect=KeyboardInterrupt)
         dm.write_initial_zarr = mock.Mock()
         publish_dataset = mock.Mock()
@@ -203,8 +206,41 @@ class TestPublish:
         dm.update_zarr.assert_called_once_with(publish_dataset)
         dm.write_initial_zarr.assert_not_called()
 
-        Client.assert_not_called()
-        nullcontext.assert_called_once_with()
+        Client.assert_called_once_with(cluster)
+
+    @staticmethod
+    def test_parse_zarr_version_match(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.utils.publish.Client")
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.update_zarr = mock.Mock()
+
+        # Mock that the store has a v3 Zarr
+        dm.store = mock.Mock(
+            spec=store.StoreInterface, has_existing=True, path="/home/vladimir_putin/", has_v3_metadata=True
+        )
+
+        # The default of dm.output_zarr3 should be false, so this should fail
+        with pytest.raises(RuntimeError, match="Existing data is Zarr v3, but output_zarr3 is not set."):
+            dm.parse(mock.Mock())
+
+        # With dm.output_zarr3 set, it should pass instead
+        dm.output_zarr3 = True
+        dm.parse(mock.Mock())
+        dm.update_zarr.assert_called_once()
+
+        # Mock that the store has a v2 Zarr
+        dm.store.has_v3_metadata = False
+
+        # dm.output_zarr3 unset should pass
+        dm.output_zarr3 = False
+        dm.parse(mock.Mock())
+        assert dm.update_zarr.call_count == 2
+
+        # dm.output_zarr3 set should fail
+        with pytest.raises(RuntimeError, match="Existing data is not Zarr v3, but output_zarr3 is set."):
+            dm.output_zarr3 = True
+            dm.parse(mock.Mock())
 
     @staticmethod
     def test_publish_metadata(manager_class):
@@ -290,26 +326,11 @@ class TestPublish:
         dm.create_stac_item.assert_called_once_with(current_zarr)
 
     @staticmethod
-    def test_to_zarr_ipld(manager_class, mocker):
+    def test_to_zarr_dry_run(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dataset = mock.Mock()
-        dm.to_zarr(dataset, "foo", bar="baz")
-
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
-        dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_not_called()
-        dm.move_post_parse_attrs_to_dict.assert_not_called()
-
-    @staticmethod
-    def test_to_zarr_ipld_dry_run(manager_class, mocker):
-        dm = manager_class()
-        dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.store = mock.Mock(spec=store.IPLD)
+        dm.store = mock.Mock(spec=store.StoreInterface)
         dm.dry_run = True
 
         dataset = mock.Mock()
@@ -321,7 +342,7 @@ class TestPublish:
         dm.move_post_parse_attrs_to_dict.assert_not_called()
 
     @staticmethod
-    def test_to_zarr_not_ipld(manager_class, mocker):
+    def test_to_zarr(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
@@ -332,10 +353,13 @@ class TestPublish:
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        # The behavior when DM is default and to_zarr is default is Zarr format is explicitly set to 2
+        dataset.to_zarr.assert_called_once_with("foo", zarr_format=2, bar="baz")
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls(
+
+        # Metadata v2 function must be called
+        dm.store.write_metadata_only_v2.assert_has_calls(
             [
                 mock.call(
                     update_attrs={
@@ -349,8 +373,18 @@ class TestPublish:
         )
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
+        # Check that DatasetManager.output_zarr3 is applied
+        dm.output_zarr3 = True
+        dm.to_zarr(dataset)
+        dataset.to_zarr.assert_called_with(zarr_format=3)
+        dm.store.write_metadata_only.assert_called()
+
+        # Check that setting zarr_format causes ValueError
+        with pytest.raises(ValueError):
+            dm.to_zarr(dataset, zarr_format=3)
+
     @staticmethod
-    def test_to_zarr_not_ipld_initial(manager_class, mocker):
+    def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
         dm.move_post_parse_attrs_to_dict = mock.Mock()
@@ -361,9 +395,10 @@ class TestPublish:
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
-        dataset.to_zarr.assert_called_once_with("foo", bar="baz")
+        # Zarr format is explicitly set to 2.0
+        dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
+        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
         dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
     @staticmethod
@@ -396,7 +431,7 @@ class TestPublish:
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
         dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+        dataset.to_zarr(dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
@@ -406,7 +441,7 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == pre_update_dict[key]
 
         dataset.attrs.update(**post_update_dict)
-        dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+        dm.to_zarr(dataset, store=dm.store.path, append_dim=dm.time_dim)
 
         for key in post_update_dict.keys():
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
@@ -442,7 +477,7 @@ class TestPublish:
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
         dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(dm.custom_output_path)  # write out local file to test updates on
+        dataset.to_zarr(store=dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
@@ -452,7 +487,7 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == pre_update_dict[key]
 
         dataset.attrs.update(**post_update_dict)
-        dm.to_zarr(dataset, dm.store.mapper(), append_dim=dm.time_dim)
+        dm.to_zarr(dataset, store=dm.store.path, append_dim=dm.time_dim)
 
         for key in post_update_dict.keys():
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
@@ -483,32 +518,7 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_dask_configuration_ipld(manager_class, mocker):
-        dask_config = {}
-
-        def dask_config_set(config):
-            dask_config.update(config)
-
-        dask = mocker.patch("gridded_etl_tools.utils.publish.dask")
-        dask.config.set = dask_config_set
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-
-        dm.dask_configuration()
-
-        assert dask_config == {
-            "distributed.scheduler.worker-saturation": dm.dask_scheduler_worker_saturation,
-            "distributed.scheduler.worker-ttl": None,
-            "distributed.worker.memory.target": dm.dask_worker_mem_target,
-            "distributed.worker.memory.spill": dm.dask_worker_mem_spill,
-            "distributed.worker.memory.pause": dm.dask_worker_mem_pause,
-            "distributed.worker.memory.terminate": dm.dask_worker_mem_terminate,
-            "scheduler": "threads",
-        }
-
-    @staticmethod
-    def test_dask_configuration_not_ipld(manager_class, mocker):
+    def test_dask_configuration(manager_class, mocker):
         dask_config = {}
 
         def dask_config_set(config):
@@ -532,88 +542,62 @@ class TestPublish:
         }
 
     @staticmethod
-    def test_write_initial_zarr_ipld(manager_class):
-        class DummyHash:
-            def __str__(self):
-                return "QmHiMom"
-
-        dm = manager_class()
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.to_zarr = mock.Mock()
-        dm.dataset_hash = None
-        publish_dataset = mock.Mock()
-        publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = DummyHash()
-
-        dm.write_initial_zarr(publish_dataset)
-
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
-        assert dm.dataset_hash == "QmHiMom"
-
-    @staticmethod
-    def test_write_initial_zarr_not_ipld(manager_class):
-        class DummyHash: ...
+    def test_write_initial_zarr(manager_class):
 
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.to_zarr = mock.Mock()
-        dm.dataset_hash = None
         publish_dataset = mock.Mock()
         publish_dataset.chunk.return_value = publish_dataset_rechunked = mock.Mock()
 
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = DummyHash()
+        dm.store.path = mock.Mock()
 
         dm.write_initial_zarr(publish_dataset)
 
-        dm.store.mapper.assert_called_once_with(set_root=False)
-        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, mapper, consolidated=True, mode="w")
-        assert dm.dataset_hash is None
+        # dm.store.path.assert_called_once_with()
+        dm.to_zarr.assert_called_once_with(publish_dataset_rechunked, store=dm.store.path, mode="w")
 
     @staticmethod
     def test_prepare_update_times(manager_class, fake_original_dataset, fake_complex_update_dataset):
         dm = manager_class()
         insert_times, update_times = dm.prepare_update_times(fake_original_dataset, fake_complex_update_dataset)
         assert insert_times == [
-            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+            np.datetime64("2021-10-10T00:00:00.000000000"),
         ] + list(
-            numpy.arange(
-                numpy.datetime64("2021-10-16T00:00:00.000000000"),
-                numpy.datetime64("2021-10-24T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2021-10-16T00:00:00.000000000"),
+                np.datetime64("2021-10-24T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         ) + [
-            numpy.datetime64("2021-11-11T00:00:00.000000000"),
-            numpy.datetime64("2021-12-11T00:00:00.000000000"),
+            np.datetime64("2021-11-11T00:00:00.000000000"),
+            np.datetime64("2021-12-11T00:00:00.000000000"),
         ] + list(
-            numpy.arange(
-                numpy.datetime64("2021-12-25T00:00:00.000000000"),
-                numpy.datetime64("2022-01-06T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2021-12-25T00:00:00.000000000"),
+                np.datetime64("2022-01-06T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         ) + [
-            numpy.datetime64("2022-01-14T00:00:00.000000000"),
+            np.datetime64("2022-01-14T00:00:00.000000000"),
         ]
         assert update_times == list(
-            numpy.arange(
-                numpy.datetime64("2022-02-01T00:00:00.000000000"),
-                numpy.datetime64("2022-03-09T00:00:00.000000000"),
-                numpy.timedelta64(1, "[D]"),
+            np.arange(
+                np.datetime64("2022-02-01T00:00:00.000000000"),
+                np.datetime64("2022-03-09T00:00:00.000000000"),
+                np.timedelta64(1, "[D]"),
             )
         )
 
     @staticmethod
     def test_prepare_update_times_no_time_dimension(manager_class, fake_original_dataset, fake_complex_update_dataset):
-        update_dataset = fake_complex_update_dataset.sel(time=[numpy.datetime64("2021-10-10T00:00:00.000000000")])
+        update_dataset = fake_complex_update_dataset.sel(time=[np.datetime64("2021-10-10T00:00:00.000000000")])
         update_dataset = update_dataset.squeeze()
         assert "time" not in update_dataset.dims
         dm = manager_class()
         insert_times, update_times = dm.prepare_update_times(fake_original_dataset, update_dataset)
         assert insert_times == [
-            numpy.datetime64("2021-10-10T00:00:00.000000000"),
+            np.datetime64("2021-10-10T00:00:00.000000000"),
         ]
         assert update_times == []
 
@@ -669,55 +653,8 @@ class TestPublish:
         dm.append_to_dataset.assert_not_called()
 
     @staticmethod
-    def test_insert_into_dataset_ipld(manager_class):
+    def test_insert_into_dataset_dry_run(manager_class):
         dm = manager_class()
-        dm.dataset_hash = "browns"
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.prep_update_dataset = mock.Mock()
-        dm.calculate_update_time_ranges = mock.Mock()
-        dm.to_zarr = mock.Mock()
-
-        original_dataset = object()
-        update_dataset = object()
-        insert_times = object()
-
-        slice1 = mock.Mock()
-        slice2 = mock.Mock()
-        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
-        insert_dataset.attrs = {}
-        insert_dataset.sel.side_effect = [slice1, slice2]
-
-        dm.calculate_update_time_ranges.return_value = (
-            (("breakfast", "second breakfast"), ("dusk", "dawn")),
-            (("the shire", "mordor"), ("vegas", "atlantic city")),
-        )
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
-        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
-
-        dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
-        dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
-
-        insert_dataset.sel.assert_has_calls(
-            [mock.call(time=slice("breakfast", "second breakfast")), mock.call(time=slice("dusk", "dawn"))]
-        )
-        dm.to_zarr.assert_has_calls(
-            [
-                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
-            ]
-        )
-
-        assert insert_dataset.attrs == {"update_is_append_only": False}
-        assert dm.dataset_hash == "42"
-
-    @staticmethod
-    def test_insert_into_dataset_not_ipld_dry_run(manager_class):
-        dm = manager_class()
-        dm.dataset_hash = "browns"
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
@@ -739,12 +676,8 @@ class TestPublish:
             (("the shire", "mordor"), ("vegas", "atlantic city")),
         )
 
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
         dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
 
-        dm.store.mapper.assert_called_once_with()
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
         dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
 
@@ -753,46 +686,22 @@ class TestPublish:
         )
         dm.to_zarr.assert_has_calls(
             [
-                mock.call(slice1.drop_vars.return_value, mapper, region={"time": slice("the shire", "mordor")}),
-                mock.call(slice2.drop_vars.return_value, mapper, region={"time": slice("vegas", "atlantic city")}),
+                mock.call(
+                    slice1.drop_vars.return_value, store=dm.store.path, region={"time": slice("the shire", "mordor")}
+                ),
+                mock.call(
+                    slice2.drop_vars.return_value,
+                    store=dm.store.path,
+                    region={"time": slice("vegas", "atlantic city")},
+                ),
             ]
         )
 
         assert insert_dataset.attrs == {"update_is_append_only": False}
-        assert dm.dataset_hash == "browns"
 
     @staticmethod
-    def test_append_to_dataset_ipld(manager_class):
+    def test_append_to_dataset_dry_run(manager_class):
         dm = manager_class()
-        dm.dataset_hash = "browns"
-        dm.store = mock.Mock(spec=store.IPLD)
-        dm.prep_update_dataset = mock.Mock()
-        dm.calculate_update_time_ranges = mock.Mock()
-        dm.to_zarr = mock.Mock()
-
-        update_dataset = object()
-        insert_times = object()
-
-        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
-        append_dataset.attrs = {}
-
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
-        dm.append_to_dataset(update_dataset, insert_times)
-
-        dm.store.mapper.assert_called_once_with()
-        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
-
-        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
-
-        assert append_dataset.attrs == {"update_is_append_only": True}
-        assert dm.dataset_hash == "42"
-
-    @staticmethod
-    def test_append_to_dataset_not_ipld_dry_run(manager_class):
-        dm = manager_class()
-        dm.dataset_hash = "browns"
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
@@ -805,41 +714,36 @@ class TestPublish:
         append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
 
-        mapper = dm.store.mapper.return_value
-        mapper.freeze.return_value = 42
-
         dm.append_to_dataset(update_dataset, insert_times)
 
-        dm.store.mapper.assert_called_once_with()
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
 
-        dm.to_zarr.assert_called_once_with(append_dataset, mapper, consolidated=True, append_dim="time")
+        dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, append_dim="time")
 
         assert append_dataset.attrs == {"update_is_append_only": True}
-        assert dm.dataset_hash == "browns"
 
     @staticmethod
     def test_prep_update_dataset(manager_class, fake_complex_update_dataset):
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        time_values = np.arange(
+            np.datetime64("2022-02-01T00:00:00.000000000"),
+            np.datetime64("2022-03-09T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.set_zarr_metadata = lambda x: x
         dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert len(dataset.time) > len(time_values)
 
         dataset = dm.prep_update_dataset(dataset, time_values)
+        dm.encode_vars(dataset)
 
-        assert numpy.array_equal(dataset.time, time_values)
-        dataset.chunks["time"][0] == 5
-        dataset.chunks["latitude"][0] == 4
-        dataset.chunks["longitude"][0] == 4
+        assert np.array_equal(dataset.time, time_values)
+        assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
@@ -847,52 +751,24 @@ class TestPublish:
         # Give the transpose call in prep_update_dataset something to do
         dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
         assert dataset.data.dims == ("longitude", "latitude", "time")
-        dataset = dataset.sel(time=[numpy.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        dataset = dataset.sel(time=[np.datetime64("2022-02-01T00:00:00.000000000")]).squeeze()
+        time_values = np.arange(
+            np.datetime64("2022-02-01T00:00:00.000000000"),
+            np.datetime64("2022-03-09T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
         dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         dm.set_zarr_metadata = lambda x: x
         dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
         assert "time" not in dataset.dims
 
         dataset = dm.prep_update_dataset(dataset, time_values)
+        dm.encode_vars(dataset)
 
-        assert numpy.array_equal(dataset.time, time_values[:1])
-        dataset.chunks["time"][0] == 5
-        dataset.chunks["latitude"][0] == 4
-        dataset.chunks["longitude"][0] == 4
-        assert dataset.data.dims == ("time", "latitude", "longitude")
-
-    @staticmethod
-    def test_prep_update_dataset_dask_chunks_not_full_size(manager_class, fake_complex_update_dataset):
-        """
-        Regression test to ensure that prep_update_datset always chunks the dataset to have full size
-        full Dask chunks, preventing mismatches between Zarr and Dask chunks that cause Xarray errors
-        """
-        # Give the transpose call in prep_update_dataset something to do
-        dataset = fake_complex_update_dataset.transpose("longitude", "latitude", "time")
-        assert dataset.data.dims == ("longitude", "latitude", "time")
-        dataset = dataset.chunk({"time": 3, "latitude": 1, "longitude": 1})
-        time_values = numpy.arange(
-            numpy.datetime64("2022-02-01T00:00:00.000000000"),
-            numpy.datetime64("2022-03-09T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
-        )
-        dm = manager_class()
-        dm.set_zarr_metadata = lambda x: x
-        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
-
-        assert len(dataset.time) > len(time_values)
-        dataset = dm.prep_update_dataset(dataset, time_values)
-
-        assert numpy.array_equal(dataset.time, time_values)
-        assert dataset.chunks["time"][0] == 5
-        assert dataset.chunks["latitude"][0] == 4
-        assert dataset.chunks["longitude"][0] == 4
+        assert np.array_equal(dataset.time, time_values[:1])
+        assert dataset.chunks == {}
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
@@ -921,7 +797,7 @@ class TestPublish:
         # Test that the append is of the expected size
         append_update = datetime_ranges[-1]
         append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
-        assert append_size == numpy.timedelta64(35, "D")
+        assert append_size == np.timedelta64(35, "D")
 
     @staticmethod
     def test_preparse_quality_check(manager_class, fake_original_dataset):
@@ -981,10 +857,10 @@ class TestPublish:
         # patch sample size to 16, size of input dataset
         fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
         dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
-        data_shape = numpy.shape(fake_large_dataset.data)
+        data_shape = np.shape(fake_large_dataset.data)
 
         # Check that it catches all NaNs
-        fake_large_dataset.data[:] = numpy.nan
+        fake_large_dataset.data[:] = np.nan
         dm.pre_chunk_dataset = fake_large_dataset
         with pytest.raises(NanFrequencyMismatchError):
             dm.pre_parse_quality_check(fake_large_dataset)
@@ -1018,7 +894,7 @@ class TestPublish:
 
         # patch sample size to 16, size of input dataset
         fake_original_dataset.attrs["expected_nan_frequency"] = 1
-        fake_original_dataset.data[:] = numpy.nan
+        fake_original_dataset.data[:] = np.nan
         dm.pre_chunk_dataset = fake_original_dataset
         dm.pre_parse_quality_check(fake_original_dataset)
 
@@ -1070,7 +946,7 @@ class TestPublish:
 
     @staticmethod
     def test_check_random_values_NaN(manager_class, fake_original_dataset):
-        fake_original_dataset.data.values[:] = numpy.nan
+        fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dm.encode_vars(fake_original_dataset)
@@ -1099,7 +975,7 @@ class TestPublish:
 
     @staticmethod
     def test_check_random_values_NaNs_are_allowed(manager_class, fake_original_dataset):
-        fake_original_dataset.data.values[:] = numpy.nan
+        fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dm.encode_vars(fake_original_dataset)
@@ -1161,8 +1037,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_regular_cadence_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta for i in range(10)]
 
         dm = manager_class()
@@ -1170,8 +1046,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_regular_cadence_not_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta for i in range(10)] + [start + delta * 20]
 
         dm = manager_class()
@@ -1179,8 +1055,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_irregular_cadence_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta * 1.05 for i in range(10)]
 
         class MyManager(manager_class):
@@ -1191,8 +1067,8 @@ class TestPublish:
 
     @staticmethod
     def test_are_times_in_expected_order_irregular_cadence_not_ok(manager_class):
-        start = numpy.datetime64("2000-01-01T00:00:00")
-        delta = numpy.datetime64("2000-01-01T01:00:00") - start
+        start = np.datetime64("2000-01-01T00:00:00")
+        delta = np.datetime64("2000-01-01T01:00:00") - start
         times = [start + i * delta * 2.5 for i in range(10)]
 
         class MyManager(manager_class):
@@ -1297,8 +1173,8 @@ class TestPublish:
         dm.store.dataset.return_value = fake_original_dataset
 
         dataset = dm.get_prod_update_ds()
-        assert dataset["time"].values[0] == numpy.datetime64("2021-12-01T00:00:00.000000000")
-        assert dataset["time"].values[-1] == numpy.datetime64("2022-01-01T00:00:00.000000000")
+        assert dataset["time"].values[0] == np.datetime64("2021-12-01T00:00:00.000000000")
+        assert dataset["time"].values[-1] == np.datetime64("2022-01-01T00:00:00.000000000")
 
     @staticmethod
     def test_check_written_value(manager_class, fake_original_dataset):
@@ -1336,14 +1212,14 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.inf
+        prod_ds.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
-        fake_original_dataset.data[coord_indices] = numpy.inf
+        fake_original_dataset.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_two_nans(manager_class, fake_original_dataset):
@@ -1351,8 +1227,8 @@ class TestPublish:
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
 
-        fake_original_dataset.data[coord_indices] = numpy.nan
-        prod_ds.data[coord_indices] = numpy.nan
+        fake_original_dataset.data[coord_indices] = np.nan
+        prod_ds.data[coord_indices] = np.nan
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
@@ -1364,7 +1240,7 @@ class TestPublish:
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
         fake_original_dataset.data[coord_indices] = 5e100
-        prod_ds.data[coord_indices] = numpy.inf
+        prod_ds.data[coord_indices] = np.inf
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
@@ -1375,14 +1251,14 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.nan
+        prod_ds.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
-        fake_original_dataset.data[coord_indices] = numpy.nan
+        fake_original_dataset.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
@@ -1392,16 +1268,16 @@ class TestPublish:
         check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
         dm.get_random_coords = mock.Mock(return_value=check_coords)
 
-        prod_ds.data[coord_indices] = numpy.nan
-        fake_original_dataset.data[coord_indices] = numpy.nan
-        dm.check_written_value(fake_original_dataset, prod_ds, threshold=numpy.inf)
+        prod_ds.data[coord_indices] = np.nan
+        fake_original_dataset.data[coord_indices] = np.nan
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_filter_search_space(manager_class, hindcast_dataset):
-        timestamps = numpy.arange(
-            numpy.datetime64("2021-10-16T00:00:00.000000000"),
-            numpy.datetime64("2021-10-26T00:00:00.000000000"),
-            numpy.timedelta64(1, "[D]"),
+        timestamps = np.arange(
+            np.datetime64("2021-10-16T00:00:00.000000000"),
+            np.datetime64("2021-10-26T00:00:00.000000000"),
+            np.timedelta64(1, "[D]"),
         )
 
         def fake_input_files(range_num: int):
@@ -1424,8 +1300,8 @@ class TestPublish:
             return date_step_ensemble_fro_files
 
         def raw_file_to_dataset(file_path):
-            path_date = numpy.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
-            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": numpy.atleast_1d(path_date)})
+            path_date = np.datetime64(re.search(r"time-(\d{4}-\d{2}-\d{2})_", file_path)[1])
+            raw_ds = hindcast_dataset.assign_coords({"hindcast_reference_time": np.atleast_1d(path_date)})
             return raw_ds
 
         dm = manager_class()
@@ -1492,17 +1368,18 @@ class TestPublish:
         assert ds == dm.reformat_orig_ds(fake_original_dataset, "some/path")
         xr.open_dataset.assert_called_once_with("some/path")
 
-    @staticmethod
-    def test_raw_file_to_dataset_s3(manager_class, fake_original_dataset):
-        dm = manager_class()
-        dm.load_dataset_from_disk = mock.Mock()
-        dm.load_dataset_from_disk.return_value = fake_original_dataset
-        dm.protocol = "s3"
-        dm.use_local_zarr_jsons = True
+    # NOTE disabled due to regression in fsspec capabilities
+    # @staticmethod
+    # def test_raw_file_to_dataset_s3(manager_class, fake_original_dataset):
+    #     dm = manager_class()
+    #     dm.load_dataset_from_disk = mock.Mock()
+    #     dm.load_dataset_from_disk.return_value = fake_original_dataset
+    #     dm.protocol = "s3"
+    #     dm.use_local_zarr_jsons = True
 
-        ds = dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
-        xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, pathlib.Path("some/path")))
-        dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
+    #     ds = dm.raw_file_to_dataset(pathlib.PosixPath("some/path"))
+    #     xr.testing.assert_equal(ds, dm.reformat_orig_ds(fake_original_dataset, pathlib.Path("some/path")))
+    #     dm.load_dataset_from_disk.assert_called_once_with(zarr_json_path="some/path")
 
     @staticmethod
     def test_raw_file_to_dataset_s3_no_local_zarr_json(manager_class):
@@ -1604,7 +1481,7 @@ class TestPublish:
 
         assert "step" in dataset
         assert "step" in dataset.dims
-        assert dataset.step[0] == numpy.datetime64("2022-07-04T00:00:00.000000000")
+        assert dataset.step[0] == np.datetime64("2022-07-04T00:00:00.000000000")
 
         dm.rename_data_variable.assert_called_once_with(dataset)
 
@@ -1645,3 +1522,23 @@ def test_shuffled_coords():
     unshuffled_set = set((frozenset(coords.items()) for coords in unshuffled))
     shuffled_set = set((frozenset(coords.items()) for coords in shuffled))
     assert shuffled_set == unshuffled_set
+
+
+def test_is_infish():
+    # Test regular numbers
+    assert not _is_infish(np.float64(42))
+    assert not _is_infish(np.float32(42))
+
+    # Test infinities
+    assert _is_infish(np.float64("inf"))
+    assert _is_infish(np.float32("inf"))
+    assert _is_infish(-np.float64("inf"))
+    assert _is_infish(-np.float32("inf"))
+
+    # Test very large numbers
+    assert _is_infish(np.float64(1e101))  # Beyond 1e100 threshold for float64
+    assert not _is_infish(np.float64(1e99))  # Below 1e100 threshold for float64
+
+    # Test float32 large numbers
+    assert _is_infish(np.float32(1e39))  # Beyond 1e38 threshold for float32
+    assert not _is_infish(np.float32(1e37))  # Below 1e38 threshold for float32

@@ -4,23 +4,22 @@ Climate Data Format
 Metadata management within managers is described in the [ETL Builders README](./etl_developers_manual.md.md#metadata). This dataset metadata is published in two ways:
 
 * In the `attrs` or `encoding` dictionaries of each Zarr, for reference when using datasets
-* Standalone STAC Items on IPFS, as the primary metadata file
+* Standalone STAC Items on S3, as the primary metadata file
 
-Note that the present iteration of this library _only_ publishes STAC metadata for datasets stored on IPFS. STAC for non-IPFS datasets is on [the roadmap](./development_roadmap.md).
+Note that the present iteration of this library _only_ publishes STAC metadata for datasets stored on S3.
 
 Below follow guides for specifying and using both types of metadata.
 
 In-Zarr metadata
 ----------------
 
-Each climate data Zarr stored on IPFS contains essential metadata fields relevant to analysis under its Attributes (`.attrs`) and Encoding (`.encoding`) fields. Example fields include units of measurement, encoding and compression standards, chunk sizes, missing values, and data types.
+Each climate data Zarr stored on S3 contains essential metadata fields relevant to analysis under its Attributes (`.attrs`) and Encoding (`.encoding`) fields. Example fields include units of measurement, encoding and compression standards, chunk sizes, missing values, and data types.
 
 Retrieving in-Zarr metadata is as simple as opening the dataset in Xarray and calling the `.attrs` or `.encoding` methods on it. 
 
     $ ipython
-    > import xarray, ipldstore
-    > mapper = ipldstore.get_ipfs_mapper()
-    > mapper.set_root('bafyreidynjhbbgnhtvbtzo7gfdx7k43xdh4fl6m6flcavnviehjeo5kci4')
+    > import xarray
+    > ds = xr.open_dataset("s3://your/path_here")
     > ds.attrs
     {'coordinate reference system': 'EPSG:4326',
     'name': 'cpc_temp_max',
@@ -55,9 +54,9 @@ Note that the overall zarr and its individual dimensions and data variables each
 Standalone metadata
 -------------------
 
-Accompanying each dataset's in-zarr metadata are a series of standalone metadata files in JSON format fully compatible with the [SpatioTemporal Asset Catalog (STAC) standard](https://stacspec.org/en). The main file (the "item" file in STAC parlance) is designed to be compatible with the [STAC Item metadata standard](https://github.com/radiantearth/stac-spec/tree/master/item-spec) and contains a more expansive set of metadata fields better suited to understanding the dataset's provenance and purpose and displaying it in a catalog of datasets. These are used by the [dClimate Marketplace](https://alpha.marketplace.dclimate.net/) to display information about all datasets.
+Accompanying each dataset's in-zarr metadata are a series of standalone metadata files in JSON format fully compatible with the [SpatioTemporal Asset Catalog (STAC) standard](https://stacspec.org/en). The main file (the "item" file in STAC parlance) is designed to be compatible with the [STAC Item metadata standard](https://github.com/radiantearth/stac-spec/tree/master/item-spec) and contains a more expansive set of metadata fields better suited to understanding the dataset's provenance and purpose and displaying it in a catalog of datasets.
 
-Example standalone metadata files can be found via the dClimate API using the code outlined in the [Retrieval](#retrieval) section.
+Example standalone metadata files can be found via the Arbol API using the code outlined in the [Retrieval](#retrieval) section.
 
 The dataset's item metadata also links to the previous iterations of the dataset and its corresponding item metadata if it has been updated. By jumping through these links in successive metadata JSONs a user can "rewind" the dataset or its metadata to a desired historical date. 
 
@@ -68,28 +67,14 @@ A full accounting of STAC's tags and standards is beyond the scope of this READM
 
 ### STAC Metadata concepts
 
-Integrating STAC with IPFS required some creative engineering. 
-
-1. Each STAC Item, Collection, or Catalog is published under an IPNS key string whose corresponding name hash can be used to reliably pull the latest version of a dataset's metadata. The actual IPFS hash for a dataset is stored in the dataset's STAC Item under `["analytics"]["href"]["/"]`. 
-2. STAC Items are regenerated with every update; to preserve the history of a dataset, the previous Item's hash is saved at `["links"]["previous"]["metadata href"]` alongside the IPFS hash of the corresponding dataset at `["links"]["previous"]["href"]`. By traversing previous items in a chain (i.e. a link list) any previous iteration of the dataset and/or its metadata can be found.
-3. dClimate follows the STAC specification's preferred top-to-bottom hierarchy of a Root Catalog --> Collections --> Items. 
+1. Each STAC Item, Collection, or Catalog is published at a URI string that can be used to reliably pull the latest version of a dataset's metadata. This is stored in the dataset's STAC Item under `["analytics"]["href"]["/"]`. 
+2. STAC Items are regenerated with every update; to preserve the history of a dataset, the previous Item's location is saved at `["links"]["previous"]["metadata href"]` alongside the path of the corresponding dataset at `["links"]["previous"]["href"]`.
+3. Arbol follows the STAC specification's preferred top-to-bottom hierarchy of a Root Catalog --> Collections --> Items. 
 4. STAC Collections are instantiated for each manager and contain the properties common to that manager's datasets. Links to the individual datasets are identified as `"rel" = "item"` under `["links"]`.
-5. In practice however, Collections are not yet used by dClimate for any purpose. This is on the roadmap for future development.
-6. The dClimate Root STAC Catalog contains an overall description of dClimate and links to each STAC Collection.
-
-Integrating STAC with Zarrs required some additional tweaks to our architecture. The most notable is referencing `zmetadata` under each Item's `assets` instead of the raw `data`. This reflects that the Zarr "files" we open from IPFS are actually consolidated JOSN metadata referencing all the individual chunks and [aligns with community best practices](https://github.com/radiantearth/stac-browser/issues/44). For the same reason we assign the `zmetadata` the role of `zarr-consolidated-metadata`.
+6. The Arbol Root STAC Catalog contains an overall description of Arbol and links to each STAC Collection.
 
 The Pangeo community has been further developing a `datacube` extension for STAC that better describes N-dimensional datasets (see [discussion here](https://discourse.pangeo.io/t/stac-and-earth-systems-datasets/1472)). This extension is powerful but requires additional work to implement, maintain, and read. Given that all of our N-dimensional datasets in practice only have a time dimension we elected not to implement this extension, for now at least.
 
-### Retrieval
-
-Standalone metadata for datasets stored on dClimate is published over the dClimate API. Users must first [create a dClimate token](https://api.dclimate.net/register) to access the API. The metadata can then be retrieved using Python's requests library through the following command.
-
-```python
-import requests
-dataset_hash_dict = requests.get(f'http://api.dclimate.net/v4/metadata/{dataset_name}', headers={'Authorization' : <YOUR TOKEN HERE>}).json()
-
-```
 
 ### Full spec
 

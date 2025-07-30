@@ -10,9 +10,7 @@ import numpy as np
 import xarray as xr
 
 from .encryption import EncryptionFilter
-from .ipfs import IPFS
 from .convenience import Convenience
-from .store import IPLD
 
 from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
@@ -51,7 +49,7 @@ class StacType(Enum):
     CATALOG = ""
 
 
-class Metadata(Convenience, IPFS):
+class Metadata(Convenience):
     """
     Base class containing metadata creation and editing methods Zarr ETLs
     Includes STAC Metadata templates for Items, Collections, and the root Catalog
@@ -166,14 +164,7 @@ class Metadata(Convenience, IPFS):
         bool
             Whether the entity exists in the backing store
         """
-        # TODO: The prevalance of this this pattern, if isinstance(self.store, IPLD): ... else: ..., probably
-        # indicates that StoreInterface needs to be rethought. Ideally, consumers of the interface wouldn't need to
-        # know which specific implementation they were using. Those details should be encapsulated by the interface
-        # definition and its implementations.
-        if isinstance(self.store, IPLD):
-            return self.check_stac_on_ipns(title)
-        else:
-            return self.store.metadata_exists(title, stac_type.value)
+        return self.store.metadata_exists(title, stac_type.value)
 
     def publish_stac(self, title: str, stac_content: dict, stac_type: StacType):
         """Publish a STAC entity to the backing store
@@ -187,10 +178,7 @@ class Metadata(Convenience, IPFS):
         stac_type : StacType
             Type of STAC entity (Catalog, Collection or Item)
         """
-        if isinstance(self.store, IPLD):
-            self.ipns_publish(title, self.ipfs_put(self.json_to_bytes(stac_content)))
-        else:
-            self.store.push_metadata(title, stac_content, stac_type.value)
+        self.store.push_metadata(title, stac_content, stac_type.value)
 
     def retrieve_stac(self, title: str, stac_type: StacType) -> tuple[dict, str]:
         """Retrieve a STAC entity and its href from the backing store
@@ -207,10 +195,7 @@ class Metadata(Convenience, IPFS):
         tuple[dict, str | pathlib.Path]
             tuple of STAC content and the href for the STAC
         """
-        if isinstance(self.store, IPLD):
-            return self.ipns_retrieve_object(title)
-        else:
-            return self.store.retrieve_metadata(title, stac_type.value)
+        return self.store.retrieve_metadata(title, stac_type.value)
 
     def get_href(self, title: str, stac_type: StacType) -> str:
         """Get a STAC entity's href from the backing store. Might be
@@ -228,10 +213,7 @@ class Metadata(Convenience, IPFS):
         str
             string representation of href.
         """
-        if isinstance(self.store, IPLD):
-            return self.ipns_generate_name(key=title)
-        else:
-            return self.store.get_metadata_path(title, stac_type.value)
+        return self.store.get_metadata_path(title, stac_type.value)
 
     def create_root_stac_catalog(self):
         """
@@ -283,8 +265,8 @@ class Metadata(Convenience, IPFS):
         if rebuild or not self.check_stac_exists(self.collection_name, StacType.COLLECTION):
             if rebuild:
                 self.info(
-                    "Collection rebuild requested. Creating new collection, pushing it to IPFS, and populating the "
-                    "main catalog"
+                    "Collection rebuild requested. Creating new collection, pushing it to the store, "
+                    "and populating the main catalog"
                 )
             # Populate data-driven attributes of the collection
             minx, miny, maxx, maxy = self.bbox_coords(dataset)
@@ -341,9 +323,9 @@ class Metadata(Convenience, IPFS):
 
     def create_stac_item(self, dataset: xr.Dataset):
         """
-        Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal, and data
-        dimensions into a STAC Item-compliant JSON. Push this JSON to IPFS and its relevant parent STAC Collection via
-        `register_stac_item`
+        Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal,
+        and data dimensions into a STAC Item-compliant JSON. Push this JSON to the store and its relevant parent
+        STAC Collection via `register_stac_item`
 
         Parameters
         ----------
@@ -371,16 +353,13 @@ class Metadata(Convenience, IPFS):
         properties_dict["start_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[0]).isoformat() + "Z"
         properties_dict["end_datetime"] = self.numpydate_to_py(dataset[self.time_dim].values[-1]).isoformat() + "Z"
         properties_dict["updated"] = (
-            datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()[:-13] + "Z"
+            datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds") + "Z"
         )
         # Populate the empty STAC Item
         minx, miny, maxx, maxy = self.bbox_coords(dataset)
         stac_item["bbox"] = [minx, miny, maxx, maxy]
         stac_item["geometry"] = json.dumps(shapely.geometry.mapping(shapely.geometry.box(minx, miny, maxx, maxy)))
-        if isinstance(self.store, IPLD):
-            zarr_href = {"/": self.latest_hash()}
-        else:
-            zarr_href = str(self.store.path)
+        zarr_href = str(self.store.path)
 
         stac_item["assets"]["zmetadata"]["href"] = zarr_href
         stac_item["properties"] = properties_dict
@@ -457,7 +436,7 @@ class Metadata(Convenience, IPFS):
         stac_item : dict
             A dictionary of metadata prepared in `create_stac_item` for publication as a standalone STAC metadata file
         """
-        self.info("Registering STAC Item in IPFS and its parent STAC Collection")
+        self.info("Registering STAC Item in the store and its parent STAC Collection")
         # Generate variables of interest
         stac_coll, collection_href = self.retrieve_stac(self.collection_name, StacType.COLLECTION)
         # Register links
@@ -473,24 +452,9 @@ class Metadata(Convenience, IPFS):
         # Item
         try:
             old_stac_item, href = self.retrieve_stac(self.key(), StacType.ITEM)
-            if isinstance(self.store, IPLD):
-                # If IPLD, generate the previous hash link
-                old_item_ipfs_hash = self.ipns_resolve(self.key())
-                self.info("Updating 'previous' link in dataset's STAC Item")
-                stac_item["links"].append(
-                    {
-                        "rel": "prev",
-                        "href": str(
-                            old_stac_item["assets"]["zmetadata"]["href"].set(base=self._default_base)
-                        ),  # convert CID object back to hash str
-                        "metadata href": {"/": old_item_ipfs_hash},
-                        "type": "application/geo+json",
-                        "title": stac_item["assets"]["zmetadata"]["title"],
-                    }
-                )
 
         # TODO: It would be better to not have KeyError in here, as it it's easy for that to be a different exception
-        # than the one you think you're catching. It would be better to have retreive_stac and/or ipns_resolve return
+        # than the one you think you're catching. It would be better to have retrieve_stac return
         # None if they can't find the key, and then use an if statement to check the return value for None.
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
@@ -508,7 +472,8 @@ class Metadata(Convenience, IPFS):
         # push final STAC Item to backing store
         self.info("Pushing STAC Item to backing store")
         self.publish_stac(self.key(), stac_item, StacType.ITEM)
-        # register item as a link in the relevant collection, if not already there, and push updated collection to IPFS
+        # register item as a link in the relevant collection, if not already there,
+        # and push updated collection to the store
         if any(
             stac_item["assets"]["zmetadata"]["title"] in link_dict["title"]
             for link_dict in stac_coll["links"]
@@ -556,31 +521,30 @@ class Metadata(Convenience, IPFS):
 
     def load_stac_metadata(self, key: str = None) -> str | dict:
         """
-        Return the latest version of a dataset's STAC Item from IPFS
+        Return the latest version of a dataset's STAC Item from S3
 
         Parameters
         ----------
         key : str
-            The human readable IPNS key string referencing a given object
+            The s3 path referencing a given STAC Item
 
         Returns
         -------
         str | dict
-            Either an IPNS name hash or an empty dictionary (if no IPNS name hash found)
+            Either a STAC Item or an empty dictionary (if no STAC Item found)
 
         """
-        if isinstance(self.store, IPLD):
-            if not key:
-                key = self.key()
-            try:
-                return self.retrieve_stac(key, StacType.ITEM)[0]
-            except (KeyError, TimeoutError):
-                self.warn(
-                    "STAC metadata requested but no STAC object found at the provided key. Returning empty dictionary"
-                )
-                return {}
-
-        # else: raise exception?
+        if not key:
+            key = self.key()
+        try:
+            stac, _ = self.retrieve_stac(key, StacType.ITEM)
+            return stac
+        except (KeyError, TimeoutError, FileNotFoundError):
+            self.warn(
+                f"STAC metadata requested at {key} but no STAC object found at the provided key. "
+                "Returning empty dictionary"
+            )
+            return {}
 
     # NON-STAC METADATA
 
@@ -647,8 +611,11 @@ class Metadata(Convenience, IPFS):
 
     def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """
-        Encode important data points related to the data and time variables.
-        These are useful both for reference and to control Xarray's reading/writing behavior.
+        Encode important data points related to the data and time variables. These are useful both for reference and to
+        control Xarray's reading/writing behavior.
+
+        More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets, so all chunking
+        information (as well as chunking itself) will be aggressively removed.
 
         Parameters
         ----------
@@ -661,7 +628,6 @@ class Metadata(Convenience, IPFS):
             self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value,
-                # deprecated by NUG but maintained for backwards compatibility
                 "missing_value": self.missing_value,
             }
         }
@@ -670,12 +636,24 @@ class Metadata(Convenience, IPFS):
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
                 "_FillValue": self.missing_value,
-                # deprecated by NUG but maintained for backwards compatibility
                 "missing_value": self.missing_value,
-                "chunks": tuple(val for val in self.requested_zarr_chunks.values()),
-                "preferred_chunks": self.requested_zarr_chunks,
             }
         )
+        # More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets,
+        # so all chunking information (as well as chunking itself) must be aggressively removed.
+        if self.store.has_existing and not self.rebuild_requested:
+            chunks = preferred_chunks = None
+        else:
+            # Initial parses need chunking information to be present in the encoding dict
+            chunks = tuple(val for val in self.requested_zarr_chunks.values())
+            preferred_chunks = self.requested_zarr_chunks
+        for aspect in list(dataset.dims) + [self.data_var]:
+            dataset[aspect].encoding.update(
+                {
+                    "chunks": chunks,
+                    "preferred_chunks": preferred_chunks,
+                }
+            )
         # Encode 'time' dimension with the Climate and Forecast Convention standards used by major climate data
         # providers.
         if "time" in dataset:
@@ -730,16 +708,10 @@ class Metadata(Convenience, IPFS):
         # Load static metadata into the dataset's attributes
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
-        # Get existing stac_metadat, if possible
-        stac_metadata = None
-        if isinstance(self.store, IPLD):
-            try:
-                stac_metadata = self.load_stac_metadata()
-            except (KeyError, TimeoutError):
-                pass
+        # Get existing stac_metadata, if possible
+        stac_metadata = self.load_stac_metadata()
 
-        # Determine date to use for "created" field. On S3 and local, use current time. On IPLD, look for an existing
-        # creation time.
+        # Determine date to use for "created" field. On S3 and local, use current time.
         if stac_metadata and "created" in stac_metadata["properties"]:
             dataset.attrs["created"] = stac_metadata["properties"]["created"]
         else:
@@ -748,30 +720,17 @@ class Metadata(Convenience, IPFS):
         # Write the date range. Use existing data if possible to get the original start date. Even though the date
         # range can be parsed by opening the Zarr, it can be faster to access directly through the Zarr's `.zmetadata`
         # file, so it gets written here.
-        if isinstance(self.store, IPLD):
-            # Set date range. Use start from previous dataset's metadata if it exists or the input dataset if this is
-            # the first run.
-            if stac_metadata:
-                dataset.attrs["update_previous_end_date"] = stac_metadata["properties"]["date range"][1]
-                dataset.attrs["date range"] = (
-                    stac_metadata["properties"]["date range"][0],
-                    f"{self.get_date_range_from_dataset(dataset)[1]:%Y%m%d%H}",
-                )
-            else:
-                dataset.attrs["update_previous_end_date"] = ""
-                dataset.attrs["date range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
+        # Use existing Zarr if possible, otherwise get the dates from the input dataset.
+        if self.store.has_existing:
+            previous_start, previous_end = self.store.dataset().attrs["date range"]
+            dataset.attrs["update_previous_end_date"] = previous_end
+            dataset.attrs["date range"] = (
+                previous_start,
+                self.date_range_to_string(self.get_date_range_from_dataset(dataset))[1],
+            )
         else:
-            # Use existing Zarr if possible, otherwise get the dates from the input dataset.
-            if self.store.has_existing:
-                previous_start, previous_end = self.store.dataset().attrs["date range"]
-                dataset.attrs["update_previous_end_date"] = previous_end
-                dataset.attrs["date range"] = (
-                    previous_start,
-                    self.date_range_to_string(self.get_date_range_from_dataset(dataset))[1],
-                )
-            else:
-                dataset.attrs["update_previous_end_date"] = ""
-                dataset.attrs["date range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
+            dataset.attrs["update_previous_end_date"] = ""
+            dataset.attrs["date range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
 
         # Write the update date range by taking the date range of the xr.Dataset submitted to this function. This
         # assumes this function is called and the metadata is written before the original xr.Dataset is combined with
@@ -812,18 +771,23 @@ class Metadata(Convenience, IPFS):
         dataset : xarray.Dataset
             The dataset being published, pre-metadata update
         """
-        compressor = numcodecs.Blosc() if self.use_compression else None
+        if not self.use_compression:
+            compressor = None
+        elif self.output_zarr3:
+            compressor = zarr.codecs.BloscCodec(cname="lz4")
+        else:
+            compressor = numcodecs.Blosc()
 
         if not self.store.has_existing:
             for coord in dataset.coords:
-                dataset[coord].encoding["compressor"] = compressor
-            dataset[self.data_var].encoding["compressor"] = compressor
+                dataset[coord].encoding["compressors"] = compressor
+            dataset[self.data_var].encoding["compressors"] = compressor
 
     def update_array_encoding(
         self,
         target_array: str,
         update_key: dict,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Update an array encoding field in the dataset's Zarr store.
 
@@ -840,7 +804,7 @@ class Metadata(Convenience, IPFS):
         self,
         target_array: str,
         remove_key: str,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Remove an array encoding field from the dataset's Zarr store.
 
@@ -858,7 +822,7 @@ class Metadata(Convenience, IPFS):
         target_array: str,
         update_key: dict | None = None,
         remove_key: str | None = None,
-    ):
+    ):  # pragma NO COVER -- legacy function that needs Zarr v2 to work
         """
         Modify the encoding of an array -- coordinate or data variable -- in the dataset's Zarr store.
 

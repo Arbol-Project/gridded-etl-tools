@@ -11,18 +11,19 @@ import multiprocessing
 import multiprocessing.pool
 import sys
 import xarray as xr
+import platform
+import pathlib
 
 import psutil
 
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.publish import Publish
-from .utils.ipfs import IPFS
 from .utils.time import TimeSpan
-from .utils.store import Local, IPLD, S3
+from .utils.store import Local, S3
 
 
-class DatasetManager(Logging, Publish, ABC, IPFS):
+class DatasetManager(Logging, Publish, ABC):
     """
     This is a base class for data parsers. It is intended to be inherited and implemented by child classes specific to
     each data source.
@@ -75,17 +76,14 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self,
         requested_dask_chunks,
         requested_zarr_chunks,
-        requested_ipfs_chunker=None,
         rebuild_requested=False,
-        custom_output_path=None,
-        custom_latest_hash=None,
-        custom_input_path=None,
+        custom_output_path: str | pathlib.Path | None = None,
+        custom_input_path: str | pathlib.Path | None = None,
         console_log=True,
         global_log_level=logging.DEBUG,
         store=None,
         s3_bucket_name=None,
         allow_overwrite=False,
-        ipfs_host="http://127.0.0.1:5001",
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
@@ -95,9 +93,10 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         skip_pre_parse_nan_check: bool = False,
         skip_post_parse_qc: bool = False,
         skip_post_parse_api_check: bool = False,
-        encryption_key: str = None,
+        encryption_key: str | None = None,
         use_compression: bool = True,
         dry_run: bool = False,
+        output_zarr3: bool = False,
         *args,
         **kwargs,
     ):
@@ -106,16 +105,12 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         Parameters
         ----------
-        ipfs_host : str, optional
-            The address of the IPFS HTTP API to use for IPFS operations
         rebuild_requested : bool, optional
             Sets `DatasetManager.rebuild_requested`. If this parameter is set, the manager requests and parses all
             available data from beginning to end.
-        custom_output_path : str, optional
+        custom_output_path : str | pathlib.Path, optional
             Overrides the default path returned by `StoreInterface.path` for Local and S3 stores.
-        custom_latest_hash : str, optional
-            Overrides the default hash lookup defined in `IPFS.latest_hash`
-        custom_input_path : str, optional
+        custom_input_path : str | pathlib.Path, optional
             A path to use for input files
         console_log : bool, optional
             Enable logging `logging.INFO` level and higher statements to console. For more customization, see
@@ -124,7 +119,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all
             logging statements will be generated and then logging handlers can decide what to do with them.
         store : str | None
-            A string indicating the type of filestore to use (one of, "local", "ipld" or "s3"). A corresponding store
+            A string indicating the type of filestore to use (one of, "local" or "s3"). A corresponding store
             object will be initialized. If `None`, the store is left unset and the default store interface defined in
             `Attributes.store` (local) is returned when the property is accessed. If using S3, the environment
             variables `AWS_ACCESS_KEY_ID`and `AWS_SECRET_ACCESS_KEY` must be specified in the ~/.aws/credentials file
@@ -134,8 +129,6 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date
             will fail with a warning message.
-        ipfs_host : str
-            The URL of the IPFS host
         dask_dashboard_address : str
             The desired URL of the dask dashboard
         dask_worker_memory_target : float
@@ -166,12 +159,13 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         dry_run: bool, optional
             Run the dataset manager all the way through but never write anything via `to_zarr`.
             Intended for development purposes
+        output_zarr3: bool
+            Although the required Zarr library version is 3.0+, Zarrs are still written in the 2.0 format by default,
+            for backward compatibility. However, if this parameter is set, the Zarr will be written in 3.0 format.
         """
-        # call IPFS init
-        super().__init__(host=ipfs_host)
+        super().__init__()
         # Set member variable defaults
         self.custom_output_path = custom_output_path
-        self.custom_latest_hash = custom_latest_hash
         self.custom_input_path = custom_input_path
         self.rebuild_requested = rebuild_requested
 
@@ -184,37 +178,23 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
         self.skip_post_parse_api_check = skip_post_parse_api_check
 
         # Create a store object based on the passed store string. If `None`, treat as "local". If any string other than
-        # "local", "ipld", or "s3" is passed, raise a `ValueError`.
+        # "local" or "s3" is passed, raise a `ValueError`.
         if store is None or store == "local":
             self.store = Local(self)
-        elif store == "ipld":
-            self.store = IPLD(self)
         elif store == "s3":
             self.store = S3(self, s3_bucket_name)
         else:
-            raise ValueError("Store must be one of 'local', 'ipld', or 's3'")
+            raise ValueError("Store must be one of 'local' or 's3'")
 
         # Assign the allow overwrite flag. The value should always be either `True` or `False`.
-        # Always allow overwrites if IPLD for backwards compatibility
-        self.allow_overwrite = allow_overwrite or isinstance(self.store, IPLD)
+        self.allow_overwrite = allow_overwrite
 
-        # Print log statements to console by default
-        if console_log:
-            self.log_to_console()
-
-        # Set the logging level of logger.getLogger(), which is the logging module's root logger and will control the
-        # level of log statements that are enabled globally. If this is set to `logging.DEBUG`, all log statements will
-        # be enabled by default and will be forwarded to handlers set by either `logging.Logger.addHandler`,
-        # `DatasetManager.log_to_file`, or `DatasetManager.log_to_console`.
-        logging.getLogger().setLevel(global_log_level)
-
-        # Add a custom exception handler that will print the traceback to loggers
-        sys.excepthook = self.log_except_hook
+        # Initialize logging and write system info to the log
+        self.init_logging(console_log=console_log, global_log_level=global_log_level)
 
         # set chunk sizes (usually specified in the ETL manager class init)
         self.requested_dask_chunks = requested_dask_chunks
         self.requested_zarr_chunks = requested_zarr_chunks
-        self.requested_ipfs_chunker = requested_ipfs_chunker
 
         # set the dask dashboard address. Defaults to 127.0.0.1:8787 so it's only findable on the local machine
         self.dask_dashboard_address = dask_dashboard_address
@@ -251,8 +231,56 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
 
         self.encryption_key = register_encryption_key(encryption_key) if encryption_key else None
         self.use_compression = use_compression
+        self.output_zarr3 = output_zarr3
+
+        # Check output Zarr format versus existing format before moving on with this object
+        if self.store.has_existing and not self.rebuild_requested:
+            if self.store.has_v3_metadata:
+                if not self.output_zarr3:
+                    raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
+            elif self.output_zarr3:
+                raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
 
     # SETUP
+
+    def init_logging(self, console_log: bool = True, global_log_level: int = logging.DEBUG):
+        """
+        Configure the Python logging module according to the given parameters, and write some system information to the
+        log.
+
+        Parameters
+        ----------
+        console_log : bool, optional
+            Enable logging `logging.INFO` level and higher statements to console. For more customization, see
+            `DatasetManager.log_to_console`
+        global_log_level : str, optional
+            The root logger `logger.getLogger()` will be set to this level. Recommended to be `logging.DEBUG`, so all
+            logging statements will be generated and then logging handlers can decide what to do with them.
+        """
+        # Print log statements to console by default
+        if console_log:
+            self.log_to_console()
+
+        # Set the logging level of logger.getLogger(), which is the logging module's root logger and will control the
+        # level of log statements that are enabled globally. If this is set to `logging.DEBUG`, all log statements will
+        # be enabled by default and will be forwarded to handlers set by either `logging.Logger.addHandler`,
+        # `DatasetManager.log_to_file`, or `DatasetManager.log_to_console`.
+        logging.getLogger().setLevel(global_log_level)
+
+        # hide DEBUG spam from h5-to-zarr during kerchunking
+        logging.getLogger("h5-to-zarr").setLevel(logging.WARNING)
+
+        # Add a custom exception handler that will print the traceback to loggers
+        sys.excepthook = self.log_except_hook
+
+        # Log key system information
+        self.info(platform.platform())
+        self.info(f"Python {platform.python_version()}")
+        try:
+            self.info(f"{platform.freedesktop_os_release()['NAME']} {platform.freedesktop_os_release()['VERSION']}")
+        except OSError:
+            # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
+            pass
 
     @deprecation.deprecated(details="Use Dataset's name attribute directly.")
     def __str__(self) -> str:
@@ -417,7 +445,7 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
             yield from subclass.get_subclasses()
 
     @classmethod
-    def get_subclass(cls, name: str, time_resolution: str = None) -> type:
+    def get_subclass(cls, name: str, time_resolution: str | None = None) -> type | None:
         """
         Method to return the subclass instance corresponding to the name provided when invoking the ETL
 
@@ -449,3 +477,4 @@ class DatasetManager(Logging, Publish, ABC, IPFS):
                     return subclass
 
         warnings.warn(f"failed to set manager from name {name}, could not find corresponding class")
+        return None
