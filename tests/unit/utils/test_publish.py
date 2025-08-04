@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import _is_infish
+from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
@@ -1542,3 +1542,126 @@ def test_is_infish():
     # Test float32 large numbers
     assert _is_infish(np.float32(1e39))  # Beyond 1e38 threshold for float32
     assert not _is_infish(np.float32(1e37))  # Below 1e38 threshold for float32
+
+
+# calculate_time_dim_chunks tests
+
+
+def test_calculate_time_dim_chunks_basic():
+    """
+    Test basic functionality with simple inputs
+    """
+    # Case: old dataset has 3 items in final chunk, desired chunk size is 5, update has 7 items
+    # First chunk should be 5-3=2, then full chunk of 5, then remainder of 0
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=3, time_dim_chunk_size=5, append_time_length=7)
+    expected = (2, 5)
+    assert result == expected
+    assert sum(result) == 7
+
+
+def test_calculate_time_dim_chunks_perfect_alignment():
+    """
+    Test when update length exactly fills remaining space in old chunk
+    """
+    # Case: old dataset has 2 items in final chunk, desired chunk size is 5, update has 3 items
+    # First chunk should be 5-2=3, which exactly matches update length
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=2, time_dim_chunk_size=5, append_time_length=3)
+    expected = (3,)
+    assert result == expected
+    assert sum(result) == 3
+
+
+def test_calculate_time_dim_chunks_no_remainder():
+    """
+    Test when chunks divide evenly after the first chunk
+    """
+    # Case: old dataset has 1 item in final chunk, desired chunk size is 4, update has 11 items
+    # First chunk should be 4-1=3, then two full chunks of 4 each
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=1, time_dim_chunk_size=4, append_time_length=11)
+    expected = (3, 4, 4)
+    assert result == expected
+    assert sum(result) == 11
+
+
+def test_calculate_time_dim_chunks_with_remainder():
+    """
+    Test when there's a partial chunk at the end
+    """
+    # Case: old dataset has 2 items in final chunk, desired chunk size is 5, update has 10 items
+    # First chunk should be 5-2=3, then full chunk of 5, then remainder of 2
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=2, time_dim_chunk_size=5, append_time_length=10)
+    expected = (3, 5, 2)
+    assert result == expected
+    assert sum(result) == 10
+
+
+def test_calculate_time_dim_chunks_small_update():
+    """
+    Test when update is smaller than needed to complete old chunk
+    """
+    # Case: old dataset has 2 items in final chunk, desired chunk size is 5, update has only 2 items
+    # First chunk should be min(5-2, 2) = min(3, 2) = 2
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=2, time_dim_chunk_size=5, append_time_length=2)
+    expected = (2,)
+    assert result == expected
+    assert sum(result) == 2
+
+
+def test_calculate_time_dim_chunks_old_chunk_full():
+    """
+    Test when old dataset's final chunk is already at desired size
+    """
+    # Case: old dataset has 5 items in final chunk, desired chunk size is 5, update has 8 items
+    # First chunk should be min(5-5, 8) = min(0, 8) = 0, so no first chunk, then full chunks
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=5, time_dim_chunk_size=5, append_time_length=8)
+    expected = (5, 3)
+    assert result == expected
+    assert sum(result) == 8
+
+
+def test_calculate_time_dim_chunks_zero_old_chunk():
+    """
+    Test when old dataset final chunk length is 0 (no existing data)
+    """
+    # Case: old dataset has 0 items in final chunk, desired chunk size is 4, update has 9 items
+    # First chunk should be min(4-0, 9) = min(4, 9) = 4, then full chunk of 4, then remainder of 1
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=0, time_dim_chunk_size=4, append_time_length=9)
+    expected = (4, 4, 1)
+    assert result == expected
+    assert sum(result) == 9
+
+
+def test_calculate_time_dim_chunks_single_item_update():
+    """
+    Test with minimal update length of 1
+    """
+    # Case: old dataset has 3 items in final chunk, desired chunk size is 5, update has 1 item
+    # First chunk should be min(5-3, 1) = min(2, 1) = 1
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=3, time_dim_chunk_size=5, append_time_length=1)
+    expected = (1,)
+    assert result == expected
+    assert sum(result) == 1
+
+
+def test_calculate_time_dim_chunks_large_update():
+    """
+    Test with large update that spans many chunks
+    """
+    # Case: old dataset has 1 item in final chunk, desired chunk size is 3, update has 20 items
+    # First chunk should be 3-1=2, then 6 full chunks of 3, then remainder of 0
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=1, time_dim_chunk_size=3, append_time_length=22)
+    expected = (2, 3, 3, 3, 3, 3, 3, 2)
+    assert result == expected
+    assert sum(result) == 22
+
+
+def test_calculate_time_dim_chunks_edge_case_zero_first_chunk():
+    """
+    Test edge case where first chunk would be 0 (old chunk already full)
+    """
+    # Case: old dataset has 4 items in final chunk, desired chunk size is 4, update has 6 items
+    # First chunk should be min(4-4, 6) = min(0, 6) = 0, so empty tuple for first, then chunks
+    result = calculate_time_dim_chunks(old_dataset_final_chunk_length=4, time_dim_chunk_size=4, append_time_length=6)
+    expected = (4, 2)
+    assert result == expected
+    assert sum(result) == 6
