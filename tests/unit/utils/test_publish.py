@@ -705,18 +705,21 @@ class TestPublish:
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
+        dm.rechunk_append_dataset = mock.Mock()
         dm.calculate_update_time_ranges = mock.Mock()
         dm.to_zarr = mock.Mock()
 
         update_dataset = object()
         insert_times = object()
 
-        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        pre_rechunk_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        append_dataset = dm.rechunk_append_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
 
         dm.append_to_dataset(update_dataset, insert_times)
 
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
+        dm.rechunk_append_dataset.assert_called_once_with(pre_rechunk_dataset)
 
         dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, append_dim="time")
 
