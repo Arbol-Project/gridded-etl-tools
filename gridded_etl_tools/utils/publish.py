@@ -1233,10 +1233,10 @@ def complete_insert_slice(
 
     # to find the start index of the completed slice, move back from the start index
     # of the update until we get to the nearest chunk boundary
-    chunk_start = region[0] - (region[0] % chunk_size)
+    chunk_start = (region[0] // chunk_size) * chunk_size
 
     # to find the end index, move forward from the slice end index until we hit a boundary
-    chunk_end = region[1] + (chunk_size - (region[1] % chunk_size))
+    chunk_end = (((region[1] - 1) // chunk_size) + 1) * chunk_size
 
     # take only the relevant region of the original dataset
     original_dataset_slice = original_dataset.isel({time_dim: slice(chunk_start, chunk_end)})
