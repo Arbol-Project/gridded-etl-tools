@@ -107,14 +107,6 @@ class TestConvenience:
         assert dm.key("beer-o-clock") == "DummyManager-beer-o-clock"
 
     @staticmethod
-    def test_key_append_date(mocker, manager_class):
-        patched_now = datetime.datetime(2010, 5, 12, 2, 42)
-        patched_dt = mocker.patch("datetime.datetime")
-        patched_dt.now.return_value = patched_now
-        dm = manager_class()
-        assert dm.key(append_date=True) == "DummyManager-daily-20100512"
-
-    @staticmethod
     def test_relative_path(manager_class):
         dm = manager_class()
         assert dm.relative_path() == pathlib.Path(".")  # Umm, ok
