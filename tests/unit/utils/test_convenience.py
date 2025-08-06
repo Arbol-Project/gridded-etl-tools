@@ -102,6 +102,11 @@ class TestConvenience:
         assert dm.key() == "DummyManager-daily"
 
     @staticmethod
+    def test_key_alt_time_resolution(manager_class):
+        dm = manager_class()
+        assert dm.key("beer-o-clock") == "DummyManager-beer-o-clock"
+
+    @staticmethod
     def test_key_append_date(mocker, manager_class):
         patched_now = datetime.datetime(2010, 5, 12, 2, 42)
         patched_dt = mocker.patch("datetime.datetime")
