@@ -172,6 +172,13 @@ def remove_dask_worker_dir():
         print(f"Cleaned up {dask_worker_space_path}")
 
 
+def remove_metadata():
+    """Delete metadata made in tests"""
+    metadata_path = pathlib.Path(__file__).parent / "metadata"
+    if metadata_path.is_dir():
+        shutil.rmtree(metadata_path)
+
+
 def remove_performance_report():
     """
     Remove the performance report

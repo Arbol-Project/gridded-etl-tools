@@ -645,6 +645,8 @@ class TestPublish:
         dm.update_quality_check = mock.Mock()
         dm.insert_into_dataset = mock.Mock()
         dm.append_to_dataset = mock.Mock()
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
+        dm.complete_insert_slice = mock.Mock()
 
         dm.update_zarr(publish_dataset)
 
@@ -660,8 +662,9 @@ class TestPublish:
         dm.prep_update_dataset = mock.Mock()
         dm.calculate_update_time_ranges = mock.Mock()
         dm.to_zarr = mock.Mock()
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
-        original_dataset = object()
+        original_dataset = mock.Mock()
         update_dataset = object()
         insert_times = object()
 
@@ -676,7 +679,19 @@ class TestPublish:
             (("the shire", "mordor"), ("vegas", "atlantic city")),
         )
 
-        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
+        full_index_slice_1, full_chunks_region_1 = mock.Mock(), ("full dusk", "full dawn")
+        full_index_slice_2, full_chunks_region_2 = mock.Mock(), ("full vegas", "full atalntic city")
+        with mock.patch(
+            "gridded_etl_tools.utils.publish.complete_insert_slice",
+            side_effect=[(full_index_slice_1, full_chunks_region_1), (full_index_slice_2, full_chunks_region_2)],
+        ) as patched_complete_slice:
+            dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
+            patched_complete_slice.assert_has_calls(
+                [
+                    mock.call(slice1, original_dataset, ("the shire", "mordor"), 5, "time"),
+                    mock.call(slice2, original_dataset, ("vegas", "atlantic city"), 5, "time"),
+                ]
+            )
 
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
         dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
@@ -687,12 +702,14 @@ class TestPublish:
         dm.to_zarr.assert_has_calls(
             [
                 mock.call(
-                    slice1.drop_vars.return_value, store=dm.store.path, region={"time": slice("the shire", "mordor")}
+                    full_index_slice_1.drop_vars.return_value,
+                    store=dm.store.path,
+                    region={"time": slice(*full_chunks_region_1)},
                 ),
                 mock.call(
-                    slice2.drop_vars.return_value,
+                    full_index_slice_2.drop_vars.return_value,
                     store=dm.store.path,
-                    region={"time": slice("vegas", "atlantic city")},
+                    region={"time": slice(*full_chunks_region_2)},
                 ),
             ]
         )

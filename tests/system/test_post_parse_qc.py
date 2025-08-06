@@ -22,6 +22,7 @@ from ..common import (
     original_ds_random,
     original_ds_null,
     nc4_input_files,
+    remove_metadata
 )
 
 
@@ -66,6 +67,7 @@ def setup_and_teardown_per_test(
     remove_zarr_json()
     remove_dask_worker_dir()
     remove_performance_report()
+    remove_metadata()
     # now clean up the various files created for each test
     clean_up_input_paths(initial_input_path, appended_input_path, qc_input_path)
 

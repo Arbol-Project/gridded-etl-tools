@@ -369,7 +369,6 @@ class Publish(Transform):
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
 
-            original_dataset = self.store.dataset()
             full_index_slice, full_chunks_region = complete_insert_slice(
                 insert_slice, original_dataset, region, self.requested_dask_chunks[self.time_dim], self.time_dim
             )
@@ -403,7 +402,6 @@ class Publish(Transform):
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
-
         self.to_zarr(append_dataset, store=self.store.path, append_dim=self.time_dim)
 
         if not self.dry_run:
@@ -1160,7 +1158,7 @@ def _is_infish(n):
 
 
 def calculate_time_dim_chunks(
-    first_chunk_size: int, time_dim_chunk_size: int, update_time_length: int
+    old_dataset_final_chunk_length: int, time_dim_chunk_size: int, append_time_length: int
 ) -> tuple[int, ...]:
     """
     Create a bespoke chunk tuple to ensure the first chunk in the append can be added to the
@@ -1184,9 +1182,10 @@ def calculate_time_dim_chunks(
         Chunk tuple whose entries sum to `append_time_length`.
     """
     # Calculate first chunk size to align with existing dataset
+    first_chunk_size = min(time_dim_chunk_size - old_dataset_final_chunk_length, append_time_length)
 
     # Calculate remaining length and full chunks
-    remaining_length = update_time_length - first_chunk_size
+    remaining_length = append_time_length - first_chunk_size
     full_chunks_count = remaining_length // time_dim_chunk_size
     final_chunk_size = remaining_length % time_dim_chunk_size
 

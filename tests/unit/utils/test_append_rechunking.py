@@ -74,8 +74,7 @@ class TestAppendRechunking:
 
         # Calculate the correct rechunking using the same logic as the function
         append_time_length = 12
-        first_chunk_size = min(self.DESIRED_CHUNK_SIZE - original_final_chunk_length, append_time_length)
-        new_chunks = calculate_time_dim_chunks(first_chunk_size, self.DESIRED_CHUNK_SIZE, append_time_length)
+        new_chunks = calculate_time_dim_chunks(original_final_chunk_length, self.DESIRED_CHUNK_SIZE, append_time_length)
 
         # Apply the rechunking manually (simulating what rechunk_append_dataset does)
         rechunked_append = append_dataset.chunk({"time": new_chunks})
