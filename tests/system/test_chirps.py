@@ -18,7 +18,7 @@ from ..common import (
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
-    remove_metadata
+    remove_metadata,
 )
 
 
