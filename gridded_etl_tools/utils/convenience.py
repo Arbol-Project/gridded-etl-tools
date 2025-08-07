@@ -53,7 +53,7 @@ class Convenience(Attributes):
         return self.local_input_root / "merged_zarr_jsons" / f"{self.dataset_name}_zarr.json"
 
     @classmethod
-    def key(cls, append_date: bool = False) -> str:
+    def key(cls, alt_time_resolution: str = None) -> str:
         """
         Returns the key value that can identify this set in a JSON file. JSON key takes the form of either
         name-measurement_span or name-today. If `append_date` is True, add today's date to the end of the string
@@ -69,10 +69,7 @@ class Convenience(Attributes):
             The formatted JSON key
 
         """
-        key = f"{cls.dataset_name}-{cls.time_resolution}"
-        if append_date:
-            key = f"{key}-{datetime.datetime.now().strftime(cls.DATE_FORMAT_FOLDER)}"
-        return key
+        return f"{cls.dataset_name}-{alt_time_resolution or cls.time_resolution}"
 
     # PATHS
 
