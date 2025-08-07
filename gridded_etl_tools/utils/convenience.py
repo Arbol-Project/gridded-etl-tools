@@ -60,8 +60,9 @@ class Convenience(Attributes):
 
         Parameters
         ----------
-        append_date : bool, optional
-            Whether to add today's date to the end of the key string
+        alt_time_resolution : str, optional
+            An alternative time resolution to use in the key string. If not provided, the default time resolution
+            is used.
 
         Returns
         -------
