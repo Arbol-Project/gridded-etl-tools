@@ -29,7 +29,7 @@ class Publish(Transform):
 
     # PARSING
 
-    def parse(self, publish_dataset: xr.Dataset):
+    def parse(self, publish_dataset: xr.Dataset | None = None):
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
@@ -88,6 +88,12 @@ class Publish(Transform):
                         else:
                             self.info(f"Data at {self.store} will be replaced.")
                         self.info(f"Now writing to {self.store}")
+                        if not publish_dataset:
+                            self.info("DEV: Creating publish_dataset with dask scheduler")
+                            publish_dataset = self.transform_dataset_in_memory()
+                            import ipdb
+
+                            ipdb.set_trace()
                         self.write_initial_zarr(publish_dataset)
                     else:
                         raise RuntimeError(

@@ -211,6 +211,9 @@ class DatasetManager(Logging, Publish, ABC):
         # Usually set to 1 to avoid data transfer between workers
         self.dask_num_workers = 1
 
+        # Allow passing special environment parameters to the dask cluster
+        self.dask_cluster_env = {}
+
         # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB
         # RAM, adjust in the init of your manager if you desire a diffeerent ratio. If there are not enough cores
         # available to use the target number of threads, use the number of available cores.
