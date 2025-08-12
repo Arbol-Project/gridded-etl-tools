@@ -369,9 +369,9 @@ class Publish(Transform):
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
 
-            # Align incoming time chunks with chunks in the existing Zarr. Misaligned chunks will result in an exception,
-            # but this is configurable for backward compatibility with older ETLs which are aligned by default from having
-            # time chunk length of 1.
+            # Align incoming time chunks with chunks in the existing Zarr. Misaligned chunks will result in an
+            # exception, but this is configurable for backward compatibility with older ETLs which are aligned by
+            # default from having time chunk length of 1.
             if self.align_update_chunks:
                 insert_slice, region = complete_insert_slice(
                     insert_slice, original_dataset, region, self.requested_dask_chunks[self.time_dim], self.time_dim
