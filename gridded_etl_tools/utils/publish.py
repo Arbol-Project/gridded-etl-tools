@@ -464,6 +464,8 @@ class Publish(Transform):
         xr.Dataset
             The append dataset with correctly aligned chunks
         """
+        self.info(f"Aligning update data with existing data along the {self.time_dim} dimension")
+
         # Most chunks have sizes independent of the size of the update and can be copied right through
         rechunk_dims = self.requested_dask_chunks.copy()
 
