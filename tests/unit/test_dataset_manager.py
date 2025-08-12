@@ -56,6 +56,7 @@ class TestDatasetManager:
             encryption_key=secret_key,
             use_compression=False,
             output_zarr3=True,
+            align_update_chunks=True,
         )
 
         assert dm.requested_dask_chunks == "requested_dask_chunks"
@@ -71,6 +72,7 @@ class TestDatasetManager:
         assert dm.encryption_key == encryption._hash(bytes.fromhex(secret_key))
         assert dm.use_compression is False
         assert dm.output_zarr3 is True
+        assert dm.align_update_chunks is True
 
         assert isinstance(dm.store, store.Local)
 

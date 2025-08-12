@@ -656,14 +656,19 @@ class TestPublish:
 
     @staticmethod
     def test_insert_into_dataset_dry_run(manager_class):
+        # Default DM without chunk alignment
         dm = manager_class()
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
         dm.calculate_update_time_ranges = mock.Mock()
+        dm.calculate_update_time_ranges.return_value = (
+            (("breakfast", "second breakfast"), ("dusk", "dawn")),
+            (("the shire", "mordor"), ("vegas", "atlantic city")),
+        )
         dm.to_zarr = mock.Mock()
-        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
 
+        # Mock original and update datasets
         original_dataset = mock.Mock()
         update_dataset = object()
         insert_times = object()
@@ -674,10 +679,58 @@ class TestPublish:
         insert_dataset.attrs = {}
         insert_dataset.sel.side_effect = [slice1, slice2]
 
+        slice1 = mock.Mock()
+        slice2 = mock.Mock()
+        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        insert_dataset.attrs = {}
+        insert_dataset.sel.side_effect = [slice1, slice2]
+
+        dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
+
+        dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
+        dm.calculate_update_time_ranges.assert_called_once_with(original_dataset, insert_dataset)
+
+        insert_dataset.sel.assert_has_calls(
+            [mock.call(time=slice("breakfast", "second breakfast")), mock.call(time=slice("dusk", "dawn"))]
+        )
+        dm.to_zarr.assert_has_calls(
+            [
+                mock.call(
+                    slice1.drop_vars.return_value, store=dm.store.path, region={"time": slice("the shire", "mordor")}
+                ),
+                mock.call(
+                    slice2.drop_vars.return_value,
+                    store=dm.store.path,
+                    region={"time": slice("vegas", "atlantic city")},
+                ),
+            ]
+        )
+        assert insert_dataset.attrs == {"update_is_append_only": False}
+
+        # DM with chunk alignment
+        dm = manager_class()
+        dm.dry_run = True
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.prep_update_dataset = mock.Mock()
+        dm.calculate_update_time_ranges = mock.Mock()
         dm.calculate_update_time_ranges.return_value = (
             (("breakfast", "second breakfast"), ("dusk", "dawn")),
             (("the shire", "mordor"), ("vegas", "atlantic city")),
         )
+        dm.to_zarr = mock.Mock()
+        dm.requested_dask_chunks = {"time": 5, "latitude": 4, "longitude": 4}
+        dm.align_update_chunks = True
+
+        # New mocks for original and update datasets
+        original_dataset = mock.Mock()
+        update_dataset = object()
+        insert_times = object()
+
+        slice1 = mock.Mock()
+        slice2 = mock.Mock()
+        insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        insert_dataset.attrs = {}
+        insert_dataset.sel.side_effect = [slice1, slice2]
 
         full_index_slice_1, full_chunks_region_1 = mock.Mock(), ("full dusk", "full dawn")
         full_index_slice_2, full_chunks_region_2 = mock.Mock(), ("full vegas", "full atalntic city")
@@ -722,25 +775,30 @@ class TestPublish:
         dm.dry_run = True
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.prep_update_dataset = mock.Mock()
-        dm.rechunk_append_dataset = mock.Mock()
         dm.calculate_update_time_ranges = mock.Mock()
         dm.to_zarr = mock.Mock()
 
         update_dataset = object()
         insert_times = object()
 
-        pre_rechunk_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
-        append_dataset = dm.rechunk_append_dataset.return_value = mock.MagicMock()
+        append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
         append_dataset.attrs = {}
 
         dm.append_to_dataset(update_dataset, insert_times)
 
         dm.prep_update_dataset.assert_called_once_with(update_dataset, insert_times)
-        dm.rechunk_append_dataset.assert_called_once_with(pre_rechunk_dataset)
 
         dm.to_zarr.assert_called_once_with(append_dataset, store=dm.store.path, append_dim="time")
 
         assert append_dataset.attrs == {"update_is_append_only": True}
+
+        # Test behavior with chunk alignment enabled
+        dm.align_update_chunks = True
+        dm.rechunk_append_dataset = mock.Mock()
+        pre_rechunk_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+        append_dataset = dm.rechunk_append_dataset.return_value = mock.MagicMock()
+        dm.append_to_dataset(update_dataset, insert_times)
+        dm.rechunk_append_dataset.assert_called_once_with(pre_rechunk_dataset)
 
     @staticmethod
     def test_prep_update_dataset(manager_class, fake_complex_update_dataset):

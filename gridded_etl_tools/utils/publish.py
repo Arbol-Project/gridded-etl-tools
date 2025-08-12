@@ -369,14 +369,19 @@ class Publish(Transform):
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
 
-            full_index_slice, full_chunks_region = complete_insert_slice(
-                insert_slice, original_dataset, region, self.requested_dask_chunks[self.time_dim], self.time_dim
-            )
+            # Align incoming time chunks with chunks in the existing Zarr. Misaligned chunks will result in an exception,
+            # but this is configurable for backward compatibility with older ETLs which are aligned by default from having
+            # time chunk length of 1.
+            if self.align_update_chunks:
+                insert_slice, region = complete_insert_slice(
+                    insert_slice, original_dataset, region, self.requested_dask_chunks[self.time_dim], self.time_dim
+                )
 
+            # Write to a region of the existing Zarr
             self.to_zarr(
-                full_index_slice.drop_vars(self._standard_dims_except(self.time_dim)),
+                insert_slice.drop_vars(self._standard_dims_except(self.time_dim)),
                 store=self.store.path,
-                region={self.time_dim: slice(*full_chunks_region)},
+                region={self.time_dim: slice(*region)},
             )
 
         if not self.dry_run:
@@ -397,7 +402,12 @@ class Publish(Transform):
             Datetimes corresponding to all new records to append to the original dataset
         """
         append_dataset = self.prep_update_dataset(update_dataset, append_times)
-        append_dataset = self.rechunk_append_dataset(append_dataset)
+
+        # Align incoming time chunks with chunks in the existing Zarr. Misaligned chunks will result in an exception,
+        # but this is configurable for backward compatibility with older ETLs which are aligned by default from having
+        # time chunk length of 1.
+        if self.align_update_chunks:
+            append_dataset = self.rechunk_append_dataset(append_dataset)
 
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
@@ -442,7 +452,7 @@ class Publish(Transform):
     def rechunk_append_dataset(self, append_dataset: xr.Dataset) -> xr.Dataset:
         """
         Prepare the chunks for the append dataset such that they align neatly with the initial dataset.
-        The science behind this is described in detail under docs/manual_rechunking.md
+        The science behind this is described in detail under docs/Aligning_update_chunks.md
 
         Parameters
         ----------

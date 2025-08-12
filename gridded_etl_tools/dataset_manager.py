@@ -97,6 +97,7 @@ class DatasetManager(Logging, Publish, ABC):
         use_compression: bool = True,
         dry_run: bool = False,
         output_zarr3: bool = False,
+        align_update_chunks: bool = False,
         *args,
         **kwargs,
     ):
@@ -162,6 +163,11 @@ class DatasetManager(Logging, Publish, ABC):
         output_zarr3: bool
             Although the required Zarr library version is 3.0+, Zarrs are still written in the 2.0 format by default,
             for backward compatibility. However, if this parameter is set, the Zarr will be written in 3.0 format.
+        align_update_chunks: bool
+            When updating an existing Zarr, align incoming time chunks with existing time chunks. If these chunks don't
+            align, the ETL may fail because there will be a danger of corrupting data. However, this is disabled by
+            default for backward compatibility with ETLs that don't need this behavior. See Aligning_update_chunks.md
+            for details.
         """
         super().__init__()
         # Set member variable defaults
@@ -240,6 +246,9 @@ class DatasetManager(Logging, Publish, ABC):
                     raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
             elif self.output_zarr3:
                 raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
+
+        # Control behavior when appending or inserting data to an existing Zarr
+        self.align_update_chunks = align_update_chunks
 
     # SETUP
 
