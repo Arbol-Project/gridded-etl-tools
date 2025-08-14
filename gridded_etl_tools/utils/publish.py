@@ -408,7 +408,7 @@ class Publish(Transform):
         # aligned by default from having time chunk length of 1.
         if self.align_update_chunks:
             append_dataset = self.rechunk_append_dataset(append_dataset)
-            self.info(f"Rechunked update dataset\n{append_dataset}")
+            self.info(f"Chunks after rechunking the update data are {append_dataset.chunks}")
 
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
