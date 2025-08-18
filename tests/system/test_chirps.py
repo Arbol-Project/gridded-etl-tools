@@ -18,6 +18,7 @@ from ..common import (
     remove_dask_worker_dir,
     remove_performance_report,
     remove_zarr_json,
+    remove_metadata,
 )
 
 
@@ -98,6 +99,7 @@ def setup_and_teardown_per_test(
     remove_zarr_json()
     remove_dask_worker_dir()
     remove_performance_report()
+    remove_metadata()
     # now clean up the various files created for each test
     clean_up_input_paths(
         extracted_input_path,

@@ -368,6 +368,16 @@ class Publish(Transform):
             insert_slice = insert_dataset.sel(**{self.time_dim: slice(*dates)})
             insert_dataset.attrs["update_is_append_only"] = False
             self.info("Indicating the dataset is not appending data only.")
+
+            # Align incoming time chunks with chunks in the existing Zarr. Chunks must be aligned or an exception will
+            # be raised by xarray, but this is left configurable for backward compatibility with older ETLs which are
+            # aligned by default from having time chunk length of 1.
+            if self.align_update_chunks:
+                insert_slice, region = complete_insert_slice(
+                    insert_slice, original_dataset, region, self.requested_dask_chunks[self.time_dim], self.time_dim
+                )
+
+            # Write to a region of the existing Zarr
             self.to_zarr(
                 insert_slice.drop_vars(self._standard_dims_except(self.time_dim)),
                 store=self.store.path,
@@ -393,10 +403,16 @@ class Publish(Transform):
         """
         append_dataset = self.prep_update_dataset(update_dataset, append_times)
 
+        # Align incoming time chunks with chunks in the existing Zarr. Chunks must be aligned or an exception will
+        # be raised by xarray, but this is left configurable for backward compatibility with older ETLs which are
+        # aligned by default from having time chunk length of 1.
+        if self.align_update_chunks:
+            append_dataset = self.rechunk_append_dataset(append_dataset)
+            self.info(f"Chunks after rechunking the update data are {append_dataset.chunks}")
+
         # Write the Zarr
         append_dataset.attrs["update_is_append_only"] = True
         self.info("Indicating the dataset is appending data only.")
-
         self.to_zarr(append_dataset, store=self.store.path, append_dim=self.time_dim)
 
         if not self.dry_run:
@@ -434,9 +450,44 @@ class Publish(Transform):
         self.info(f"Update dataset\n{update_dataset}")
         return update_dataset
 
+    def rechunk_append_dataset(self, append_dataset: xr.Dataset) -> xr.Dataset:
+        """
+        Prepare the chunks for the append dataset such that they align neatly with the initial dataset.
+        The science behind this is described in detail under docs/Aligning_update_chunks.md
+
+        Parameters
+        ----------
+        append_dataset : xr.Dataset
+            A dataset containing new records to append to the original dataset
+
+        Returns
+        -------
+        xr.Dataset
+            The append dataset with correctly aligned chunks
+        """
+        self.info(f"Aligning update data with existing data along the {self.time_dim} dimension")
+
+        # Most chunks have sizes independent of the size of the update and can be copied right through
+        rechunk_dims = self.requested_dask_chunks.copy()
+
+        # Calculate time dimension chunks to align with existing dataset
+        time_dim_chunk_size = rechunk_dims[self.time_dim]
+        existing_final_chunk_length = (
+            self.store.dataset().chunks[self.time_dim][-1]
+            if self.store.has_existing and not self.rebuild_requested
+            else 0
+        )
+        append_time_length = len(append_dataset[self.time_dim].values)
+        # Calculate optimal chunk distribution for time dimension
+        rechunk_dims[self.time_dim] = calculate_time_dim_chunks(
+            existing_final_chunk_length, time_dim_chunk_size, append_time_length
+        )
+        # Apply the chunks to the append dataset.
+        return append_dataset.chunk(**rechunk_dims)
+
     def calculate_update_time_ranges(
         self, original_dataset: xr.Dataset, update_dataset: xr.Dataset
-    ) -> tuple[list[datetime.datetime], list[str]]:
+    ) -> tuple[list[datetime.datetime], list[tuple[int, int]]]:
         """
         Calculate the start/end dates and index values for contiguous time ranges of updates.
         Used by `update_zarr` to specify the location(s) of updates in a target Zarr dataset.
@@ -460,7 +511,7 @@ class Publish(Transform):
         -------
         datetime_ranges : list[datetime.datetime, datetime.datetime]
             A List of (Datetime, Datetime) tuples defining the time ranges of records to insert
-        regions_indices: list[int, int]
+        regions_indices: list[tuple[int, int]]
              A List of (int, int) tuples defining the indices of records to insert
         """
         # NOTE this won't work for months (returns 1 minute) because of how pandas handles timedeltas
@@ -1117,3 +1168,95 @@ def _is_infish(n):
     else:
         limit = 1e38
     return np.isinf(n) or abs(n) > limit
+
+
+def calculate_time_dim_chunks(
+    old_dataset_final_chunk_length: int, time_dim_chunk_size: int, append_time_length: int
+) -> tuple[int, ...]:
+    """
+    Create a bespoke chunk tuple to ensure the first chunk in the append can be added to the
+    last chunk of the initial dataset smoothly, i.e. it does not bridge two chunks.
+
+    For example, for an 8 record update to a dataset with desired chunks of 5 time
+    and a final time dim chunk of length 3, the desired chunks would be (2,5,1).
+
+    Parameters
+    ----------
+    old_dataset_final_chunk_length : int
+        The length of the final chunk in the original dataset along the time dimension.
+    time_dim_chunk_size : int
+        The desired size of each time chunk.
+    append_time_length : int
+        The length of the time dimension in the append.
+
+    Returns
+    -------
+    tuple of int
+        Chunk tuple whose entries sum to `append_time_length`.
+    """
+    # Calculate first chunk size to align with existing dataset
+    first_chunk_size = min(time_dim_chunk_size - old_dataset_final_chunk_length, append_time_length)
+
+    # Calculate remaining length and full chunks
+    remaining_length = append_time_length - first_chunk_size
+    full_chunks_count = remaining_length // time_dim_chunk_size
+    final_chunk_size = remaining_length % time_dim_chunk_size
+
+    desired_chunks = []
+    # first chunk must align with end of initial dataset
+    if first_chunk_size > 0:
+        desired_chunks.append(first_chunk_size)
+    # now write out full chunks until we run out of room for full chunks
+    desired_chunks.extend([time_dim_chunk_size] * full_chunks_count)
+    # tack on the remaining partial chunk (if it exists)
+    if final_chunk_size > 0:
+        desired_chunks.append(final_chunk_size)
+
+    return tuple(desired_chunks)
+
+
+def complete_insert_slice(
+    insert_slice: xr.Dataset, original_dataset: xr.Dataset, region: tuple[int, int], chunk_size: int, time_dim: str
+) -> tuple[xr.Dataset, tuple[int, int]]:
+    """
+    With new zarr versions, inserts will fail when the insert dataset crosses chunk boundaries or
+    occupies only a part of a chunk in the original dataset. To fix this, we fill in the insert
+    with datapoints from the original dataset, so that it exactly fills an integer number of chunks,
+    and then rechunk it so it aligns with the original dataset
+
+    Parameters
+    ----------
+    insert_slice : xr.Dataset
+        insert slice to complete
+    original_dataset : xr.Dataset
+        full original dataset to use to complete insert_slice
+    region : tuple[int, int]
+        start and end indices of insert_slice within original_dataset
+    chunk_size : int
+        desired chunk size for time dim
+    time_dim : str
+        name of time dimension
+
+    Returns
+    -------
+    tuple[xr.Dataset, tuple[int, int]]:
+        Completed, rechunked slice along with the indices of that slice within larger dataset
+    """
+
+    # to find the start index of the completed slice, move back from the start index
+    # of the update until we get to the nearest chunk boundary
+    chunk_start = (region[0] // chunk_size) * chunk_size
+
+    # to find the end index, move forward from the slice end index until we hit a boundary
+    chunk_end = (((region[1] - 1) // chunk_size) + 1) * chunk_size
+
+    # take only the relevant region of the original dataset
+    original_dataset_slice = original_dataset.isel({time_dim: slice(chunk_start, chunk_end)})
+
+    # Fill in the missing regions of input slice with the relevant region from the original
+    full_index_slice = insert_slice.combine_first(original_dataset_slice)
+
+    # now that we know that that the start and end are aligned with chunk boundaries,
+    # we can safely rechunk to the original time chunks schema
+    full_index_slice_rechunked = full_index_slice.chunk({time_dim: chunk_size})
+    return full_index_slice_rechunked, (chunk_start, chunk_end)
