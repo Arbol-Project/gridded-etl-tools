@@ -929,6 +929,10 @@ class Publish(Transform):
             # Both are nan, great
             return
 
+        elif orig_val == self.missing_value and np.isnan(prod_val):
+            # Recognized NaN values were written to prod as NaNs, muy bien
+            return
+
         # There may be one nan, or they may both be actual numbers
         elif abs(orig_val - prod_val) <= threshold:
             # They are both actual numbers and they are close enough to the same value to match
