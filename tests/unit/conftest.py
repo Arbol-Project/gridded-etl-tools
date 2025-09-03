@@ -221,6 +221,7 @@ class DummyManager(DummyManagerBase):
     time_resolution = TimeSpan.SPAN_DAILY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
+    missing_value = 42
 
 
 class DummyYXManager(DummyManagerBase):
