@@ -167,8 +167,13 @@ class StoreInterface(ABC):
         xr.Dataset | None
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
+        if self.__class__.__name__ == "S3":
+            storage_options = {"profile": self.profile}
+        else:
+            storage_options = {}
+
         if self.has_existing:
-            return xr.open_zarr(store=self.path, decode_timedelta=True, **kwargs)
+            return xr.open_zarr(store=self.path, storage_options=storage_options, decode_timedelta=True, **kwargs)
         else:
             return None
 
@@ -257,7 +262,7 @@ class S3(StoreInterface):
     After initialization, use the member functions to access the Zarr.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager, bucket: str):
+    def __init__(self, dm: dataset_manager.DatasetManager, bucket: str, profile: str | None = None):
         """
         Get an interface to a dataset's Zarr on S3 in the specified bucket.
 
@@ -272,6 +277,7 @@ class S3(StoreInterface):
         if not bucket:
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
+        self.profile = profile
 
     def fs(self, refresh: bool = False, profile: str | None = None, **kwargs) -> s3fs.S3FileSystem:
         """
@@ -295,6 +301,9 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
+            # Use instance profile if none explicitly passed
+            if profile is None:
+                profile = self.profile
             self._fs = s3fs.S3FileSystem(profile=profile, **kwargs)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
