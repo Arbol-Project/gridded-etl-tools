@@ -51,6 +51,9 @@ class TestDatasetManager:
             allow_overwrite=True,
             dask_dashboard_address="123 main st",
             dask_cpu_mem_target_ratio=1 / 16,
+            dask_num_workers=2,
+            dask_use_process_scheduler=True,
+            dask_scheduler_protocol="tcp://",
             use_local_zarr_jsons=True,
             skip_prepare_input_files=True,
             encryption_key=secret_key,
@@ -67,6 +70,9 @@ class TestDatasetManager:
         assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
         assert dm.dask_num_threads == 4
+        assert dm.dask_num_workers == 2
+        assert dm.dask_scheduler_protocol == "tcp://"
+        assert dm.dask_use_process_scheduler is True
         assert dm.use_local_zarr_jsons is True
         assert dm.skip_prepare_input_files is True
         assert dm.encryption_key == encryption._hash(bytes.fromhex(secret_key))

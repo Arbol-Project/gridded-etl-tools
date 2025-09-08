@@ -87,7 +87,10 @@ class DatasetManager(Logging, Publish, ABC):
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
+        dask_num_workers: int = 1,
         dask_cpu_mem_target_ratio: float = 4 / 32,
+        dask_use_process_scheduler: bool = False,
+        dask_scheduler_protocol: str = "inproc://",
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         skip_pre_parse_nan_check: bool = False,
@@ -211,11 +214,11 @@ class DatasetManager(Logging, Publish, ABC):
         self.dask_worker_mem_spill = dask_worker_memory_spill
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
-        self.dask_use_process_scheduler = False
-        self.dask_scheduler_protocol = "inproc://"
+        self.dask_use_process_scheduler = dask_use_process_scheduler
+        self.dask_scheduler_protocol = dask_scheduler_protocol
 
         # Usually set to 1 to avoid data transfer between workers
-        self.dask_num_workers = 1
+        self.dask_num_workers = dask_num_workers
 
         # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB
         # RAM, adjust in the init of your manager if you desire a diffeerent ratio. If there are not enough cores
