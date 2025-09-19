@@ -24,6 +24,7 @@ from requests.adapters import HTTPAdapter, Retry
 from urllib.parse import urlparse, urljoin
 import os
 import collections
+import s3fs
 
 from bs4 import BeautifulSoup
 
@@ -320,7 +321,138 @@ class HTTPExtractor(Extractor):
         return True
 
 
-class S3Extractor(Extractor):
+class S3ExtractorBase(Extractor):
+    """
+    Base class for S3 extraction operations.
+    """
+
+    def __init__(
+        self,
+        dm: dataset_manager.DatasetManager,
+        concurrency_limit: int = 8,
+        ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
+        unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
+    ):
+        """
+        Create a new S3 Extractor object by associating a Dataset Manager with it.
+
+        Parameters
+        ----------
+        dm
+            Source data for this dataset manager will be extracted
+        concurrency_limit
+            Number of simultaneous threads to run while requesting data
+        ignorable_extraction_errors
+            A list or tuple of exception types that can be safely ignored during S3 extraction.
+            These will trigger skipping the current extract operation (for a given file) and requesting the next file
+        unsupported_extraction_errors
+            A list or tuple of exception types that should trigger
+            the immediate failure of the entire extraction operation.
+        """
+        super().__init__(dm, concurrency_limit=concurrency_limit)
+
+        # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
+        self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
+        self.unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
+
+    @abstractmethod
+    def extract_from_s3(
+        self,
+        remote_file_path: str,
+        scan_indices: int | tuple[int, int] = 0,
+        local_file_path: pathlib.Path | None = None,
+    ) -> None:
+        """
+        Abstract method to extract/download from S3. Must be implemented by subclasses.
+
+        Parameters
+        ----------
+        remote_file_path
+            An S3 file URL path to the file to be processed
+        scan_indices
+            Indices of the raw climate data to be read (used by kerchunk, ignored by download)
+        local_file_path
+            An optional local file path
+        """
+
+    def request(
+        self,
+        remote_file_path: str,
+        scan_indices: int | tuple[int, int] = 0,
+        tries: int = 5,
+        local_file_path: pathlib.Path | None = None,
+        informative_id: str | None = None,
+    ) -> bool:
+        """
+        Extract/download a remote S3 file with retry logic and error handling.
+
+        Parameters
+        ----------
+        remote_file_path
+            An S3 file URL path to the file to be processed
+        scan_indices
+            Indices of the raw climate data to be read (used by kerchunk, ignored by download)
+        tries
+            Allow a number of failed requests before failing permanently
+        local_file_path
+            An optional local file path
+        informative_id
+            A string to identify the request in logs. Defaults to just the given remote file path
+
+        Returns
+        -------
+        bool
+            Returns a boolean indicating the success of the operation, if successful. Errors out if not.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the request fails more than the given amount of tries
+        """
+        if not remote_file_path.lower().startswith("s3://"):
+            raise ValueError(f"Given path {remote_file_path} is not an S3 path")
+
+        # Default to using the raw file name to identify the request in the log message
+        if informative_id is None:
+            informative_id = remote_file_path
+
+        log.info(f"Beginning to download {informative_id}")
+
+        # Count failed requests and fail with an exception if allowed amount of tries is exceeded
+        counter = 1
+        while counter <= tries:
+            try:
+                # Call the abstract method implemented by subclasses
+                self.extract_from_s3(
+                    remote_file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path
+                )
+                log.info(f"Finished downloading {informative_id}")
+                return True
+            except self.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
+                # Returning false allows the ETL to continue, but registers that no file was downloaded
+                return False
+            except self.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
+                log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
+                raise
+            except Exception as e:
+                # Increase delay time after each failure
+                retry_delay = counter * 30
+                log.info(
+                    f"Encountered exception {e} for {informative_id}, retrying after {retry_delay} seconds"
+                    f" , attempt {counter}"
+                )
+                counter += 1
+                time.sleep(retry_delay)
+        else:
+            log.info(f"Couldn't find or download a remote file for {informative_id}")
+            raise FileNotFoundError(
+                f"Too many ({counter}) failed download attempts from server "
+                f"requesting {informative_id} at {remote_file_path}"
+            )
+
+
+class S3ExtractorKerchunk(S3ExtractorBase):
     """
     Create an object that can be used to request remote kerchunking of S3 files in parallel. The kerchunked files will
     be added to the given `DatasetManager`'s list of Zarr JSONs at `DatasetManager.zarr_jsons`.
@@ -349,91 +481,90 @@ class S3Extractor(Extractor):
             A list or tuple of exception types that should trigger
             the immediate failure of the entire extraction operation.
         """
-        super().__init__(dm, concurrency_limit=concurrency_limit)
+        super().__init__(dm, concurrency_limit, ignorable_extraction_errors, unsupported_extraction_errors)
         self.dm.zarr_jsons = []
 
-        # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
-        self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
-        self.unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
-
-    def request(
+    def extract_from_s3(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
-        tries: int = 5,
         local_file_path: pathlib.Path | None = None,
-        informative_id: str | None = None,
-    ) -> bool:
+    ) -> None:
         """
-        Extract a remote S3 climate file into a JSON and add it to the given `DatasetManager` object's internal
-        list of Zarr JSONs. The list can then be processed by `DatasetManager.create_zarr_json` to create a Zarr that
-        can be opened remotely in `xarray`.
+        Extract a remote S3 climate file into a JSON using kerchunk.
 
         Parameters
         ----------
         remote_file_path
-            An S3 file URL path to the climate file to be transformed and added to `DatasetManager.zarr_jsons`
+            An S3 file URL path to the climate file to be transformed
         scan_indices
-            Indices of the raw climate data to be read. This is a quirk particular to certain GRIB files that package
-            many datasets w/in one GRIB file. The index tells Kerchunk which to pull out and process.
-        tries
-            Allow a number of failed requests before failing permanently
+            Indices of the raw climate data to be read
         local_file_path
             An optional local file path to save the kerchunked Zarr JSON to
-        informative_id
-            A string to identify the request in logs. Defaults to just the given remote file path
+        """
+        self.dm.kerchunkify(file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path)
 
-        Returns
-        -------
-        bool
-            Returns a boolean indicating the success of the operation, if successful. Errors out if not.
+
+class S3ExtractorDownload(S3ExtractorBase):
+    """
+    Create an object that can be used to download S3 files directly using s3fs.
+    """
+
+    def __init__(self, dm, concurrency_limit=8, ignorable_extraction_errors=(), unsupported_extraction_errors=()):
+        # ValueError can be raised by extract_from_s3 and should not retry
+        unsupported_extraction_errors += (ValueError,)
+        super().__init__(dm, concurrency_limit, ignorable_extraction_errors, unsupported_extraction_errors)
+        self.s3_fs = s3fs.S3FileSystem()
+
+    def extract_from_s3(
+        self,
+        remote_file_path: str,
+        scan_indices: int | tuple[int, int] = 0,
+        local_file_path: pathlib.Path | None = None,
+    ) -> None:
+        """
+        Download S3 file directly to local path using s3fs.
+
+        Parameters
+        ----------
+        remote_file_path
+            An S3 file URL path to download
+        scan_indices
+            Ignored for direct downloads
+        local_file_path
+            Local file path where file should be saved
 
         Raises
         ------
-        FileNotFoundError
-            If the request fails more than the given amount of tries
+        ImportError
+            If s3fs is not available
+        ValueError
+            If local_file_path is None (required for downloads)
         """
-        if not remote_file_path.lower().startswith("s3://"):
-            raise ValueError(f"Given path {remote_file_path} is not an S3 path")
+        if local_file_path is None:
+            raise ValueError(f"local_file_path is required for {self.__class__.__name__}")
 
-        # Default to using the raw file name to identify the request in the log message
-        if informative_id is None:
-            informative_id = remote_file_path
+        if scan_indices != 0:
+            raise ValueError(f"scan_indices not supported for {self.__class__.__name__}")
 
-        log.info(f"Beginning to download {informative_id}")
+        # Ensure local directory exists
+        local_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Count failed requests and fail with an exception if allowed amount of tries is exceeded
-        counter = 1
-        while counter <= tries:
-            try:
-                # Remote kerchunk the requested file
-                self.dm.kerchunkify(
-                    file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path
-                )
-                log.info(f"Finished downloading {informative_id}")
-                return True
-            except self.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
-                log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
-                # Returning false allows the ETL to continue, but registers that no file was downloaded
-                return False
-            except self.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
-                log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
-                raise
-            except Exception as e:
-                # Increase delay time after each failure
-                retry_delay = counter * 30
-                log.info(
-                    f"Encountered exception {e} for {informative_id}, retrying after {retry_delay} seconds"
-                    f" , attempt {counter}"
-                )
-                counter += 1
-                time.sleep(retry_delay)
-        else:
-            log.info(f"Couldn't find or download a remote file for {informative_id}")
-            raise FileNotFoundError(
-                f"Too many ({counter}) failed download attempts from server "
-                f"requesting {informative_id} at {remote_file_path}"
-            )
+        # Download the file
+        self.s3_fs.download(remote_file_path, str(local_file_path))
+
+
+class S3Extractor(S3ExtractorKerchunk):
+    """
+    Deprecated: Use S3ExtractorKerchunk instead.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        log.warning(
+            "S3Extractor is deprecated. Use S3ExtractorKerchunk for kerchunking operations "
+            "or S3ExtractorDownload for direct file downloads."
+        )
 
 
 class FTPExtractor(Extractor):
