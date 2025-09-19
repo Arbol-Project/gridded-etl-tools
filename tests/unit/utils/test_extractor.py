@@ -6,7 +6,6 @@ import responses
 import requests
 import re
 import os
-import warnings
 
 from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import (

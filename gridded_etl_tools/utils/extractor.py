@@ -536,10 +536,10 @@ class S3ExtractorDownload(S3ExtractorBase):
 
         Raises
         ------
-        ImportError
-            If s3fs is not available
         ValueError
             If local_file_path is None (required for downloads)
+        ValueError
+            If scan_indices is not 0 (unsupported for downloads)
         """
         if local_file_path is None:
             raise ValueError(f"local_file_path is required for {self.__class__.__name__}")
