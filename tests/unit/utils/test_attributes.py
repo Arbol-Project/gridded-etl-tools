@@ -150,7 +150,7 @@ class TestAttributes:
     @staticmethod
     def test_missing_value_indicator(manager_class):
         with pytest.deprecated_call():
-            assert manager_class.missing_value_indicator() == ""
+            assert manager_class.missing_value_indicator() == 42
 
     @staticmethod
     def test_irregular_update_cadence(manager_class):

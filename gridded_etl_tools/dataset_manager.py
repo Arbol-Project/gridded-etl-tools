@@ -87,7 +87,10 @@ class DatasetManager(Logging, Publish, ABC):
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
+        dask_num_workers: int = None,
+        dask_num_threads: int = None,
         dask_cpu_mem_target_ratio: float = 4 / 32,
+        dask_scheduler_protocol: str = "inproc://",
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         skip_pre_parse_nan_check: bool = False,
@@ -205,30 +208,43 @@ class DatasetManager(Logging, Publish, ABC):
         # set the dask dashboard address. Defaults to 127.0.0.1:8787 so it's only findable on the local machine
         self.dask_dashboard_address = dask_dashboard_address
 
-        # Dask distributed configuration defaults, mostly related to memory usage
+        # Setup dask workers and threads
+        total_memory_gb = psutil.virtual_memory().total / 1_000_000_000  # needed for info statement below
+        # Default path is to set dask_num_workers and dask_num_threads based on the number of cores and memory available
+        if dask_num_workers is None and dask_num_threads is None:
+            # Usually set to 1 to avoid data transfer between workers
+            self.dask_num_workers = 1
+
+            # All threads will be on a single CPU because self.dask_num_workers is 1.
+            # By default, we use 4 threads per 32 GB RAM, adjust in the init of your manager
+            # if you desire a different ratio. If there are not enough cores
+            # available to use the target number of threads, use all available cores as threads.
+            target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
+            if target_thread_count >= multiprocessing.cpu_count():
+                target_thread_count = multiprocessing.cpu_count() - 1
+
+            if target_thread_count < 1:
+                target_thread_count = 1
+
+            self.dask_num_threads = target_thread_count
+        # Otherwise, use the values provided. You must provide both!
+        elif dask_num_workers is not None and dask_num_threads is not None:
+            self.dask_num_workers = dask_num_workers
+            self.dask_num_threads = dask_num_threads
+        else:
+            raise ValueError(
+                "Either set both dask_num_workers and dask_num_threads or neither; "
+                f"got dask_num_workers={dask_num_workers} and dask_num_threads={dask_num_threads}"
+            )
+
+        # Other Dask distributed configuration defaults, mostly related to memory usage
         self.dask_scheduler_worker_saturation = 1.2
         self.dask_worker_mem_target = dask_worker_memory_target
         self.dask_worker_mem_spill = dask_worker_memory_spill
         self.dask_worker_mem_pause = 0.92
         self.dask_worker_mem_terminate = 0.98
-        self.dask_use_process_scheduler = False
-        self.dask_scheduler_protocol = "inproc://"
-
-        # Usually set to 1 to avoid data transfer between workers
-        self.dask_num_workers = 1
-
-        # Each thread will use a CPU if self.dask_num_workers is 1. The default target ratio is 4 threads per 32 GB
-        # RAM, adjust in the init of your manager if you desire a diffeerent ratio. If there are not enough cores
-        # available to use the target number of threads, use the number of available cores.
-        total_memory_gb = psutil.virtual_memory().total / 1_000_000_000
-        target_thread_count = int(dask_cpu_mem_target_ratio * total_memory_gb)
-        if target_thread_count >= multiprocessing.cpu_count():
-            target_thread_count = multiprocessing.cpu_count() - 1
-
-        if target_thread_count < 1:
-            target_thread_count = 1
-
-        self.dask_num_threads = target_thread_count
+        self.dask_use_process_scheduler = self.dask_num_workers > 1
+        self.dask_scheduler_protocol = dask_scheduler_protocol
 
         self.info(
             f"Using {self.dask_num_threads} threads on a {multiprocessing.cpu_count()}-core system with "

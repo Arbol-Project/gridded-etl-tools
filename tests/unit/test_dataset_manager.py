@@ -51,6 +51,9 @@ class TestDatasetManager:
             allow_overwrite=True,
             dask_dashboard_address="123 main st",
             dask_cpu_mem_target_ratio=1 / 16,
+            dask_num_workers=2,
+            dask_num_threads=4,
+            dask_scheduler_protocol="tcp://",
             use_local_zarr_jsons=True,
             skip_prepare_input_files=True,
             encryption_key=secret_key,
@@ -66,7 +69,10 @@ class TestDatasetManager:
         dm.init_logging.assert_called_once_with(console_log=False, global_log_level=logging.WARN)
         assert dm.allow_overwrite is True
         assert dm.dask_dashboard_address == "123 main st"
+        assert dm.dask_num_workers == 2
         assert dm.dask_num_threads == 4
+        assert dm.dask_scheduler_protocol == "tcp://"
+        assert dm.dask_use_process_scheduler is True
         assert dm.use_local_zarr_jsons is True
         assert dm.skip_prepare_input_files is True
         assert dm.encryption_key == encryption._hash(bytes.fromhex(secret_key))
@@ -75,6 +81,27 @@ class TestDatasetManager:
         assert dm.align_update_chunks is True
 
         assert isinstance(dm.store, store.Local)
+
+    @staticmethod
+    def test_constructor_default_sets_worker_count_to_one(mocker, manager_class):
+        mocker.patch("gridded_etl_tools.dataset_manager.psutil.virtual_memory")
+        dataset_manager.psutil.virtual_memory.return_value.total = 64_000_000_000
+
+        mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
+        dataset_manager.multiprocessing.cpu_count.return_value = 100
+
+        dm = manager_class()
+        assert dm.dask_num_workers == 1
+
+    @staticmethod
+    def test_constructor_raises_if_only_dask_num_workers_provided(manager_class):
+        with pytest.raises(ValueError):
+            manager_class(dask_num_workers=2)
+
+    @staticmethod
+    def test_constructor_raises_if_only_dask_num_threads_provided(manager_class):
+        with pytest.raises(ValueError):
+            manager_class(dask_num_threads=4)
 
     @staticmethod
     def test_constructor_s3_store(manager_class):

@@ -1310,6 +1310,18 @@ class TestPublish:
         dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
+    def test_check_written_value_value_one_missing_value_one_nan(manager_class, fake_original_dataset):
+        dm = manager_class()
+        prod_ds = fake_original_dataset.copy(deep=True)
+        coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
+
+        prod_ds.data[coord_indices] = np.nan
+        fake_original_dataset.data[coord_indices] = dm.missing_value  # 42
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+
+    @staticmethod
     def test_check_two_infinities_ish(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
