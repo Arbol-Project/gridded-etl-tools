@@ -434,8 +434,8 @@ class TestS3ExtractorDownload:
             extractor.request(rfp, local_file_path=lfp)
 
     @staticmethod
-    def test_s3_download_scan_indices_ignored(manager_class, monkeypatch, tmp_path):
-        """Test that scan_indices parameter is ignored for downloads"""
+    def test_s3_download_scan_indices_invalid(manager_class, monkeypatch, tmp_path):
+        """Test that scan_indices parameter raises an exception for downloads"""
         # Mock s3fs module
         mock_s3fs_module = Mock()
         mock_filesystem = Mock()
@@ -449,7 +449,6 @@ class TestS3ExtractorDownload:
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = tmp_path / "castle1.grib"
 
-        # scan_indices should be ignored (no error should be raised)
         with pytest.raises(ValueError, match="scan_indices not supported"):
             extractor.request(rfp, scan_indices=(1, 2), local_file_path=lfp)
 
