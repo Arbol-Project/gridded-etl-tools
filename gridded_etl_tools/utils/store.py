@@ -167,13 +167,12 @@ class StoreInterface(ABC):
         xr.Dataset | None
             The dataset opened in xarray or None if there is no dataset currently stored.
         """
-        if self.__class__.__name__ == "S3":
-            storage_options = {"profile": self.profile}
-        else:
-            storage_options = {}
-
         if self.has_existing:
-            return xr.open_zarr(store=self.path, storage_options=storage_options, decode_timedelta=True, **kwargs)
+            if self.__class__.__name__ == "S3":
+                storage_options = {"profile": self.profile}
+                return xr.open_zarr(store=self.path, storage_options=storage_options, decode_timedelta=True, **kwargs)
+            else:
+                return xr.open_zarr(store=self.path, decode_timedelta=True, **kwargs)
         else:
             return None
 
