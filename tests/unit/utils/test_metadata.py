@@ -991,14 +991,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": (1, 1, 1),
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",
@@ -1021,14 +1020,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",
@@ -1052,14 +1050,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.forecast_reference_time.encoding == {
             "long_name": "initial time of forecast",
@@ -1090,14 +1087,13 @@ class TestMetadata:
         md.encode_vars(dataset) is dataset
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.hindcast_reference_time.encoding == {
             "long_name": "initial time of forecast",
@@ -1152,14 +1148,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",

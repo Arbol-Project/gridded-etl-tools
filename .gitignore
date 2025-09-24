@@ -11,6 +11,7 @@ lib/
 lib64
 pyvenv.cfg
 share/
+.venv
 
 # Climate data
 datasets
