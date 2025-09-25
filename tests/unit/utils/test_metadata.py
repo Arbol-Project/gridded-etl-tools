@@ -1037,8 +1037,16 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1072,8 +1080,16 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1114,8 +1130,16 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1184,8 +1208,16 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1319,23 +1351,22 @@ class TestMetadata:
         # Now we can test everything else
         assert saved_ds.latitude.encoding == {
             "chunks": (4,),
-            "preferred_chunks": {'latitude': 4},
-            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
-            'dtype': np.dtype('float64'),
-            'filters': (),
-            'shards': None
+            "preferred_chunks": {"latitude": 4},
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("float64"),
+            "filters": (),
+            "shards": None,
         }
         assert saved_ds.longitude.encoding == {
             "chunks": (4,),
             "preferred_chunks": {"longitude": 4},
-            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
-            'dtype': np.dtype('float64'),
-            'filters': (),
-            'shards': None
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("float64"),
+            "filters": (),
+            "shards": None,
         }
         assert "missing_value" not in saved_ds.longitude.encoding
         assert "missing_value" not in saved_ds.latitude.encoding
-
 
     @staticmethod
     def test_encoding_survives_to_zarr_integer_coords(manager_class, fake_original_dataset, tmp_path):
@@ -1355,25 +1386,24 @@ class TestMetadata:
         # Test full encoding -- this time the _FillValue is an implausible integer value, not NaN
         assert saved_ds.latitude.encoding == {
             "chunks": (4,),
-            "preferred_chunks": {'latitude': 4},
+            "preferred_chunks": {"latitude": 4},
             "_FillValue": -9223372036854775808,
-            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
-            'dtype': np.dtype('int64'),
-            'filters': (),
-            'shards': None
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("int64"),
+            "filters": (),
+            "shards": None,
         }
         assert saved_ds.longitude.encoding == {
             "chunks": (4,),
             "preferred_chunks": {"longitude": 4},
             "_FillValue": -9223372036854775808,
-            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
-            'dtype': np.dtype('int64'),
-            'filters': (),
-            'shards': None
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("int64"),
+            "filters": (),
+            "shards": None,
         }
         assert "missing_value" not in saved_ds.longitude.encoding
         assert "missing_value" not in saved_ds.latitude.encoding
-
 
     @staticmethod
     def test_zarr_step_dtype_conversion_issue(tmp_path):

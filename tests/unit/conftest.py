@@ -36,6 +36,7 @@ def fake_original_dataset_float_coords():
     ds["data"] = ds["data"].astype("<f4")
     return ds
 
+
 @pytest.fixture
 def fake_original_dataset():
     time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
