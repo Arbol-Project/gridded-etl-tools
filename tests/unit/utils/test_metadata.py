@@ -6,11 +6,10 @@ import pytest
 import numpy as np
 import numcodecs
 import zarr
+import xarray as xr
 
 # Imports used for legacy encoding change tests
 # import os
-# import json
-# import xarray as xr
 # from time import sleep
 
 from requests.exceptions import Timeout
@@ -991,14 +990,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": (1, 1, 1),
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",
@@ -1021,14 +1019,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",
@@ -1052,14 +1049,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.forecast_reference_time.encoding == {
             "long_name": "initial time of forecast",
@@ -1090,14 +1086,13 @@ class TestMetadata:
         md.encode_vars(dataset) is dataset
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.hindcast_reference_time.encoding == {
             "long_name": "initial time of forecast",
@@ -1152,14 +1147,13 @@ class TestMetadata:
         md.encode_vars(dataset)
         mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv, "missing_value": mv}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
             "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": mv,
         }
         assert dataset.time.encoding == {
             "long_name": "time",
@@ -1255,11 +1249,55 @@ class TestMetadata:
     @staticmethod
     @pytest.fixture
     def encoding_test_output():
-        """Fixture to create and cleanup output directory for encoding tests"""
+        """
+        Fixture to create and cleanup output directory for encoding tests"""
         output_path = pathlib.Path("./tests/unit/utils/output")
         pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
         yield output_path
         clean_up_input_paths(output_path)
+
+    @staticmethod
+    def test_zarr_step_dtype_conversion_issue(tmp_path):
+        """
+        This is a regression test for a very obscure Xarray behavior we encountered reading the `step` coordinate
+        of a 4D (Forecast) dataset. In rare cases where the initial DS was saved with Xarray==2025.9.0 and then
+        appended to with Xarray==2025.6.0, this would fail with a "pandas.errors.OutOfBoundsTimedelta
+        Cannot convert 77760000000000000 seconds to timedelta64[ns] without overflow"
+
+        This regression test is not so great because we don't re-install from pip within the test (sounds horrible),
+        but it theoretically could catch the issue if it's ever re-introduced by further Xarray updates
+        -- which, given their record, is not out of the question.
+        """
+        # Create and save a dataset that will cause Xarray to auto-insert the dtype into the .zattrs
+        # Create step coordinate with large nanosecond values (hours as ns)
+        step_values = np.array([0, 6, 12, 18], dtype="timedelta64[h]").astype("timedelta64[ns]")  # 1h, 6h, 12h in ns
+        step = xr.DataArray(step_values, dims="step")
+        step.encoding = {"units": "hours", "dtype": np.dtype("int64")}
+        forecast_reference_time = xr.DataArray(
+            data=np.array(["2025-02-26T00:00:00.000000000"], dtype="datetime64[ns]"), dims="forecast_reference_time"
+        )
+        forecast_reference_time.encoding = {"dtype": np.dtype("int64")}
+
+        ds = xr.Dataset(
+            {
+                "data": xr.DataArray(
+                    data=np.array([[1, 2, 3, 4]]),
+                    dims=("forecast_reference_time", "step"),
+                    coords={"forecast_reference_time": forecast_reference_time, "step": step},
+                )
+            }
+        )
+        zarr_path = tmp_path / "test.zarr"
+
+        ds.to_zarr(zarr_path, zarr_version=2)
+
+        # Now append to the new_ds
+        append_ds = xr.open_zarr(zarr_path, decode_cf=True)
+        append_ds["forecast_reference_time"] = append_ds["forecast_reference_time"] + np.timedelta64(1, "D")
+        append_ds.to_zarr(zarr_path, zarr_version=2, mode="a")
+
+        # Prove the appended ds can be opened
+        xr.open_zarr(zarr_path, decode_cf=True)
 
     # LEGACY ENCODING CHANGE TESTS DISABLED AS THEY RELY ON ZARR V2
     # WHICH IS NOT AVAILABLE IN THE CI ENVIRONMENT
