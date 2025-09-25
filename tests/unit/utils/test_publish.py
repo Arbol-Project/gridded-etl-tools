@@ -818,7 +818,7 @@ class TestPublish:
         assert len(dataset.time) > len(time_values)
 
         dataset = dm.prep_update_dataset(dataset, time_values)
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         assert np.array_equal(dataset.time, time_values)
         assert dataset.chunks == {}
@@ -843,7 +843,7 @@ class TestPublish:
         assert "time" not in dataset.dims
 
         dataset = dm.prep_update_dataset(dataset, time_values)
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         assert np.array_equal(dataset.time, time_values[:1])
         assert dataset.chunks == {}
@@ -881,7 +881,7 @@ class TestPublish:
     def test_preparse_quality_check(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
@@ -894,7 +894,7 @@ class TestPublish:
     def test_preparse_quality_check_short_dataset(manager_class, single_time_instant_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(single_time_instant_dataset)
+        dm.encode_ds(single_time_instant_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
@@ -910,7 +910,7 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.check_nan_frequency = mock.Mock()
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         with pytest.raises(IndexError):
             dm.pre_parse_quality_check(dataset)
@@ -919,7 +919,7 @@ class TestPublish:
     def test_preparse_quality_check_bad_dtype(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         fake_original_dataset.data.encoding["dtype"] = "thewrongtype"
 
@@ -929,7 +929,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial(mocker, manager_class, fake_large_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_large_dataset)
+        dm.encode_ds(fake_large_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # patch sample size to 16, size of input dataset
@@ -967,7 +967,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_small_array(mocker, manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # patch sample size to 16, size of input dataset
@@ -980,7 +980,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_no_existing(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=False)
         dm.pre_parse_quality_check(fake_original_dataset)
@@ -992,7 +992,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_skip_check(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.skip_pre_parse_nan_check = True
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
@@ -1006,7 +1006,7 @@ class TestPublish:
     def test_preparse_quality_check_no_frequency_attribute(mocker, manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # raise AttributeError if expected_nan_frequency attribute not present
@@ -1019,7 +1019,7 @@ class TestPublish:
         dm = manager_class()
         dm.EXTREME_VALUES_BY_UNIT = {"parsecs": (-10, 10)}
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_random_values(fake_original_dataset)
 
     @staticmethod
@@ -1027,7 +1027,7 @@ class TestPublish:
         fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         with pytest.raises(ValueError):
             dm.check_random_values(fake_original_dataset)
 
@@ -1035,7 +1035,7 @@ class TestPublish:
     def test_check_random_values_nonsense_value(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
 
         fake_original_dataset["data"].encoding["units"] = "K"
         fake_original_dataset.data.values[:] = 1_000_000  # hot
@@ -1048,7 +1048,7 @@ class TestPublish:
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dataset = fake_original_dataset.drop_vars(dm._standard_dims_except(dm.time_dim))
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
         dm.check_random_values(dataset)
 
     @staticmethod
@@ -1056,7 +1056,7 @@ class TestPublish:
         fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.has_nans = True
         dm.check_random_values(fake_original_dataset)
 

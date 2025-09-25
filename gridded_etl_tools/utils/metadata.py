@@ -578,7 +578,7 @@ class Metadata(Convenience):
         # Consistently apply Blosc lz4 compression to all coordinates and the data variable
         self.set_initial_compression(dataset)
         # Encode data types and missing value indicators for the data variable
-        self.encode_vars(dataset)
+        self.encode_ds(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
 
@@ -609,7 +609,7 @@ class Metadata(Convenience):
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             return dataset
 
-    def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
+    def encode_ds(self, dataset: xr.Dataset):
         """
         Encode important data points related to the data and time variables. These are useful both for reference and to
         control Xarray's reading/writing behavior.
@@ -657,6 +657,7 @@ class Metadata(Convenience):
         if "time" in dataset:
             dataset.time.encoding.update(
                 {
+                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "time",
                     "calendar": "gregorian",
                 }
@@ -664,6 +665,7 @@ class Metadata(Convenience):
         elif "forecast_reference_time" in dataset and self.time_dim == "forecast_reference_time":
             dataset.forecast_reference_time.encoding.update(
                 {
+                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "initial time of forecast",
                     "standard_name": "forecast_reference_time",
                     "calendar": "proleptic_gregorian",
@@ -672,6 +674,7 @@ class Metadata(Convenience):
         elif "hindcast_reference_time" in dataset and self.time_dim == "hindcast_reference_time":  # pragma NO BRANCH
             dataset.hindcast_reference_time.encoding.update(
                 {
+                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "initial time of forecast",
                     "standard_name": "hindcast_reference_time",
                     "calendar": "proleptic_gregorian",
@@ -685,6 +688,11 @@ class Metadata(Convenience):
                     "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
                 }
             )
+
+        # Ensure erroneous missing_value or _FillValue is not populated to coordinates
+        for coord in dataset.coords:
+            if coord != self.time_dim and coord != self.data_var:  # pragma NO COVER
+                dataset[coord].encoding["_FillValue"] = "NaN"
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:

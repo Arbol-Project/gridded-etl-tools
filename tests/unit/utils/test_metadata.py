@@ -945,7 +945,7 @@ class TestMetadata:
         renamed = md.rename_data_variable.return_value
 
         md.remove_unwanted_fields = mock.Mock()
-        md.encode_vars = mock.Mock()
+        md.encode_ds = mock.Mock()
         md.set_initial_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
 
@@ -955,7 +955,7 @@ class TestMetadata:
         md.rename_data_variable.assert_called_once_with(dataset)
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.set_initial_compression.assert_called_once_with(renamed)
-        md.encode_vars.assert_called_once_with(renamed)
+        md.encode_ds.assert_called_once_with(renamed)
 
     @staticmethod
     def test_rename_data_variable(manager_class):
@@ -978,19 +978,31 @@ class TestMetadata:
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
     @staticmethod
-    def test_encode_vars(manager_class, fake_original_dataset):
+    def test_encode_ds(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": "NaN",
+            "chunks": (1, 1, 1),
+            "preferred_chunks": md.requested_zarr_chunks,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": "NaN",
+            "chunks": (1, 1, 1),
+            "preferred_chunks": md.requested_zarr_chunks,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -999,6 +1011,7 @@ class TestMetadata:
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
@@ -1007,19 +1020,23 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_chunks_has_existing(manager_class, fake_original_dataset):
+    def test_encode_ds_chunks_has_existing(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1028,6 +1045,7 @@ class TestMetadata:
             "preferred_chunks": None,
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
@@ -1036,9 +1054,11 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_forecast(manager_class, forecast_dataset):
+    def test_encode_ds_forecast(manager_class, forecast_dataset):
         dataset = forecast_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.forecast_reference_time.encoding == {}
 
@@ -1046,10 +1066,12 @@ class TestMetadata:
         md.time_dim = "forecast_reference_time"
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "step": 1, "forecast_reference_time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1058,6 +1080,7 @@ class TestMetadata:
             "preferred_chunks": None,
         }
         assert dataset.forecast_reference_time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "initial time of forecast",
             "standard_name": "forecast_reference_time",
             "calendar": "proleptic_gregorian",
@@ -1067,9 +1090,11 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_hindcast(manager_class, hindcast_dataset):
+    def test_encode_ds_hindcast(manager_class, hindcast_dataset):
         dataset = hindcast_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.hindcast_reference_time.encoding == {}
 
@@ -1083,10 +1108,12 @@ class TestMetadata:
             "hindcast_reference_time": 1,
         }
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset) is dataset
+        md.encode_ds(dataset) is dataset
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1095,6 +1122,7 @@ class TestMetadata:
             "preferred_chunks": None,
         }
         assert dataset.hindcast_reference_time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "initial time of forecast",
             "standard_name": "hindcast_reference_time",
             "calendar": "proleptic_gregorian",
@@ -1104,30 +1132,34 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_w_encryption_key(manager_class, fake_original_dataset):
+    def test_encode_ds_w_encryption_key(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 1
         assert isinstance(filters[0], encryption.EncryptionFilter)
 
     @staticmethod
-    def test_encode_vars_w_encryption_key_and_preexisting_filter(manager_class, fake_original_dataset):
+    def test_encode_ds_w_encryption_key_and_preexisting_filter(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         dataset["data"].encoding = {"filters": ["SomeOtherFilter"]}
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset.time.encoding == {}
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 2
@@ -1135,19 +1167,23 @@ class TestMetadata:
         assert isinstance(filters[1], encryption.EncryptionFilter)
 
     @staticmethod
-    def test_encode_vars_time_units_known(manager_class, fake_original_dataset):
+    def test_encode_ds_time_units_known(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         dataset.time.encoding = {"units": "picoseconds since the big bang"}
 
         md = manager_class()
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1156,6 +1192,7 @@ class TestMetadata:
             "preferred_chunks": None,
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "picoseconds since the big bang",
