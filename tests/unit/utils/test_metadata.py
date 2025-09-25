@@ -5,8 +5,10 @@ import pathlib
 import pytest
 import numpy as np
 import numcodecs
+from numcodecs import Blosc
 import zarr
 import xarray as xr
+
 
 # Imports used for legacy encoding change tests
 # import os
@@ -994,12 +996,12 @@ class TestMetadata:
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
         assert dataset.latitude.encoding == {
-            "_FillValue": "NaN",
+            "_FillValue": -9223372036854775808,
             "chunks": (1, 1, 1),
             "preferred_chunks": md.requested_zarr_chunks,
         }
         assert dataset.longitude.encoding == {
-            "_FillValue": "NaN",
+            "_FillValue": -9223372036854775808,
             "chunks": (1, 1, 1),
             "preferred_chunks": md.requested_zarr_chunks,
         }
@@ -1035,8 +1037,8 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1070,8 +1072,8 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1112,8 +1114,8 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1182,8 +1184,8 @@ class TestMetadata:
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
-        assert dataset.latitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
-        assert dataset.longitude.encoding == {"_FillValue": "NaN", "chunks": None, "preferred_chunks": None}
+        assert dataset.latitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
+        assert dataset.longitude.encoding == {"_FillValue": -9223372036854775808, "chunks": None, "preferred_chunks": None}
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
@@ -1292,6 +1294,86 @@ class TestMetadata:
         pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
         yield output_path
         clean_up_input_paths(output_path)
+
+    @staticmethod
+    def test_encoding_survives_to_zarr(manager_class, fake_original_dataset_float_coords, tmp_path):
+        """
+        Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
+        causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
+        """
+        md = manager_class(static_metadata={"bar": "baz"})
+        md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
+        md.encode_ds(fake_original_dataset_float_coords)
+
+        # Save and re-open
+        zarr_path = tmp_path / "test.zarr"
+        fake_original_dataset_float_coords.to_zarr(zarr_path, zarr_version=2)
+        saved_ds = xr.open_zarr(zarr_path)
+
+        # NaN never is equivalent to anything else so we need to test it separately
+        lat_fill_value = saved_ds.latitude.encoding.pop("_FillValue")
+        lon_fill_value = saved_ds.longitude.encoding.pop("_FillValue")
+        assert np.isnan(lat_fill_value)
+        assert np.isnan(lon_fill_value)
+
+        # Now we can test everything else
+        assert saved_ds.latitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {'latitude': 4},
+            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            'dtype': np.dtype('float64'),
+            'filters': (),
+            'shards': None
+        }
+        assert saved_ds.longitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"longitude": 4},
+            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            'dtype': np.dtype('float64'),
+            'filters': (),
+            'shards': None
+        }
+        assert "missing_value" not in saved_ds.longitude.encoding
+        assert "missing_value" not in saved_ds.latitude.encoding
+
+
+    @staticmethod
+    def test_encoding_survives_to_zarr_integer_coords(manager_class, fake_original_dataset, tmp_path):
+        """
+        Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
+        causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
+        """
+        md = manager_class(static_metadata={"bar": "baz"})
+        md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
+        md.encode_ds(fake_original_dataset)
+
+        # Save and re-open
+        zarr_path = tmp_path / "test.zarr"
+        fake_original_dataset.to_zarr(zarr_path, zarr_version=2)
+        saved_ds = xr.open_zarr(zarr_path)
+
+        # Test full encoding -- this time the _FillValue is an implausible integer value, not NaN
+        assert saved_ds.latitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {'latitude': 4},
+            "_FillValue": -9223372036854775808,
+            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            'dtype': np.dtype('int64'),
+            'filters': (),
+            'shards': None
+        }
+        assert saved_ds.longitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"longitude": 4},
+            "_FillValue": -9223372036854775808,
+            'compressors': (Blosc(cname='lz4', clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            'dtype': np.dtype('int64'),
+            'filters': (),
+            'shards': None
+        }
+        assert "missing_value" not in saved_ds.longitude.encoding
+        assert "missing_value" not in saved_ds.latitude.encoding
+
 
     @staticmethod
     def test_zarr_step_dtype_conversion_issue(tmp_path):

@@ -657,7 +657,6 @@ class Metadata(Convenience):
         if "time" in dataset:
             dataset.time.encoding.update(
                 {
-                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "time",
                     "calendar": "gregorian",
                 }
@@ -665,7 +664,6 @@ class Metadata(Convenience):
         elif "forecast_reference_time" in dataset and self.time_dim == "forecast_reference_time":
             dataset.forecast_reference_time.encoding.update(
                 {
-                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "initial time of forecast",
                     "standard_name": "forecast_reference_time",
                     "calendar": "proleptic_gregorian",
@@ -674,7 +672,6 @@ class Metadata(Convenience):
         elif "hindcast_reference_time" in dataset and self.time_dim == "hindcast_reference_time":  # pragma NO BRANCH
             dataset.hindcast_reference_time.encoding.update(
                 {
-                    "_FillValue": -9223372036854775808,  # implausible value to prevent accidental masking
                     "long_name": "initial time of forecast",
                     "standard_name": "hindcast_reference_time",
                     "calendar": "proleptic_gregorian",
@@ -689,10 +686,17 @@ class Metadata(Convenience):
                 }
             )
 
-        # Ensure erroneous missing_value or _FillValue is not populated to coordinates
+        # Ensure a type-appropriate _FillValue is populated to each coordinate
         for coord in dataset.coords:
-            if coord != self.time_dim and coord != self.data_var:  # pragma NO COVER
-                dataset[coord].encoding["_FillValue"] = "NaN"
+            if coord != self.data_var:
+                if coord == self.time_dim or np.issubdtype(
+                    dataset[coord].dtype, np.integer
+                ):  # will include time dim(s)
+                    dataset[coord].encoding[
+                        "_FillValue"
+                    ] = -9223372036854775808  # implausible value to prevent accidental masking
+                else:
+                    dataset[coord].encoding["_FillValue"] = "NaN"
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:

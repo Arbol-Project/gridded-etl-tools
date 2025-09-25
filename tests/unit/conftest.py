@@ -22,6 +22,21 @@ def example_zarr_json():
 
 
 @pytest.fixture
+def fake_original_dataset_float_coords():
+    time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
+    latitude = xr.DataArray(np.arange(1, 3, 0.5), dims="latitude", coords={"latitude": np.arange(1, 3, 0.5)})
+    longitude = xr.DataArray(np.arange(1, 3, 0.5), dims="longitude", coords={"longitude": np.arange(1, 3, 0.5)})
+    data = xr.DataArray(
+        np.random.randn(138, 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+@pytest.fixture
 def fake_original_dataset():
     time = xr.DataArray(np.array(original_times), dims="time", coords={"time": np.arange(138)})
     latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
