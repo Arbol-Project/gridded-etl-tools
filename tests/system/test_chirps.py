@@ -6,7 +6,7 @@ import xarray
 import shutil
 import glob
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from ..common import (
     run_etl,
     get_manager,
@@ -20,6 +20,9 @@ from ..common import (
     remove_zarr_json,
     remove_metadata,
 )
+
+from gridded_etl_tools.utils.publish import ZarrOutputError
+from gridded_etl_tools.utils.store import StoreInterface
 
 
 @pytest.fixture
@@ -148,7 +151,22 @@ def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path)
     assert not dm.store.has_existing
 
 
-def test_initial(mocker, manager_class, initial_input_path, root):
+def test_initial_write_failure(manager_class, initial_input_path):
+    """
+    Test with a failed call to xarray.Dataset.to_zarr
+    """
+    dm = manager_class(custom_input_path=initial_input_path, store="local")
+    dm.transform_data_on_disk()
+    publish_dataset = dm.transform_dataset_in_memory()
+    dm.store = Mock(spec=StoreInterface)
+    dm.store.has_existing = False
+    with patch("xarray.Dataset.to_zarr", side_effect=RuntimeError("Nuclear meltdown")):
+        with pytest.raises(ZarrOutputError):
+            dm.parse(publish_dataset)
+        dm.store.write_metadata_only_v2.assert_called_once_with(update_attrs={"update_in_progress": False})
+
+
+def test_initial(manager_class, initial_input_path, root):
     """
     Test a parse of CHIRPS data.
     """
