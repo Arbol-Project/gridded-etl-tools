@@ -33,6 +33,7 @@ keywords = ["Climate", "Zarr", "ETL"]
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4",
+    "boto3",
     "cfgrib",
     "dag-cbor==0.2.2",
     "dask[array,diagnostics,distributed]>=2025.5.1",
@@ -68,7 +69,8 @@ testing = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
-    "responses"
+    "responses",
+    "moto[server]"
 ]
 dev = [
     "black",

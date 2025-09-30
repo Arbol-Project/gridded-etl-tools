@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks
+from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks, ZarrOutputError
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
@@ -329,7 +329,6 @@ class TestPublish:
     def test_to_zarr_dry_run(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.dry_run = True
 
@@ -339,14 +338,11 @@ class TestPublish:
         dataset.to_zarr.assert_not_called()
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_not_called()
-        dm.move_post_parse_attrs_to_dict.assert_not_called()
 
     @staticmethod
     def test_to_zarr(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dataset = mock.Mock()
@@ -368,10 +364,9 @@ class TestPublish:
                         "initial_parse": False,
                     }
                 ),
-                mock.call(update_attrs=post_parse_attrs),
+                mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
-        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
         # Check that DatasetManager.output_zarr3 is applied
         dm.output_zarr3 = True
@@ -383,12 +378,29 @@ class TestPublish:
         with pytest.raises(ValueError):
             dm.to_zarr(dataset, zarr_format=3)
 
+        # Test what happens when an unknown exception happens during writing
+        dataset.reset_mock()
+        dataset.to_zarr.side_effect = RuntimeError("Nuclear meltdown")
+        with pytest.raises(ZarrOutputError):
+            dm.to_zarr(dataset)
+        # Metadata must be reset even when an error happens during writing
+        dm.store.write_metadata_only_v2.assert_has_calls(
+            [
+                mock.call(
+                    update_attrs={
+                        "update_in_progress": True,
+                        "update_is_append_only": "is it?",
+                        "initial_parse": False,
+                    }
+                ),
+                mock.call(update_attrs={"update_in_progress": False}),
+            ]
+        )
+
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
 
         dataset = mock.Mock()
@@ -398,8 +410,7 @@ class TestPublish:
         # Zarr format is explicitly set to 2.0
         dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
-        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs={"update_in_progress": False})])
 
     @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
@@ -493,29 +504,6 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
 
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-
-    @staticmethod
-    def test_move_post_parse_attrs_to_dict(manager_class, fake_original_dataset):
-        dm = manager_class()
-        dm.update_attributes = dm.update_attributes + ["some relevant attribute", "some non-existant attribute"]
-        fake_original_dataset.attrs = {
-            "date range": ["2000010100", "2020123123"],
-            "update_date_range": ["202012293", "2020123123"],
-            "update_previous_end_date": "2020123023",
-            "update_in_progress": False,
-            "some relevant attribute": True,
-            "some irrelevant attribute": False,
-            "initial_parse": False,
-        }
-
-        update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
-        assert update_attrs == {
-            "update_in_progress": False,
-            "date range": ["2000010100", "2020123123"],
-            "update_previous_end_date": "2020123023",
-            "initial_parse": False,
-            "some relevant attribute": True,
-        }
 
     @staticmethod
     def test_dask_configuration(manager_class, mocker):

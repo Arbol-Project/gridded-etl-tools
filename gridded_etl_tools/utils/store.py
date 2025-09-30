@@ -11,11 +11,12 @@ import json
 import os
 
 import shutil
-import s3fs  # type: ignore[import-not-found]
+import s3fs  # type: ignore[import-untyped]
 import xarray as xr
 import pathlib
 import fsspec  # type: ignore[import-untyped]
 import collections
+import boto3  # type: ignore[import-untyped]
 
 from abc import abstractmethod, ABC
 from typing import Any
@@ -245,6 +246,17 @@ class StoreInterface(ABC):
             raise RuntimeError("Cannot check non-existing Zarr for metadata")
         return self.fs().exists(os.path.join(self.path, "zarr.json"))
 
+    @property
+    def versioning_enabled(self) -> bool:
+        """
+        Returns
+        -------
+        bool
+            True if versioning is enabled on the store. For local this is always false. For S3, this is true if the
+            bucket has been configured with versioning enabled.
+        """
+        return False
+
 
 class S3(StoreInterface):
     """
@@ -257,7 +269,7 @@ class S3(StoreInterface):
     After initialization, use the member functions to access the Zarr.
     """
 
-    def __init__(self, dm: dataset_manager.DatasetManager, bucket: str):
+    def __init__(self, dm: dataset_manager.DatasetManager, bucket: str, endpoint_url: str | None = None):
         """
         Get an interface to a dataset's Zarr on S3 in the specified bucket.
 
@@ -272,6 +284,7 @@ class S3(StoreInterface):
         if not bucket:
             raise ValueError("Must provide bucket name if parsing to S3")
         self.bucket = bucket
+        self.endpoint_url = endpoint_url
 
     def fs(self, refresh: bool = False, profile: str | None = None, **kwargs) -> s3fs.S3FileSystem:
         """
@@ -295,7 +308,7 @@ class S3(StoreInterface):
             A filesystem object for interfacing with S3
         """
         if refresh or not hasattr(self, "_fs"):
-            self._fs = s3fs.S3FileSystem(profile=profile, **kwargs)
+            self._fs = s3fs.S3FileSystem(profile=profile, endpoint_url=self.endpoint_url, **kwargs)
             self.dm.info(
                 "Initialized S3 filesystem. Credentials will be looked up according to rules at "
                 "https://s3fs.readthedocs.io/en/latest/#credentials"
@@ -303,7 +316,7 @@ class S3(StoreInterface):
         return self._fs
 
     @property
-    def path(self) -> str:
+    def path(self) -> str | pathlib.Path:
         """
         Get the S3-protocol URL to the parent `DatasetManager`'s Zarr .
 
@@ -442,6 +455,19 @@ class S3(StoreInterface):
             return f"s3://{self.bucket}/metadata/{stac_type}/{title}.json"
         else:
             return f"s3://{self.bucket}/metadata/{title}.json"
+
+    @property
+    def versioning_enabled(self) -> bool:
+        """
+        Returns
+        -------
+        bool
+            True if versioning is enabled on the bucket.
+        """
+        # Need to use boto3 instead of s3fs to get the versioning status
+        client = boto3.client("s3", endpoint_url=self.endpoint_url)
+        response = client.get_bucket_versioning(Bucket=self.bucket)
+        return response.get("Status", None) == "Enabled"
 
 
 class Local(StoreInterface):
