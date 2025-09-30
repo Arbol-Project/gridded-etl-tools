@@ -219,10 +219,8 @@ class Publish(Transform):
             finally:
                 # Indicate in metadata that update is not in progress.
                 self.info("Writing metadata after writing data to indicate write is finished.")
-                restored_attrs = {
-                    "update_in_progress": False
-                }
-                    
+                restored_attrs = {"update_in_progress": False}
+
                 # Use Zarr format to determine metadata format.
                 if zarr_format == 3:
                     self.store.write_metadata_only(update_attrs=restored_attrs)
