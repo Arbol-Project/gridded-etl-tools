@@ -32,7 +32,7 @@ log = logging.getLogger("extraction_logs")
 
 
 class Extractor(ABC):
-    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8, **kwargs):
+    def __init__(self, dm: dataset_manager.DatasetManager, concurrency_limit: int = 8):
         """
         Create an instance of `Extrator`. `Extractor` is an abstract base class, so this should not be called directly.
         Use a specific type of extractor below instead.
@@ -332,7 +332,6 @@ class S3ExtractorBase(Extractor):
         concurrency_limit: int = 8,
         ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
         unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
-        **kwargs,
     ):
         """
         Create a new S3 Extractor object by associating a Dataset Manager with it.
@@ -350,7 +349,7 @@ class S3ExtractorBase(Extractor):
             A list or tuple of exception types that should trigger
             the immediate failure of the entire extraction operation.
         """
-        super().__init__(dm, concurrency_limit=concurrency_limit, **kwargs)
+        super().__init__(dm, concurrency_limit=concurrency_limit)
 
         # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
         self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
@@ -570,8 +569,8 @@ class S3Extractor(S3ExtractorKerchunk):
     Deprecated: Use S3ExtractorKerchunk instead.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args):
+        super().__init__(*args)
         log.warning(
             "S3Extractor is deprecated. Use S3ExtractorKerchunk for kerchunking operations "
             "or S3ExtractorDownload for direct file downloads."
