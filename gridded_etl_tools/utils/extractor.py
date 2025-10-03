@@ -569,8 +569,8 @@ class S3Extractor(S3ExtractorKerchunk):
     Deprecated: Use S3ExtractorKerchunk instead.
     """
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         log.warning(
             "S3Extractor is deprecated. Use S3ExtractorKerchunk for kerchunking operations "
             "or S3ExtractorDownload for direct file downloads."
