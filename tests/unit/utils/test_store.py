@@ -5,7 +5,6 @@ import pathlib
 from unittest import mock
 from moto.server import ThreadedMotoServer
 import boto3  # type: ignore[import-untyped]
-import s3fs  # type: ignore[import-untyped]
 
 import pytest
 
