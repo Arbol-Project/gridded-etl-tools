@@ -52,7 +52,7 @@ dependencies = [
     "pycryptodome",
     "python-dateutil",
     "requests",
-    "s3fs",
+    "s3fs>=2025.9.0",
     "shapely",
     "statsmodels",
     "tqdm",
