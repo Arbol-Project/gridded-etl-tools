@@ -578,7 +578,7 @@ class Metadata(Convenience):
         # Consistently apply Blosc lz4 compression to all coordinates and the data variable
         self.set_initial_compression(dataset)
         # Encode data types and missing value indicators for the data variable
-        self.encode_vars(dataset)
+        self.encode_ds(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
 
@@ -609,7 +609,7 @@ class Metadata(Convenience):
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             return dataset
 
-    def encode_vars(self, dataset: xr.Dataset) -> xr.Dataset:
+    def encode_ds(self, dataset: xr.Dataset):
         """
         Encode important data points related to the data and time variables. These are useful both for reference and to
         control Xarray's reading/writing behavior.
@@ -628,7 +628,6 @@ class Metadata(Convenience):
             self.data_var: {
                 "dtype": self.data_var_dtype,
                 "_FillValue": self.missing_value,
-                "missing_value": self.missing_value,
             }
         }
         dataset[self.data_var].encoding.update(
@@ -636,7 +635,6 @@ class Metadata(Convenience):
                 "dtype": self.data_var_dtype,
                 "units": self.unit_of_measurement,
                 "_FillValue": self.missing_value,
-                "missing_value": self.missing_value,
             }
         )
         # More recent versions of Xarray + Dask choke when updating with pre-chunked update datasets,
@@ -687,6 +685,18 @@ class Metadata(Convenience):
                     "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
                 }
             )
+
+        # Ensure a type-appropriate _FillValue is populated to each coordinate
+        for coord in dataset.coords:
+            if coord != self.data_var:
+                if coord == self.time_dim or np.issubdtype(
+                    dataset[coord].dtype, np.integer
+                ):  # will include time dim(s)
+                    dataset[coord].encoding[
+                        "_FillValue"
+                    ] = -9223372036854775808  # implausible value to prevent accidental masking
+                else:
+                    dataset[coord].encoding["_FillValue"] = "NaN"
 
         # Encrypt variable data if requested
         if self.encryption_key is not None:

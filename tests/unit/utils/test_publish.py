@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks
+from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks, ZarrOutputError
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
@@ -329,7 +329,6 @@ class TestPublish:
     def test_to_zarr_dry_run(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.dry_run = True
 
@@ -339,14 +338,11 @@ class TestPublish:
         dataset.to_zarr.assert_not_called()
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
         dm.store.write_metadata_only.assert_not_called()
-        dm.move_post_parse_attrs_to_dict.assert_not_called()
 
     @staticmethod
     def test_to_zarr(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dataset = mock.Mock()
@@ -368,10 +364,9 @@ class TestPublish:
                         "initial_parse": False,
                     }
                 ),
-                mock.call(update_attrs=post_parse_attrs),
+                mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
-        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
 
         # Check that DatasetManager.output_zarr3 is applied
         dm.output_zarr3 = True
@@ -383,12 +378,29 @@ class TestPublish:
         with pytest.raises(ValueError):
             dm.to_zarr(dataset, zarr_format=3)
 
+        # Test what happens when an unknown exception happens during writing
+        dataset.reset_mock()
+        dataset.to_zarr.side_effect = RuntimeError("Nuclear meltdown")
+        with pytest.raises(ZarrOutputError):
+            dm.to_zarr(dataset)
+        # Metadata must be reset even when an error happens during writing
+        dm.store.write_metadata_only_v2.assert_has_calls(
+            [
+                mock.call(
+                    update_attrs={
+                        "update_in_progress": True,
+                        "update_is_append_only": "is it?",
+                        "initial_parse": False,
+                    }
+                ),
+                mock.call(update_attrs={"update_in_progress": False}),
+            ]
+        )
+
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
         dm.pre_parse_quality_check = mock.Mock()
-        dm.move_post_parse_attrs_to_dict = mock.Mock()
-        dm.move_post_parse_attrs_to_dict.return_value = post_parse_attrs = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
 
         dataset = mock.Mock()
@@ -398,8 +410,7 @@ class TestPublish:
         # Zarr format is explicitly set to 2.0
         dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs=post_parse_attrs)])
-        dm.move_post_parse_attrs_to_dict.assert_called_once_with(dataset=dataset)
+        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs={"update_in_progress": False})])
 
     @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
@@ -493,29 +504,6 @@ class TestPublish:
             assert dm.store.dataset().attrs[key] == post_update_dict[key]
 
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-
-    @staticmethod
-    def test_move_post_parse_attrs_to_dict(manager_class, fake_original_dataset):
-        dm = manager_class()
-        dm.update_attributes = dm.update_attributes + ["some relevant attribute", "some non-existant attribute"]
-        fake_original_dataset.attrs = {
-            "date range": ["2000010100", "2020123123"],
-            "update_date_range": ["202012293", "2020123123"],
-            "update_previous_end_date": "2020123023",
-            "update_in_progress": False,
-            "some relevant attribute": True,
-            "some irrelevant attribute": False,
-            "initial_parse": False,
-        }
-
-        update_attrs = dm.move_post_parse_attrs_to_dict(fake_original_dataset)
-        assert update_attrs == {
-            "update_in_progress": False,
-            "date range": ["2000010100", "2020123123"],
-            "update_previous_end_date": "2020123023",
-            "initial_parse": False,
-            "some relevant attribute": True,
-        }
 
     @staticmethod
     def test_dask_configuration(manager_class, mocker):
@@ -818,7 +806,7 @@ class TestPublish:
         assert len(dataset.time) > len(time_values)
 
         dataset = dm.prep_update_dataset(dataset, time_values)
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         assert np.array_equal(dataset.time, time_values)
         assert dataset.chunks == {}
@@ -843,7 +831,7 @@ class TestPublish:
         assert "time" not in dataset.dims
 
         dataset = dm.prep_update_dataset(dataset, time_values)
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         assert np.array_equal(dataset.time, time_values[:1])
         assert dataset.chunks == {}
@@ -881,7 +869,7 @@ class TestPublish:
     def test_preparse_quality_check(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
@@ -894,7 +882,7 @@ class TestPublish:
     def test_preparse_quality_check_short_dataset(manager_class, single_time_instant_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(single_time_instant_dataset)
+        dm.encode_ds(single_time_instant_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
@@ -910,7 +898,7 @@ class TestPublish:
         dm = manager_class()
         dm.check_random_values = mock.Mock()
         dm.check_nan_frequency = mock.Mock()
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
 
         with pytest.raises(IndexError):
             dm.pre_parse_quality_check(dataset)
@@ -919,7 +907,7 @@ class TestPublish:
     def test_preparse_quality_check_bad_dtype(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         fake_original_dataset.data.encoding["dtype"] = "thewrongtype"
 
@@ -929,7 +917,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial(mocker, manager_class, fake_large_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_large_dataset)
+        dm.encode_ds(fake_large_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # patch sample size to 16, size of input dataset
@@ -967,7 +955,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_small_array(mocker, manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # patch sample size to 16, size of input dataset
@@ -980,7 +968,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_no_existing(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=False)
         dm.pre_parse_quality_check(fake_original_dataset)
@@ -992,7 +980,7 @@ class TestPublish:
     def test_preparse_quality_check_nan_binomial_skip_check(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.skip_pre_parse_nan_check = True
         dm.check_nan_frequency = mock.Mock()
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
@@ -1006,7 +994,7 @@ class TestPublish:
     def test_preparse_quality_check_no_frequency_attribute(mocker, manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.store = mock.Mock(spec=store.Local, has_existing=True)
 
         # raise AttributeError if expected_nan_frequency attribute not present
@@ -1019,7 +1007,7 @@ class TestPublish:
         dm = manager_class()
         dm.EXTREME_VALUES_BY_UNIT = {"parsecs": (-10, 10)}
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.check_random_values(fake_original_dataset)
 
     @staticmethod
@@ -1027,7 +1015,7 @@ class TestPublish:
         fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         with pytest.raises(ValueError):
             dm.check_random_values(fake_original_dataset)
 
@@ -1035,7 +1023,7 @@ class TestPublish:
     def test_check_random_values_nonsense_value(manager_class, fake_original_dataset):
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
 
         fake_original_dataset["data"].encoding["units"] = "K"
         fake_original_dataset.data.values[:] = 1_000_000  # hot
@@ -1048,7 +1036,7 @@ class TestPublish:
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
         dataset = fake_original_dataset.drop_vars(dm._standard_dims_except(dm.time_dim))
-        dm.encode_vars(dataset)
+        dm.encode_ds(dataset)
         dm.check_random_values(dataset)
 
     @staticmethod
@@ -1056,7 +1044,7 @@ class TestPublish:
         fake_original_dataset.data.values[:] = np.nan
         dm = manager_class()
         dm.pre_chunk_dataset = fake_original_dataset
-        dm.encode_vars(fake_original_dataset)
+        dm.encode_ds(fake_original_dataset)
         dm.has_nans = True
         dm.check_random_values(fake_original_dataset)
 
@@ -1308,6 +1296,18 @@ class TestPublish:
         fake_original_dataset.data[coord_indices] = np.nan
         prod_ds.data[coord_indices] = np.nan
         dm.check_written_value(fake_original_dataset, prod_ds)
+
+    @staticmethod
+    def test_check_written_value_value_one_missing_value_one_nan(manager_class, fake_original_dataset):
+        dm = manager_class()
+        prod_ds = fake_original_dataset.copy(deep=True)
+        coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
+
+        prod_ds.data[coord_indices] = np.nan
+        fake_original_dataset.data[coord_indices] = dm.missing_value  # 42
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_two_infinities_ish(manager_class, fake_original_dataset):

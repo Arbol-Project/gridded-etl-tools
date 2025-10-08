@@ -5,12 +5,13 @@ import pathlib
 import pytest
 import numpy as np
 import numcodecs
+from numcodecs import Blosc
 import zarr
+import xarray as xr
+
 
 # Imports used for legacy encoding change tests
 # import os
-# import json
-# import xarray as xr
 # from time import sleep
 
 from requests.exceptions import Timeout
@@ -946,7 +947,7 @@ class TestMetadata:
         renamed = md.rename_data_variable.return_value
 
         md.remove_unwanted_fields = mock.Mock()
-        md.encode_vars = mock.Mock()
+        md.encode_ds = mock.Mock()
         md.set_initial_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
 
@@ -956,7 +957,7 @@ class TestMetadata:
         md.rename_data_variable.assert_called_once_with(dataset)
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.set_initial_compression.assert_called_once_with(renamed)
-        md.encode_vars.assert_called_once_with(renamed)
+        md.encode_ds.assert_called_once_with(renamed)
 
     @staticmethod
     def test_rename_data_variable(manager_class):
@@ -979,27 +980,40 @@ class TestMetadata:
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
     @staticmethod
-    def test_encode_vars(manager_class, fake_original_dataset):
+    def test_encode_ds(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
+        mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": (1, 1, 1),
+            "preferred_chunks": md.requested_zarr_chunks,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": (1, 1, 1),
+            "preferred_chunks": md.requested_zarr_chunks,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
-            "_FillValue": "",
+            "_FillValue": mv,
             "chunks": (1, 1, 1),
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
-            "missing_value": "",
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
@@ -1008,27 +1022,40 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_chunks_has_existing(manager_class, fake_original_dataset):
+    def test_encode_ds_chunks_has_existing(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
+        mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
-            "_FillValue": "",
+            "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": "",
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "days since 1975-07-07 0:0:0 0",
@@ -1037,9 +1064,11 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_forecast(manager_class, forecast_dataset):
+    def test_encode_ds_forecast(manager_class, forecast_dataset):
         dataset = forecast_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.forecast_reference_time.encoding == {}
 
@@ -1047,18 +1076,29 @@ class TestMetadata:
         md.time_dim = "forecast_reference_time"
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "step": 1, "forecast_reference_time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
+        mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
-            "_FillValue": "",
+            "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": "",
         }
         assert dataset.forecast_reference_time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "initial time of forecast",
             "standard_name": "forecast_reference_time",
             "calendar": "proleptic_gregorian",
@@ -1068,9 +1108,11 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_hindcast(manager_class, hindcast_dataset):
+    def test_encode_ds_hindcast(manager_class, hindcast_dataset):
         dataset = hindcast_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.hindcast_reference_time.encoding == {}
 
@@ -1084,18 +1126,29 @@ class TestMetadata:
             "hindcast_reference_time": 1,
         }
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_vars(dataset) is dataset
+        md.encode_ds(dataset) is dataset
+        mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
-            "_FillValue": "",
+            "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": "",
         }
         assert dataset.hindcast_reference_time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "initial time of forecast",
             "standard_name": "hindcast_reference_time",
             "calendar": "proleptic_gregorian",
@@ -1105,30 +1158,34 @@ class TestMetadata:
         }
 
     @staticmethod
-    def test_encode_vars_w_encryption_key(manager_class, fake_original_dataset):
+    def test_encode_ds_w_encryption_key(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         assert dataset.time.encoding == {}
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 1
         assert isinstance(filters[0], encryption.EncryptionFilter)
 
     @staticmethod
-    def test_encode_vars_w_encryption_key_and_preexisting_filter(manager_class, fake_original_dataset):
+    def test_encode_ds_w_encryption_key_and_preexisting_filter(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         dataset["data"].encoding = {"filters": ["SomeOtherFilter"]}
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset.time.encoding == {}
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 2
@@ -1136,27 +1193,40 @@ class TestMetadata:
         assert isinstance(filters[1], encryption.EncryptionFilter)
 
     @staticmethod
-    def test_encode_vars_time_units_known(manager_class, fake_original_dataset):
+    def test_encode_ds_time_units_known(manager_class, fake_original_dataset):
         dataset = fake_original_dataset
         assert dataset.encoding == {}
+        assert dataset.latitude.encoding == {}
+        assert dataset.longitude.encoding == {}
         assert dataset["data"].encoding == {}
         dataset.time.encoding = {"units": "picoseconds since the big bang"}
 
         md = manager_class()
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
-        md.encode_vars(dataset)
+        md.encode_ds(dataset)
+        mv = md.missing_value
 
-        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": "", "missing_value": ""}}
+        assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
+        assert dataset.latitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
+        assert dataset.longitude.encoding == {
+            "_FillValue": -9223372036854775808,
+            "chunks": None,
+            "preferred_chunks": None,
+        }
         assert dataset["data"].encoding == {
             "dtype": "<f4",
             "units": "parsecs",
-            "_FillValue": "",
+            "_FillValue": mv,
             "chunks": None,
             "preferred_chunks": None,
-            "missing_value": "",
         }
         assert dataset.time.encoding == {
+            "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
             "units": "picoseconds since the big bang",
@@ -1250,11 +1320,133 @@ class TestMetadata:
     @staticmethod
     @pytest.fixture
     def encoding_test_output():
-        """Fixture to create and cleanup output directory for encoding tests"""
+        """
+        Fixture to create and cleanup output directory for encoding tests"""
         output_path = pathlib.Path("./tests/unit/utils/output")
         pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
         yield output_path
         clean_up_input_paths(output_path)
+
+    @staticmethod
+    def test_encoding_survives_to_zarr(manager_class, fake_original_dataset_float_coords, tmp_path):
+        """
+        Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
+        causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
+        """
+        md = manager_class(static_metadata={"bar": "baz"})
+        md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
+        md.encode_ds(fake_original_dataset_float_coords)
+
+        # Save and re-open
+        zarr_path = tmp_path / "test.zarr"
+        fake_original_dataset_float_coords.to_zarr(zarr_path, zarr_version=2)
+        saved_ds = xr.open_zarr(zarr_path)
+
+        # NaN never is equivalent to anything else so we need to test it separately
+        lat_fill_value = saved_ds.latitude.encoding.pop("_FillValue")
+        lon_fill_value = saved_ds.longitude.encoding.pop("_FillValue")
+        assert np.isnan(lat_fill_value)
+        assert np.isnan(lon_fill_value)
+
+        # Now we can test everything else
+        assert saved_ds.latitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"latitude": 4},
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("float64"),
+            "filters": (),
+            "shards": None,
+        }
+        assert saved_ds.longitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"longitude": 4},
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("float64"),
+            "filters": (),
+            "shards": None,
+        }
+        assert "missing_value" not in saved_ds.longitude.encoding
+        assert "missing_value" not in saved_ds.latitude.encoding
+
+    @staticmethod
+    def test_encoding_survives_to_zarr_integer_coords(manager_class, fake_original_dataset, tmp_path):
+        """
+        Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
+        causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
+        """
+        md = manager_class(static_metadata={"bar": "baz"})
+        md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
+        md.encode_ds(fake_original_dataset)
+
+        # Save and re-open
+        zarr_path = tmp_path / "test.zarr"
+        fake_original_dataset.to_zarr(zarr_path, zarr_version=2)
+        saved_ds = xr.open_zarr(zarr_path)
+
+        # Test full encoding -- this time the _FillValue is an implausible integer value, not NaN
+        assert saved_ds.latitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"latitude": 4},
+            "_FillValue": -9223372036854775808,
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("int64"),
+            "filters": (),
+            "shards": None,
+        }
+        assert saved_ds.longitude.encoding == {
+            "chunks": (4,),
+            "preferred_chunks": {"longitude": 4},
+            "_FillValue": -9223372036854775808,
+            "compressors": (Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE, blocksize=0),),
+            "dtype": np.dtype("int64"),
+            "filters": (),
+            "shards": None,
+        }
+        assert "missing_value" not in saved_ds.longitude.encoding
+        assert "missing_value" not in saved_ds.latitude.encoding
+
+    @staticmethod
+    def test_zarr_step_dtype_conversion_issue(tmp_path):
+        """
+        This is a regression test for a very obscure Xarray behavior we encountered reading the `step` coordinate
+        of a 4D (Forecast) dataset. In rare cases where the initial DS was saved with Xarray==2025.9.0 and then
+        appended to with Xarray==2025.6.0, this would fail with a "pandas.errors.OutOfBoundsTimedelta
+        Cannot convert 77760000000000000 seconds to timedelta64[ns] without overflow"
+
+        This regression test is not so great because we don't re-install from pip within the test (sounds horrible),
+        but it theoretically could catch the issue if it's ever re-introduced by further Xarray updates
+        -- which, given their record, is not out of the question.
+        """
+        # Create and save a dataset that will cause Xarray to auto-insert the dtype into the .zattrs
+        # Create step coordinate with large nanosecond values (hours as ns)
+        step_values = np.array([0, 6, 12, 18], dtype="timedelta64[h]").astype("timedelta64[ns]")  # 1h, 6h, 12h in ns
+        step = xr.DataArray(step_values, dims="step")
+        step.encoding = {"units": "hours", "dtype": np.dtype("int64")}
+        forecast_reference_time = xr.DataArray(
+            data=np.array(["2025-02-26T00:00:00.000000000"], dtype="datetime64[ns]"), dims="forecast_reference_time"
+        )
+        forecast_reference_time.encoding = {"dtype": np.dtype("int64")}
+
+        ds = xr.Dataset(
+            {
+                "data": xr.DataArray(
+                    data=np.array([[1, 2, 3, 4]]),
+                    dims=("forecast_reference_time", "step"),
+                    coords={"forecast_reference_time": forecast_reference_time, "step": step},
+                )
+            }
+        )
+        zarr_path = tmp_path / "test.zarr"
+
+        ds.to_zarr(zarr_path, zarr_version=2)
+
+        # Now append to the new_ds
+        append_ds = xr.open_zarr(zarr_path, decode_cf=True)
+        append_ds["forecast_reference_time"] = append_ds["forecast_reference_time"] + np.timedelta64(1, "D")
+        append_ds.to_zarr(zarr_path, zarr_version=2, mode="a")
+
+        # Prove the appended ds can be opened
+        xr.open_zarr(zarr_path, decode_cf=True)
 
     # LEGACY ENCODING CHANGE TESTS DISABLED AS THEY RELY ON ZARR V2
     # WHICH IS NOT AVAILABLE IN THE CI ENVIRONMENT

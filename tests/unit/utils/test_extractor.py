@@ -7,8 +7,17 @@ import requests
 import re
 import os
 
+
 from unittest.mock import Mock
-from gridded_etl_tools.utils.extractor import Extractor, HTTPExtractor, S3Extractor, FTPExtractor
+from gridded_etl_tools.utils.extractor import (
+    Extractor,
+    HTTPExtractor,
+    S3Extractor,
+    S3ExtractorKerchunk,
+    S3ExtractorDownload,
+    S3ExtractorBase,
+    FTPExtractor,
+)
 from .test_convenience import DummyFtpClient
 
 
@@ -254,24 +263,24 @@ class TestHTTPExtractor:
                 assert result.call_count == 1
 
 
-class TestS3Extractor:
+class TestS3ExtractorKerchunk:
     @staticmethod
     def test_s3_misspecified_extraction_errors(manager_class):
         dm = manager_class()
 
         # Test that ignorable extraction errors are converted to a tuple
         ignorable_extraction_errors = [FileNotFoundError]
-        extractor = S3Extractor(dm, ignorable_extraction_errors=ignorable_extraction_errors)
+        extractor = S3ExtractorKerchunk(dm, ignorable_extraction_errors=ignorable_extraction_errors)
         assert extractor.ignorable_extraction_errors == tuple(ignorable_extraction_errors)
 
         # Ensure the same for unsupported extraction errors
         unsupported_extraction_errors = [ValueError]
-        extractor = S3Extractor(dm, unsupported_extraction_errors=unsupported_extraction_errors)
+        extractor = S3ExtractorKerchunk(dm, unsupported_extraction_errors=unsupported_extraction_errors)
         assert extractor.unsupported_extraction_errors == tuple(unsupported_extraction_errors)
 
     @staticmethod
     def test_s3_request(manager_class):
-        extractor = S3Extractor(manager_class())
+        extractor = S3ExtractorKerchunk(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
@@ -285,7 +294,7 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_with_informative_id(manager_class):
-        extractor = S3Extractor(manager_class())
+        extractor = S3ExtractorKerchunk(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
@@ -299,7 +308,7 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_remote_file_is_not_on_s3(manager_class):
-        extractor = S3Extractor(manager_class())
+        extractor = S3ExtractorKerchunk(manager_class())
 
         rfp = "t4://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
@@ -314,7 +323,7 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_fail(manager_class):
-        extract = S3Extractor(manager_class())
+        extract = S3ExtractorKerchunk(manager_class())
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = "/local/sand/depo/castle1.json"
@@ -329,7 +338,7 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_permitted_fail(manager_class):
-        extract = S3Extractor(
+        extract = S3ExtractorKerchunk(
             manager_class(),
             ignorable_extraction_errors=[FileNotFoundError],
             unsupported_extraction_errors=[ValueError],
@@ -347,7 +356,7 @@ class TestS3Extractor:
 
     @staticmethod
     def test_s3_request_unpermitted_fail(manager_class):
-        extract = S3Extractor(
+        extract = S3ExtractorKerchunk(
             manager_class(),
             ignorable_extraction_errors=[FileNotFoundError],
             unsupported_extraction_errors=[ValueError],
@@ -363,6 +372,151 @@ class TestS3Extractor:
         with pytest.raises(ValueError):
             extract.request(*args)
         assert time.sleep.call_count == 0
+
+
+class TestS3ExtractorDeprecation:
+    @staticmethod
+    def test_s3_extractor_deprecation_warning(manager_class, caplog):
+        """Test that S3Extractor raises a deprecation warning"""
+        dm = manager_class()
+
+        # Clear any existing log records
+        caplog.clear()
+
+        # Create S3Extractor instance (should trigger deprecation warning)
+        extractor = S3Extractor(dm)
+
+        # Verify the warning was logged
+        assert "S3Extractor is deprecated" in caplog.text
+        assert "S3ExtractorKerchunk for kerchunking operations" in caplog.text
+        assert "S3ExtractorDownload for direct file downloads" in caplog.text
+
+        # Verify it still behaves like S3ExtractorKerchunk
+        assert isinstance(extractor, S3ExtractorKerchunk)
+        assert hasattr(extractor.dm, "zarr_jsons")
+
+
+class TestS3ExtractorDownload:
+    @staticmethod
+    def test_s3_download_with_fs_provided(manager_class, tmp_path):
+        """Test successful S3 file download with provided fs"""
+
+        mock_s3_fs = Mock()
+        extractor = S3ExtractorDownload(manager_class(), fs=mock_s3_fs)
+        assert extractor.s3_fs == mock_s3_fs
+
+        # Test that extract_from_s3 uses the provided fs
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        mock_s3_fs.download.assert_called_once_with(rfp, str(lfp))
+
+    @staticmethod
+    def test_s3_download_without_fs_provided(manager_class, tmp_path, monkeypatch):
+        mock_s3fs = Mock()
+        monkeypatch.setattr("s3fs.S3FileSystem", mock_s3fs)
+
+        extractor = S3ExtractorDownload(manager_class())
+        mock_s3fs.assert_called_once_with()
+        assert extractor.s3_fs == mock_s3fs.return_value
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.s3_fs.download.assert_called_once_with(rfp, str(lfp))
+
+        # fs=None should also instantiate a new S3FileSystem
+        S3ExtractorDownload(manager_class(), fs=None)
+        assert mock_s3fs.call_count == 2
+
+    @staticmethod
+    def test_s3_download_request_success(manager_class, tmp_path):
+        """Test successful S3 file download"""
+
+        extractor = S3ExtractorDownload(manager_class())
+        mock_s3_fs = Mock()
+        extractor.s3_fs = mock_s3_fs
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+
+        result = extractor.request(rfp, local_file_path=lfp)
+
+        assert result is True
+        mock_s3_fs.download.assert_called_once_with(rfp, str(lfp))
+
+    @staticmethod
+    def test_s3_download_request_no_local_path(manager_class):
+        """Test that S3ExtractorDownload requires local_file_path"""
+        extractor = S3ExtractorDownload(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+
+        with pytest.raises(ValueError, match="local_file_path is required"):
+            extractor.request(rfp)
+
+    @staticmethod
+    def test_s3_download_request_invalid_s3_path(manager_class):
+        """Test that non-S3 paths are rejected"""
+        extractor = S3ExtractorDownload(manager_class())
+
+        rfp = "t4://bucket/sand/castle/castle1.grib"
+        lfp = pathlib.Path("/local/sand/depo/castle1.grib")
+
+        with pytest.raises(ValueError, match="is not an S3 path"):
+            extractor.request(rfp, local_file_path=lfp)
+
+    @staticmethod
+    def test_s3_download_scan_indices_invalid(manager_class, monkeypatch, tmp_path):
+        """Test that scan_indices parameter raises an exception for downloads"""
+        # Mock s3fs module
+        mock_s3fs_module = Mock()
+        mock_filesystem = Mock()
+        mock_s3fs_module.S3FileSystem.return_value = mock_filesystem
+
+        # Mock the s3fs import
+        monkeypatch.setattr("s3fs.S3FileSystem", mock_s3fs_module.S3FileSystem)
+
+        extractor = S3ExtractorDownload(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+
+        with pytest.raises(ValueError, match="scan_indices not supported"):
+            extractor.request(rfp, scan_indices=(1, 2), local_file_path=lfp)
+
+    @staticmethod
+    def test_s3_download_retry_logic(manager_class, monkeypatch, tmp_path):
+        """Test that retry logic works for download failures"""
+        # Mock s3fs to fail then succeed
+        mock_s3fs_module = Mock()
+        mock_filesystem = Mock()
+        mock_filesystem.download.side_effect = [Exception("Network error"), None]
+        mock_s3fs_module.S3FileSystem.return_value = mock_filesystem
+
+        # Mock the s3fs import and time.sleep
+        monkeypatch.setattr("s3fs.S3FileSystem", mock_s3fs_module.S3FileSystem)
+        monkeypatch.setattr("time.sleep", Mock())
+
+        extractor = S3ExtractorDownload(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+
+        result = extractor.request(rfp, tries=2, local_file_path=lfp)
+
+        assert result is True
+        assert mock_filesystem.download.call_count == 2
+
+
+class TestS3ExtractorBase:
+    @staticmethod
+    def test_s3_extractor_base_is_abstract():
+        """Test that S3ExtractorBase cannot be instantiated directly"""
+        dm = Mock()
+
+        with pytest.raises(TypeError):
+            S3ExtractorBase(dm)
 
 
 class TestFTPExtractor:

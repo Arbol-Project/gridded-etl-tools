@@ -3,10 +3,23 @@ import json
 import os
 import pathlib
 from unittest import mock
+from moto.server import ThreadedMotoServer
+import boto3  # type: ignore[import-untyped]
 
 import pytest
 
 from gridded_etl_tools.utils import store as store_module
+
+
+@pytest.fixture(scope="module")
+def mock_aws_server():
+    """Get a local HTTP endpoint representing a mocked AWS server."""
+    # Port 0 means get a random unused port
+    server = ThreadedMotoServer(port=0)
+    server.start()
+    host, port = server.get_host_and_port()
+    yield f"http://{host}:{port}"
+    server.stop()
 
 
 class DummyStoreImpl(store_module.StoreInterface):
@@ -95,6 +108,11 @@ class TestStoreInterface:
         MockFS.exists = lambda x, y: True
         assert store.has_v3_metadata
 
+    @staticmethod
+    def test_versioning_enabled():
+        store = DummyStoreImpl(None)
+        assert store.versioning_enabled is False
+
 
 class TestS3:
     @staticmethod
@@ -102,10 +120,12 @@ class TestS3:
         dm = object()
         bucket = "drops"
 
-        store = store_module.S3(dm, bucket)
+        store = store_module.S3(dm, bucket, "side", "fbi.access")
 
         assert store.dm is dm
         assert store.bucket == bucket
+        assert store.profile == "side"
+        assert store.endpoint_url == "fbi.access"
 
     @staticmethod
     def test_constructor_no_bucket():
@@ -116,36 +136,56 @@ class TestS3:
 
     @staticmethod
     def test_fs(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
         store = store_module.S3(mock.Mock(), "bucket")
-        fs = s3fs.S3FileSystem.return_value
+        fs = mock_s3fs.S3FileSystem.return_value
 
         assert store.fs() is fs
         assert store.fs() is fs  # second call returns cached value
 
-        s3fs.S3FileSystem.assert_called_once_with(profile=None)
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile=None, endpoint_url=None)
 
     @staticmethod
     def test_fs_refresh(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
         store = store_module.S3(mock.Mock(), "bucket")
         store._fs = object()
-        fs = s3fs.S3FileSystem.return_value
+        fs = mock_s3fs.S3FileSystem.return_value
 
         assert store.fs(refresh=True) is fs
 
-        s3fs.S3FileSystem.assert_called_once_with(profile=None)
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile=None, endpoint_url=None)
 
     @staticmethod
     def test_fs_refresh_profile(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        store = store_module.S3(mock.Mock(), "bucket")
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket", None, "fbi.access")
         store._fs = object()
-        fs = s3fs.S3FileSystem.return_value
+        fs = mock_s3fs.S3FileSystem.return_value
 
         assert store.fs(refresh=True, profile="slim") is fs
 
-        s3fs.S3FileSystem.assert_called_once_with(profile="slim")
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile="slim", endpoint_url="fbi.access")
+
+    @staticmethod
+    def test_fs_profile(mocker):
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket", "low")
+        store._fs = object()
+
+        store.fs(refresh=True, profile="high")
+
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile="high", endpoint_url=None)
+
+    @staticmethod
+    def test_fs_profile_init(mocker):
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket", "low")
+        store._fs = object()
+
+        store.fs(refresh=True)
+
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile="low", endpoint_url=None)
 
     @staticmethod
     def test_path():
@@ -167,8 +207,8 @@ class TestS3:
 
     @staticmethod
     def test_mapper(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        mapper = s3fs.S3Map.return_value
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        mapper = mock_s3fs.S3Map.return_value
         store = store_module.S3(mock.Mock(custom_output_path="put/it/here.zarr"), "bucket")
         store.fs = mock.Mock()
 
@@ -178,12 +218,12 @@ class TestS3:
         assert store.mapper() is mapper  # second call uses cached object
 
         store.fs.assert_called_once_with()
-        s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
+        mock_s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
 
     @staticmethod
     def test_mapper_refresh(mocker):
-        s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        mapper = s3fs.S3Map.return_value
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        mapper = mock_s3fs.S3Map.return_value
         store = store_module.S3(mock.Mock(custom_output_path="put/it/here.zarr"), "bucket")
         store.fs = mock.Mock()
         store._mapper = object()
@@ -193,7 +233,7 @@ class TestS3:
         assert store.mapper(refresh=True) is mapper
 
         store.fs.assert_called_once_with()
-        s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
+        mock_s3fs.S3Map.assert_called_once_with(root="put/it/here.zarr", s3=fs)
 
     @staticmethod
     def test_has_existing():
@@ -298,6 +338,56 @@ class TestS3:
 
         with open(tmpdir / "zarr.json") as f:
             assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
+
+    @staticmethod
+    def test_versioning_enabled(mock_aws_server):
+        # Create a mock server and bucket
+        boto = boto3.client("s3", endpoint_url=mock_aws_server)
+        boto.create_bucket(Bucket="FBI_Classified")
+
+        # Connect to the mock bucket
+        store = store_module.S3(mock.Mock(), "FBI_Classified", None, mock_aws_server)
+        assert store.versioning_enabled is False
+
+        # Enable versioning on the bucket
+        boto.put_bucket_versioning(Bucket="FBI_Classified", VersioningConfiguration={"Status": "Enabled"})
+        assert store.versioning_enabled is True
+
+    @staticmethod
+    def test_dataset_calls_open_zarr_with_profile_storage_options(mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.store.xr")
+        store = store_module.S3(
+            mock.Mock(custom_output_path="s3://bucket/data.zarr"),
+            "bucket",
+            profile="slim",
+        )
+        # Make Zarr appear to exist
+        store.fs = mock.Mock()
+        store.fs.return_value.exists.return_value = True
+
+        ds = store.dataset(arbitrary="keyword")
+        assert ds is xr.open_zarr.return_value
+
+        xr.open_zarr.assert_called_once_with(
+            store=store.path,
+            storage_options={"profile": "slim"},
+            decode_timedelta=True,
+            arbitrary="keyword",
+        )
+
+    @staticmethod
+    def test_dataset_s3_not_existing_does_not_call_xarray(mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.store.xr")
+        store = store_module.S3(
+            mock.Mock(custom_output_path="s3://bucket/data.zarr"),
+            "bucket",
+            profile="slim",
+        )
+        store.fs = mock.Mock()
+        store.fs.return_value.exists.return_value = False
+
+        assert store.dataset() is None
+        xr.open_zarr.assert_not_called()
 
 
 class TestLocal:
@@ -458,3 +548,8 @@ class TestLocal:
 
         with open(tmpdir / "zarr.json") as f:
             assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
+
+    @staticmethod
+    def test_versioning_enabled():
+        store = store_module.Local(None)
+        assert store.versioning_enabled is False
