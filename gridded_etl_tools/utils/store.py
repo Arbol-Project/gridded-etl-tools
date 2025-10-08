@@ -249,11 +249,14 @@ class StoreInterface(ABC):
     @property
     def versioning_enabled(self) -> bool:
         """
+        Check if versioning is available and has been enabled on the store backend. For local this is always false. For
+        S3, this is true if the bucket has been configured with versioning enabled. Versioning is a prerequisite for
+        rolling a Zarr back to a previous version.
+
         Returns
         -------
         bool
-            True if versioning is enabled on the store. For local this is always false. For S3, this is true if the
-            bucket has been configured with versioning enabled.
+            True if versioning is available and enabled
         """
         return False
 
@@ -459,10 +462,13 @@ class S3(StoreInterface):
     @property
     def versioning_enabled(self) -> bool:
         """
+        Check if versioning has been enabled on the bucket. Versioning is a prerequisite for rolling a Zarr back to a
+        previous version.
+
         Returns
         -------
         bool
-            True if versioning is enabled on the bucket.
+            True if versioning is enabled on the bucket
         """
         # Need to use boto3 instead of s3fs to get the versioning status
         client = boto3.client("s3", endpoint_url=self.endpoint_url)
