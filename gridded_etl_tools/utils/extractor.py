@@ -510,11 +510,21 @@ class S3ExtractorDownload(S3ExtractorBase):
     Create an object that can be used to download S3 files directly using s3fs.
     """
 
-    def __init__(self, dm, concurrency_limit=8, ignorable_extraction_errors=(), unsupported_extraction_errors=()):
+    def __init__(
+        self,
+        dm,
+        concurrency_limit=8,
+        ignorable_extraction_errors=(),
+        unsupported_extraction_errors=(),
+        fs: s3fs.S3FileSystem() = None,
+    ):
         # ValueError can be raised by extract_from_s3 and should not retry
         unsupported_extraction_errors += (ValueError,)
         super().__init__(dm, concurrency_limit, ignorable_extraction_errors, unsupported_extraction_errors)
-        self.s3_fs = s3fs.S3FileSystem()
+        if fs:
+            self.s3_fs = fs
+        else:
+            self.s3_fs = s3fs.S3FileSystem()
 
     def extract_from_s3(
         self,

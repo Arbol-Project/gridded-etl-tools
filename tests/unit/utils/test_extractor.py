@@ -7,6 +7,7 @@ import requests
 import re
 import os
 
+
 from unittest.mock import Mock
 from gridded_etl_tools.utils.extractor import (
     Extractor,
@@ -396,6 +397,38 @@ class TestS3ExtractorDeprecation:
 
 
 class TestS3ExtractorDownload:
+    @staticmethod
+    def test_s3_download_with_fs_provided(manager_class, tmp_path):
+        """Test successful S3 file download with provided fs"""
+
+        mock_s3_fs = Mock()
+        extractor = S3ExtractorDownload(manager_class(), fs=mock_s3_fs)
+        assert extractor.s3_fs == mock_s3_fs
+
+        # Test that extract_from_s3 uses the provided fs
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        mock_s3_fs.download.assert_called_once_with(rfp, str(lfp))
+
+    @staticmethod
+    def test_s3_download_without_fs_provided(manager_class, tmp_path, monkeypatch):
+        mock_s3fs = Mock()
+        monkeypatch.setattr("s3fs.S3FileSystem", mock_s3fs)
+
+        extractor = S3ExtractorDownload(manager_class())
+        mock_s3fs.assert_called_once_with()
+        assert extractor.s3_fs == mock_s3fs.return_value
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        lfp = tmp_path / "castle1.grib"
+        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.s3_fs.download.assert_called_once_with(rfp, str(lfp))
+
+        # fs=None should also instantiate a new S3FileSystem
+        S3ExtractorDownload(manager_class(), fs=None)
+        assert mock_s3fs.call_count == 2
+
     @staticmethod
     def test_s3_download_request_success(manager_class, tmp_path):
         """Test successful S3 file download"""
