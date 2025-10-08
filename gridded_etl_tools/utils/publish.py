@@ -22,6 +22,10 @@ from .errors import NanFrequencyMismatchError
 TWENTY_MINUTES = 1200
 
 
+class ZarrOutputError(Exception):
+    """Raise when an exception occurs while the Zarr is being written"""
+
+
 class Publish(Transform):
     """
     Base class for publishing methods -- both initial publication and updates to existing datasets
@@ -142,6 +146,14 @@ class Publish(Transform):
         format will be 3. Otherwise, it will be 2. Do not pass "zarr_format" to "kwargs", or a ValueError will be
         raised.
 
+        Before the Zarr is written, "update_in_progress" will be set to True in the Zarr metadata. If a Zarr is opened,
+        and "update_in_progress" is True, that indicates the Zarr is currently being written and should not be read
+        from. After the Zarr is written, "update_in_progress" will be updated to False in the Zarr metadata, and the
+        data can be read safely.
+
+        ZarrOutputError will be raised if any exception occurs while the Zarr is being written. This can be used, for
+        example, to check whether a Zarr needs to be rolled back to a backup version.
+
         Parameters
         ----------
         dataset
@@ -153,6 +165,8 @@ class Publish(Transform):
 
         Raises
         ------
+        ZarrOutputError
+            If an error occurs while the Zarr is being written
         ValueError
             If "zarr_format" is passed as a keyword argument
         """
@@ -189,44 +203,32 @@ class Publish(Transform):
                 dataset.attrs.update(update_attrs)
             else:
                 dataset.attrs.update({"update_in_progress": True, "initial_parse": True})
-            # Remove update attributes from the dataset putting them in a dictionary to be written post-parse
-            post_parse_attrs = self.move_post_parse_attrs_to_dict(dataset=dataset)
 
-            # Write data to Zarr and log duration.
+            # Time the write operation
             start_writing = time.perf_counter()
-            dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
+
+            # Write to Zarr
+            try:
+                dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
+
+            # Catch any exception that occurs, and raise ZarrOutputError along with the original exception.
+            except Exception as error:
+                raise ZarrOutputError("Error while Zarr was being written.") from error
+
+            # Reset the update in progress flag, whether the write was successful or not.
+            finally:
+                # Indicate in metadata that update is not in progress.
+                self.info("Writing metadata after writing data to indicate write is finished.")
+                restored_attrs = {"update_in_progress": False}
+
+                # Use Zarr format to determine metadata format.
+                if zarr_format == 3:
+                    self.store.write_metadata_only(update_attrs=restored_attrs)
+                else:
+                    self.store.write_metadata_only_v2(update_attrs=restored_attrs)
+
+            # Log the write duration
             self.info(f"Writing Zarr took {datetime.timedelta(seconds=time.perf_counter() - start_writing)}")
-
-            # Indicate in metadata that update is complete. Use Zarr format to determine metadata format.
-            self.info("Writing metadata after writing data to indicate write is finished.")
-            if zarr_format == 3:
-                self.store.write_metadata_only(update_attrs=post_parse_attrs)
-            else:
-                self.store.write_metadata_only_v2(update_attrs=post_parse_attrs)
-
-    def move_post_parse_attrs_to_dict(self, dataset: xr.Dataset) -> dict[str, Any]:
-        """
-        Build a dictionary of attributes that should only be populated to a Zarr after parsing finishes.
-        Parameters
-        ----------
-        dataset
-            The xr.Dataset about to be written
-
-        Returns
-        -------
-        update_attrs
-            A dictionary of [str, Any] keypairs to be written to a Zarr only after a successful parse has finished
-        """
-        dataset = dataset.copy()
-        update_attrs = {"update_in_progress": False, "initial_parse": False}
-        # Build a dictionary of attributes to update post-parse
-        for attr in self.update_attributes:
-            if attr in dataset.attrs:
-                # Remove update attribute fields from the dataset so they aren't written with the dataset
-                # For example "date range" should only be updated after a successful parse
-                update_attrs[attr] = dataset.attrs[attr]
-
-        return update_attrs
 
     # SETUP
 

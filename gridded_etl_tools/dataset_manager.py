@@ -302,7 +302,19 @@ class DatasetManager(Logging, Publish, ABC):
         self.info(platform.platform())
         self.info(f"Python {platform.python_version()}")
         try:
-            self.info(f"{platform.freedesktop_os_release()['NAME']} {platform.freedesktop_os_release()['VERSION']}")
+            # None of the following keys are guaranteed to be included in the platform information, so build a string
+            # with as much information as is available.
+            release = platform.freedesktop_os_release()
+            log = ""
+            if "PRETTY_NAME" in release:
+                log += release["PRETTY_NAME"]
+            else:
+                if "NAME" in release:
+                    log += release["NAME"] + " "
+                if "VERSION" in release:
+                    log += release["VERSION"]
+            if log:
+                self.info(log)
         except OSError:
             # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
             pass
