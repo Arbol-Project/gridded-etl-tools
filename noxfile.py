@@ -14,7 +14,7 @@ def unit(session):
     session.install("-e", ".[testing]")
     session.run(
         "pytest",
-        "--log-disable=DEBUG",
+        "--log-level=INFO",
         f"--cov={CODE}",
         "--cov=tests.unit",
         "--cov-append",
