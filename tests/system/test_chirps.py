@@ -5,7 +5,6 @@ import pytest
 import xarray
 import shutil
 import glob
-import gc
 
 from unittest.mock import Mock, patch
 from ..common import (
