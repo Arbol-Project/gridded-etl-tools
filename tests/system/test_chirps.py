@@ -5,6 +5,7 @@ import pytest
 import xarray
 import shutil
 import glob
+import gc
 
 from unittest.mock import Mock, patch
 from ..common import (
@@ -97,6 +98,7 @@ def setup_and_teardown_per_test(
         patched_root_stac_catalog,
     )
     yield  # run the tests first
+    gc.collect()
     # delete temp files
     remove_mock_output()
     remove_zarr_json()
