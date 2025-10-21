@@ -191,7 +191,7 @@ def test_initial(manager_class, initial_input_path, root):
         .values
     )
     gc.collect()
-    original_dataset = xarray.open_dataset(root / "CHIRPS25_2024-12_Nevada.nc")
+    original_dataset = xarray.open_dataset(root / "CHIRPS25_2024-12_Nevada.nc", engine="h5netcdf")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2024, 12, 12)).values
@@ -235,7 +235,7 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
         generated_dataset[dm.data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
     )
     gc.collect()
-    original_dataset = xarray.open_dataset(root / "CHIRPS25_2025-01_Nevada.nc")
+    original_dataset = xarray.open_dataset(root / "CHIRPS25_2025-01_Nevada.nc", engine="h5netcdf")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
