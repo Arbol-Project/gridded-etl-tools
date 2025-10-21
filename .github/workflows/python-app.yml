@@ -45,6 +45,5 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{secrets.TESTING_AWS_ACCESS_KEY_ID}}
         AWS_SECRET_ACCESS_KEY: ${{secrets.TESTING_AWS_SECRET_ACCESS_KEY}}
-        HDF5_USE_FILE_LOCKING: FALSE
       run: |
         nox
