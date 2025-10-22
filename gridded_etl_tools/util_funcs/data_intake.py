@@ -176,8 +176,9 @@ def nest_files(
         key = tuple(dim_values[dim_idx][idx] for dim_idx, idx in enumerate(indices))
         key_file = file_lookup.get(key, None)
         if key_file is None:
-            raise FileNotFoundError(f"No file found for key: {key}. "
-                                    "Nested file structure must be complete for all dimensions, exiting.")
+            raise FileNotFoundError(
+                f"No file found for key: {key}. " "Nested file structure must be complete for all dimensions, exiting."
+            )
         flat_list.append(key_file)
 
     # Reshape flat list into nested structure
