@@ -2,7 +2,7 @@ import pathlib
 import re
 import pandas as pd
 import pytest
-from gridded_etl_tools.util_funcs.data_intake import parse_filenames, nest_files
+from gridded_etl_tools.util_funcs.flat_to_nd import parse_filenames, nest_files, reshape
 
 FILE_NAME_PATTERNS_V1 = {
     "time": re.compile(r"forecast_reference_time-(\d{4}-\d{2}-\d{2})_step"),
@@ -294,3 +294,55 @@ def test_nest_files_empty():
     df = pd.DataFrame(columns=["file", "time", "step", "ensemble"])
     with pytest.raises(ValueError, match="Input DataFrame is empty, cannot nest files"):
         nest_files(df)
+
+
+def test_reshape_valid_cases():
+    """Test that reshape works correctly for valid cases."""
+    # Test case 1: 2D reshape
+    data = [1, 2, 3, 4, 5, 6]
+    result = reshape(data, [2, 3])
+    expected = [[1, 2, 3], [4, 5, 6]]
+    assert result == expected
+
+    # Test case 2: 3D reshape
+    data = list(range(8))
+    result = reshape(data, [2, 2, 2])
+    expected = [[[0, 1], [2, 3]], [[4, 5], [6, 7]]]
+    assert result == expected
+
+    # Test case 3: 1D reshape (should return data as is)
+    data = [1, 2, 3, 4]
+    result = reshape(data, [4])
+    expected = [1, 2, 3, 4]
+    assert result == expected
+
+
+def test_reshape_data_loss_prevention():
+    """Test that reshape raises errors for cases that would cause data loss."""
+    # Test case 1: Data too long (the original problem from the user's example)
+    data = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n"]
+    with pytest.raises(ValueError, match="Cannot reshape data of length 14 into shape \\[2, 3, 2\\]"):
+        reshape(data, [2, 3, 2])
+
+    # Test case 2: Data too short
+    data = [1, 2, 3]
+    with pytest.raises(ValueError, match="Cannot reshape data of length 3 into shape \\[2, 3\\]"):
+        reshape(data, [2, 3])
+
+    # Test case 3: Empty data with non-empty shape
+    data = []
+    with pytest.raises(ValueError, match="Cannot reshape data of length 0 into shape \\[2, 2\\]"):
+        reshape(data, [2, 2])
+
+
+def test_reshape_edge_cases():
+    """Test reshape with edge cases."""
+    # Test with single element
+    data = [42]
+    result = reshape(data, [1])
+    assert result == [42]
+
+    # Test with empty shape (should work with empty data)
+    data = []
+    result = reshape(data, [0])
+    assert result == []

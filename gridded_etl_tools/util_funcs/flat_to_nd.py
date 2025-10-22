@@ -216,7 +216,21 @@ def reshape(data: list, shape: list[int]) -> list:
     >>> shape = [2, 2, 2]
     >>> reshape(data, shape)
     [[[0, 1], [2, 3]], [[4, 5], [6, 7]]]
+
+    Raises
+    ------
+    ValueError
+        If the total number of elements in `data` does not match the product of dimensions in `shape`.
     """
+    # Error out if data length does not match the expected shape
+    # We expect only full lists and this would cause data loss
+    expected_size = int(np.prod(shape))
+    if len(data) != expected_size:
+        raise ValueError(
+            f"Cannot reshape data of length {len(data)} into shape {shape}. "
+            f"Expected {expected_size} elements, got {len(data)}."
+        )
+
     if len(shape) == 1:
         return data
 
