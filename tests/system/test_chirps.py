@@ -189,6 +189,9 @@ def test_initial(manager_class, initial_input_path, root):
         )
         .values
     )
+
+    # Pull original data for checking. The "h5netcdf" engine is specified because re-opening the netCDF file fails on
+    # the GitHub actions server instance without it.
     original_dataset = xarray.open_dataset(root / "CHIRPS25_2024-12_Nevada.nc", engine="h5netcdf")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
@@ -232,6 +235,9 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     output_value = (
         generated_dataset[dm.data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
     )
+
+    # Pull original data for checking. The "h5netcdf" engine is specified because re-opening the netCDF file fails on
+    # the GitHub actions server instance without it.
     original_dataset = xarray.open_dataset(root / "CHIRPS25_2025-01_Nevada.nc", engine="h5netcdf")
     orig_data_var = [key for key in original_dataset.data_vars][0]
     original_value = (
