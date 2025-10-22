@@ -18,6 +18,7 @@ from dask.distributed import Client, LocalCluster
 
 from .transform import Transform
 from .errors import NanFrequencyMismatchError
+from .store import S3
 
 TWENTY_MINUTES = 1200
 
@@ -209,6 +210,12 @@ class Publish(Transform):
 
             # Write to Zarr
             try:
+                # xarray uses its own S3 client, so pass it the endpoint URL from store if it was set
+                if isinstance(self.store, S3) and self.store.endpoint_url is not None:
+                    if "storage_options" not in kwargs:
+                        kwargs["storage_options"] = {"endpoint_url": self.store.endpoint_url}
+                    elif "endpoint_url" not in kwargs["storage_options"]:
+                        kwargs["storage_options"]["endpoint_url"] = self.store.endpoint_url
                 dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
 
             # Catch any exception that occurs, and raise ZarrOutputError along with the original exception.

@@ -397,6 +397,19 @@ class TestPublish:
             ]
         )
 
+        # Test different combinations of storage options kwargs
+        dataset.to_zarr = mock.Mock()
+        dm.store = mock.Mock(spec=store.S3)
+        dm.store.endpoint_url = "https://waluigi.world"
+        dm.to_zarr(dataset)
+        dataset.to_zarr.assert_called_with(zarr_format=3, storage_options={"endpoint_url": "https://waluigi.world"})
+        dm.to_zarr(dataset, storage_options={"endpoint_url": "https://waluigi.universe"})
+        dataset.to_zarr.assert_called_with(zarr_format=3, storage_options={"endpoint_url": "https://waluigi.universe"})
+        dm.to_zarr(dataset, storage_options={"SADDLE UP": "SALLY FORTH"})
+        dataset.to_zarr.assert_called_with(
+            zarr_format=3, storage_options={"SADDLE UP": "SALLY FORTH", "endpoint_url": "https://waluigi.world"}
+        )
+
     @staticmethod
     def test_to_zarr_initial(manager_class, mocker):
         dm = manager_class()
