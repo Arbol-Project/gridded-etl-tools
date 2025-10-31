@@ -543,7 +543,7 @@ class Transform(Metadata, Convenience):
     # LOAD RAW DATA TO IN-MEMORY DATASET
 
     def zarr_json_to_dataset(
-        self, zarr_json_path: str | None = None, decode_times: bool = True, **kwargs
+        self, zarr_json_path: str | None = None, decode_times: bool = True, extra_storage_options: dict = {}, **kwargs
     ) -> xr.Dataset:
         """
         Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying any desired
@@ -558,6 +558,10 @@ class Transform(Metadata, Convenience):
             Choose whether to decode the times in inputs file using the CF conventions. In most cases this is desirable
             and necessary, therefore this defaults to True. decode_timedelta will also be set to this value. Setting
             decode_timedelta explicitly is a recent requirement of xarray.
+        extra_storage_options : dict, optional
+            Additional storage options to pass to the Zarr JSON file. Useful for datasets that require additional
+            storage options, such as modified concurrency settings.
+            Defaults to an empty dictionary.
         kwargs : dict, optional
             Additional keyword arguments to pass to xr.open_dataset
 
@@ -582,6 +586,7 @@ class Transform(Metadata, Convenience):
                     "remote_options": {"asynchronous": True},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
+                    **extra_storage_options,
                 },
                 "consolidated": False,
             },
