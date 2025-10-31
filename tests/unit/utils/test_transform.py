@@ -900,6 +900,35 @@ class TestTransform:
         )
 
     @staticmethod
+    def test_zarr_json_to_dataset_extra_storage_options(manager_class, mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
+        dataset = xr.open_dataset.return_value
+        dm = manager_class()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+
+        assert dm.zarr_json_to_dataset(extra_storage_options={"chocolate": "bar"}) is dataset
+        dm.zarr_json_path.assert_called_once_with()
+        xr.open_dataset.assert_called_once_with(
+            filename_or_obj="reference://",
+            engine="zarr",
+            chunks={},
+            backend_kwargs={
+                "storage_options": {
+                    "fo": "/path/to/zarr.json",
+                    "remote_protocol": "handshake",
+                    "remote_options": {"asynchronous": True},
+                    "skip_instance_cache": True,
+                    "default_cache_type": "readahead",
+                    "chocolate": "bar",
+                },
+                "consolidated": False,
+            },
+            decode_times=True,
+            decode_timedelta=True,
+        )
+
+    @staticmethod
     def test_zarr_json_to_dataset_has_existing(manager_class, mocker):
         xr = mocker.patch("gridded_etl_tools.utils.transform.xr")
         dataset = xr.open_dataset.return_value
