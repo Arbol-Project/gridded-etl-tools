@@ -559,11 +559,22 @@ class Transform(Metadata, Convenience):
             and necessary, therefore this defaults to True. decode_timedelta will also be set to this value. Setting
             decode_timedelta explicitly is a recent requirement of xarray.
         extra_storage_options : dict, optional
-            Additional storage options to pass to the Zarr JSON file. Useful for datasets that require additional
-            storage options, such as modified concurrency settings.
-            Defaults to an empty dictionary.
-        kwargs : dict, optional
-            Additional keyword arguments to pass to xr.open_dataset
+            Additional storage options to pass to remote_options, which in turn are passed onto the remote
+            fsspec filesystem intiializer. Useful for instituting retries in requests for data from S3, e.g.
+            Can be used like so:
+
+            >>> from aiobotocore.session import AioSession
+            >>> from botocore.config import Config
+            >>> def get_aio_session():
+            >>>     aio_session = AioSession()
+            >>>     aio_session.set_default_client_config(
+            >>>         Config(retries={"mode": "adaptive", "max_attempts": 10})
+            >>>     )
+            >>>     return aio_session
+            >>>
+            >>> def zarr_json_to_dataset(self, *args, **kwargs):
+            >>>     extra_storage_options = {"session": get_aio_session()}
+            >>>     return super().zarr_json_to_dataset(*args, extra_storage_options=extra_storage_options, **kwargs)
 
         Returns
         -------
@@ -583,10 +594,9 @@ class Transform(Metadata, Convenience):
                 "storage_options": {
                     "fo": zarr_json_path,
                     "remote_protocol": self.protocol,
-                    "remote_options": {"asynchronous": True},
+                    "remote_options": {"asynchronous": True, **extra_storage_options},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
-                    **extra_storage_options,
                 },
                 "consolidated": False,
             },

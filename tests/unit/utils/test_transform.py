@@ -917,10 +917,9 @@ class TestTransform:
                 "storage_options": {
                     "fo": "/path/to/zarr.json",
                     "remote_protocol": "handshake",
-                    "remote_options": {"asynchronous": True},
+                    "remote_options": {"asynchronous": True, "chocolate": "bar"},
                     "skip_instance_cache": True,
                     "default_cache_type": "readahead",
-                    "chocolate": "bar",
                 },
                 "consolidated": False,
             },
