@@ -87,7 +87,7 @@ class Convenience(Attributes):
             path.mkdir(parents=True, mode=0o755, exist_ok=True)
             return path
 
-    def relative_path(self) -> str:
+    def relative_path(self) -> pathlib.Path:
         """
         The file folder hierarchy for a set. This should be a relative path so it can be appended to other root paths
         like `self.local_input_path()`
@@ -145,8 +145,7 @@ class Convenience(Attributes):
     def output_path(self, omit_root: bool = False) -> pathlib.Path:
         """
         Return the path to a directory where parsed climate data will be written, automatically determining the end
-        date and base on that. If `omit_root` is set, remove `self.output_root` from the path. Override with
-        `self.custom_output_path` if that member variable is set.
+        date and base on that. If `omit_root` is set, remove `self.output_root` from the path.
 
         Parameters
         ----------
@@ -155,7 +154,7 @@ class Convenience(Attributes):
 
         Returns
         -------
-        str
+        pathlib.Path
             string representing the output directory path where climate data will be written
         """
         path = self.relative_path()

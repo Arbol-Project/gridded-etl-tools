@@ -87,8 +87,8 @@ class DatasetManager(Logging, Publish, ABC):
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
         dask_worker_memory_spill: float = 0.65,
-        dask_num_workers: int = None,
-        dask_num_threads: int = None,
+        dask_num_workers: int | None = None,
+        dask_num_threads: int | None = None,
         dask_cpu_mem_target_ratio: float = 4 / 32,
         dask_scheduler_protocol: str = "inproc://",
         use_local_zarr_jsons: bool = False,
@@ -173,10 +173,16 @@ class DatasetManager(Logging, Publish, ABC):
             for details.
         """
         super().__init__()
-        # Set member variable defaults
-        self.custom_output_path = custom_output_path
-        self.custom_input_path = custom_input_path
+
         self.rebuild_requested = rebuild_requested
+
+        # These paths are expected to be pathlib.Path objects in some cases
+        self.custom_output_path = custom_output_path
+        if self.custom_output_path is not None:
+            self.custom_output_path = pathlib.Path(self.custom_output_path)
+        self.custom_input_path = custom_input_path
+        if self.custom_input_path is not None:
+            self.custom_input_path = pathlib.Path(self.custom_input_path)
 
         # Create certain paramters for development and debugging of certain dataset. All default to False.
         self.dry_run = dry_run
