@@ -454,8 +454,8 @@ class TestPublish:
         # Mock datasets
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
-        dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
+        dm.custom_output_path = pathlib.Path(tmpdir)
+        dataset.to_zarr(dm.store.path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
@@ -500,8 +500,8 @@ class TestPublish:
         # Mock datasets
         dataset = copy.deepcopy(fake_original_dataset)
         dataset.attrs.update(**pre_update_dict)
-        dm.custom_output_path = tmpdir / "to_zarr_dataset.zarr"
-        dataset.to_zarr(store=dm.custom_output_path, zarr_format=2)  # write out local file to test updates on
+        dm.custom_output_path = pathlib.Path(tmpdir)
+        dataset.to_zarr(store=dm.store.path, zarr_format=2)  # write out local file to test updates on
 
         # Mock functions
         dm.pre_parse_quality_check = mock.Mock()
