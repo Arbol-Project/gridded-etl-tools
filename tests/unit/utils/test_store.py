@@ -358,7 +358,10 @@ class TestLocal:
 
     @staticmethod
     def test_mapper():
-        store = store_module.Local(mock.Mock(custom_output_path="el/cami/no"))
+        store = store_module.Local(mock.Mock(
+            custom_output_path=pathlib.Path("el/cami/no"),
+            key=lambda: "Jeremy-daily",
+        ))
         store.fs = mock.Mock()
         fs = store.fs.return_value
         mapper = fs.get_mapper.return_value
@@ -367,11 +370,14 @@ class TestLocal:
         assert store.mapper() is mapper  # Second call returns cached copy
 
         store.fs.assert_called_once_with()
-        fs.get_mapper.assert_called_once_with("el/cami/no")
+        fs.get_mapper.assert_called_once_with(pathlib.Path("el/cami/no/Jeremy-daily.zarr"))
 
     @staticmethod
     def test_mapper_refresh():
-        store = store_module.Local(mock.Mock(custom_output_path="el/cami/no"))
+        store = store_module.Local(mock.Mock(
+            custom_output_path=pathlib.Path("el/cami/no"),
+            key=lambda: "Jeremy-daily",
+        ))
         store.fs = mock.Mock()
         fs = store.fs.return_value
         mapper = fs.get_mapper.return_value
@@ -380,7 +386,7 @@ class TestLocal:
         assert store.mapper(refresh=True) is mapper
 
         store.fs.assert_called_once_with()
-        fs.get_mapper.assert_called_once_with("el/cami/no")
+        fs.get_mapper.assert_called_once_with(pathlib.Path("el/cami/no/Jeremy-daily.zarr"))
 
     @staticmethod
     def test___repr__():
@@ -404,11 +410,12 @@ class TestLocal:
     def test_path_custom():
         dm = mock.Mock(
             output_path=mock.Mock(return_value=pathlib.PosixPath("hi/mom")),
-            custom_output_path="hello/dad/iminjail.zarr",
+            custom_output_path=pathlib.Path("hello/dad/"),
+            key=lambda: "Jeremy-daily",
         )
         dm.name = mock.Mock(return_value="Jeremy")
         store = store_module.Local(dm)
-        assert store.path == "hello/dad/iminjail.zarr"
+        assert store.path == pathlib.Path("hello/dad/Jeremy-daily.zarr")
 
         dm.output_path.assert_not_called()
         dm.name.assert_not_called()
@@ -416,7 +423,7 @@ class TestLocal:
     @staticmethod
     def test_has_existing():
         store = store_module.Local(mock.Mock())
-        path = store.dm.custom_output_path
+        path = store.dm.custom_output_path.joinpath(f"{store.dm.key()}.zarr")
 
         assert store.has_existing is path.exists.return_value
 
@@ -483,13 +490,16 @@ class TestLocal:
 
     @staticmethod
     def test_write_metadata_only(tmpdir):
-        with open(tmpdir / "zarr.json", "w") as f:
+        key = "Jeremy-daily"
+        resolved_path_to_zarr = tmpdir / f"{key}.zarr"
+        os.mkdir(resolved_path_to_zarr)
+        with open(resolved_path_to_zarr / "zarr.json", "w") as f:
             json.dump({"attributes": {"meta": "data"}}, f)
 
-        store = store_module.Local(mock.Mock(custom_output_path=tmpdir))
+        store = store_module.Local(mock.Mock(custom_output_path=pathlib.Path(tmpdir), key=lambda: key))
         store.write_metadata_only({"new": "value"})
 
-        with open(tmpdir / "zarr.json") as f:
+        with open(resolved_path_to_zarr / "zarr.json") as f:
             assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
 
     @staticmethod

@@ -176,13 +176,12 @@ class DatasetManager(Logging, Publish, ABC):
 
         self.rebuild_requested = rebuild_requested
 
-        # These paths are expected to be pathlib.Path objects in some cases
-        self.custom_output_path = custom_output_path
-        if self.custom_output_path is not None:
-            self.custom_output_path = pathlib.Path(self.custom_output_path)
-        self.custom_input_path = custom_input_path
-        if self.custom_input_path is not None:
-            self.custom_input_path = pathlib.Path(self.custom_input_path)
+        # These paths are expected to be pathlib.Path objects in some cases, so make sure they are not str type. The
+        # one-line if/else makes this typing work with mypy.
+        self.custom_output_path: pathlib.Path | None = \
+            custom_output_path if custom_output_path is None else pathlib.Path(custom_output_path)
+        self.custom_input_path: pathlib.Path | None = \
+            custom_input_path if custom_input_path is None else pathlib.Path(custom_input_path)
 
         # Create certain paramters for development and debugging of certain dataset. All default to False.
         self.dry_run = dry_run
