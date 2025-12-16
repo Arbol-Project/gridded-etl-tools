@@ -408,7 +408,7 @@ class TestS3ExtractorDownload:
         # Test that extract_from_s3 uses the provided fs
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = tmp_path / "castle1.grib"
-        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.perform_extraction(rfp, local_file_path=lfp)
         mock_s3_fs.download.assert_called_once_with(rfp, str(lfp))
 
     @staticmethod
@@ -422,7 +422,7 @@ class TestS3ExtractorDownload:
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = tmp_path / "castle1.grib"
-        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.perform_extraction(rfp, local_file_path=lfp)
         extractor.s3_fs.download.assert_called_once_with(rfp, str(lfp))
 
         # fs=None should also instantiate a new S3FileSystem

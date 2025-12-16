@@ -139,7 +139,7 @@ class RetryingExtractor(Extractor):
     the extraction operation while sharing common retry behavior.
 
     Subclasses must implement:
-    - _perform_extraction(): The actual extraction operation
+    - perform_extraction(): The actual extraction operation
     - _get_failure_exception(): Returns the exception to raise on final failure
 
     Optionally override:
@@ -208,7 +208,7 @@ class RetryingExtractor(Extractor):
         return self.backoff_factor * (2 ** (attempt - 1))
 
     @abstractmethod
-    def _perform_extraction(self, *args, **kwargs) -> bool:
+    def perform_extraction(self, *args, **kwargs) -> bool:
         """
         Perform the actual extraction operation.
 
@@ -254,7 +254,7 @@ class RetryingExtractor(Extractor):
         identifier
             A string identifying the resource (used for logging)
         *args, **kwargs
-            Arguments passed through to _perform_extraction
+            Arguments passed through to perform_extraction
         retries
             Override the instance's retry count for this call (optional)
 
@@ -274,7 +274,7 @@ class RetryingExtractor(Extractor):
         counter = 1
         while counter <= max_retries:
             try:
-                result = self._perform_extraction(*args, **kwargs)
+                result = self.perform_extraction(*args, **kwargs)
                 return result
             except self.ignorable_extraction_errors as e:
                 log.info(f"Encountered permitted exception {e} for {identifier}, skipping")
@@ -407,7 +407,7 @@ class HTTPExtractor(RetryingExtractor):
 
         return href_links
 
-    def _perform_extraction(self, remote_file_path: str, destination_path: pathlib.Path) -> bool:
+    def perform_extraction(self, remote_file_path: str, local_path: pathlib.Path) -> bool:
         """
         Perform the HTTP download operation.
 
@@ -415,7 +415,7 @@ class HTTPExtractor(RetryingExtractor):
         ----------
         remote_file_path
             URL to download from
-        destination_path
+        local_path
             Local path to write file to
 
         Returns
@@ -425,7 +425,7 @@ class HTTPExtractor(RetryingExtractor):
         """
         response = self.session.get(remote_file_path)
         response.raise_for_status()
-        with open(destination_path, "wb") as outfile:
+        with open(local_path, "wb") as outfile:
             outfile.write(response.content)
         return True
 
@@ -435,7 +435,7 @@ class HTTPExtractor(RetryingExtractor):
             f"Too many ({attempts}) failed download attempts requesting {identifier}"
         )
 
-    def request(self, remote_file_path: str, destination_path: pathlib.Path | None = None) -> bool:
+    def request(self, remote_file_path: str, local_path: pathlib.Path | None = None) -> bool:
         """
         Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
         given, the file will be saved to the working directory with the same name it has on the server.
@@ -451,7 +451,7 @@ class HTTPExtractor(RetryingExtractor):
         ----------
         remote_file_path
             URL to a file to be downloaded
-        destination_path
+        local_path
             Local path to write file to
 
         Returns
@@ -477,19 +477,19 @@ class HTTPExtractor(RetryingExtractor):
         log.info(f"Downloading {remote_file_path}")
 
         # Build a dynamic path if a full destination path hasn't been given
-        if destination_path is None or destination_path.is_dir():
+        if local_path is None or local_path.is_dir():
             # Extract the file name from the end of the URL
             file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
 
-            if destination_path is None:
-                destination_path = file_name
+            if local_path is None:
+                local_path = file_name
             else:
-                destination_path /= file_name
+                local_path /= file_name
 
         return self.retry_with_backoff(
             identifier=remote_file_path,
             remote_file_path=remote_file_path,
-            destination_path=destination_path,
+            local_path=local_path,
         )
 
 
@@ -505,40 +505,6 @@ class S3ExtractorBase(RetryingExtractor):
         Maintains backwards compatibility with existing S3 retry behavior.
         """
         return attempt * self.backoff_factor
-
-    @abstractmethod
-    def extract_from_s3(
-        self,
-        remote_file_path: str,
-        scan_indices: int | tuple[int, int] = 0,
-        local_file_path: pathlib.Path | None = None,
-    ) -> None:
-        """
-        Abstract method to extract/download from S3. Must be implemented by subclasses.
-
-        Parameters
-        ----------
-        remote_file_path
-            An S3 file URL path to the file to be processed
-        scan_indices
-            Indices of the raw climate data to be read (used by kerchunk, ignored by download)
-        local_file_path
-            An optional local file path
-        """
-
-    def _perform_extraction(
-        self,
-        remote_file_path: str,
-        scan_indices: int | tuple[int, int] = 0,
-        local_file_path: pathlib.Path | None = None,
-    ) -> bool:
-        """Delegate to the abstract extract_from_s3 method."""
-        self.extract_from_s3(
-            remote_file_path=remote_file_path,
-            scan_indices=scan_indices,
-            local_file_path=local_file_path,
-        )
-        return True
 
     def _get_failure_exception(self, attempts: int, identifier: str) -> Exception:
         """Return FileNotFoundError for S3 failures."""
@@ -609,12 +575,12 @@ class S3ExtractorKerchunk(S3ExtractorBase):
         super().__init__(*args, **kwargs)
         self.dm.zarr_jsons = []
 
-    def extract_from_s3(
+    def perform_extraction(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
         local_file_path: pathlib.Path | None = None,
-    ) -> None:
+    ) -> bool:
         """
         Extract a remote S3 climate file into a JSON using kerchunk.
 
@@ -628,6 +594,7 @@ class S3ExtractorKerchunk(S3ExtractorBase):
             An optional local file path to save the kerchunked Zarr JSON to
         """
         self.dm.kerchunkify(file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path)
+        return True
 
 
 class S3ExtractorDownload(S3ExtractorBase):
@@ -641,7 +608,7 @@ class S3ExtractorDownload(S3ExtractorBase):
         fs: s3fs.S3FileSystem | None = None,
         **kwargs,
     ):
-        # ValueError can be raised by extract_from_s3 and should not retry
+        # ValueError can be raised by perform_extraction and should not retry
         super().__init__(*args, **kwargs)
         self.unsupported_extraction_errors = tuple(self.unsupported_extraction_errors) + (ValueError,)
         if fs:
@@ -649,12 +616,12 @@ class S3ExtractorDownload(S3ExtractorBase):
         else:
             self.s3_fs = s3fs.S3FileSystem()
 
-    def extract_from_s3(
+    def perform_extraction(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
         local_file_path: pathlib.Path | None = None,
-    ) -> None:
+    ) -> True:
         """
         Download S3 file directly to local path using s3fs.
 
@@ -685,6 +652,7 @@ class S3ExtractorDownload(S3ExtractorBase):
 
         # Download the file
         self.s3_fs.download(remote_file_path, str(local_file_path))
+        return True
 
 
 class S3Extractor(S3ExtractorKerchunk):
