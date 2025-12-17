@@ -648,7 +648,7 @@ class TestFTPExtractor:
         assert ftp_client.commands == ["RETR two.dat"]
 
     @staticmethod
-    def test_request_destination_is_not_a_directory(tmp_path):
+    def test_request_local_is_not_a_directory(tmp_path):
         dm = Mock()
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)

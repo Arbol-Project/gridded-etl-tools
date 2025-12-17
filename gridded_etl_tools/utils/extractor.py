@@ -437,11 +437,11 @@ class HTTPExtractor(RetryingExtractor):
 
     def request(self, remote_file_path: str, local_path: pathlib.Path | None = None) -> bool:
         """
-        Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
+        Request a file from an HTTP server and save it to disk, optionally at a given local path. If no local path is
         given, the file will be saved to the working directory with the same name it has on the server.
 
-        If an existing directory is given as the destination path, the file will be written to the given directory with
-        the same file name as on the server. If a destination path is given and is not a directory, the file will be
+        If an existing directory is given as the local path, the file will be written to the given directory with
+        the same file name as on the server. If a local path is given and is not a directory, the file will be
         written to the given path.
 
         An active session is required to make the request, so this must be called from within a context manager for this
@@ -476,7 +476,7 @@ class HTTPExtractor(RetryingExtractor):
 
         log.info(f"Downloading {remote_file_path}")
 
-        # Build a dynamic path if a full destination path hasn't been given
+        # Build a dynamic path if a full local path hasn't been given
         if local_path is None or local_path.is_dir():
             # Extract the file name from the end of the URL
             file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
@@ -675,7 +675,7 @@ class FTPExtractor(Extractor):
 
     Use a context manager to open the connection (@see FTPExtractor.__enter__). Once connected, the object is able to
     navigate to specific working directory, match files located in subdirectories, and fetch files to a given
-    destination folder.
+    local folder.
 
     Currently only anonymous FTP access is supported.
     """
@@ -776,15 +776,13 @@ class FTPExtractor(Extractor):
         except ftplib.error_perm:
             raise RuntimeError("Error changing directory. Is the FTP connection open?")
 
-    def request(
-        self, source: pathlib.PurePosixPath, destination: pathlib.PurePosixPath = pathlib.PurePosixPath()
-    ) -> bool:
+    def request(self, source: pathlib.PurePosixPath, local: pathlib.PurePosixPath = pathlib.PurePosixPath()) -> bool:
         """
-        Download the given source path within the FTP server's current working directory to the given destination.
+        Download the given source path within the FTP server's current working directory to the given local path.
 
-        If the destination is a full path or the destination doesn't exist yet, that will be the path used for the
-        output. If the destination is an existing folder, the output path will use the source's file name with any
-        subdirectories omitted. By default, the destination is the current working directory.
+        If the local is a full path or the local doesn't exist yet, that will be the path used for the
+        output. If the local is an existing folder, the output path will use the source's file name with any
+        subdirectories omitted. By default, the local is the current working directory.
 
         Parameters
         ----------
@@ -802,12 +800,12 @@ class FTPExtractor(Extractor):
         RuntimeError
             If an error occurs during the FTP retrieval call
         """
-        # Build a file name using the source name if an existing directory was given as the destination. Otherwise, use
-        # the destination as the full path to the output file.
-        if pathlib.Path(destination).is_dir():
-            output = destination / source.name
+        # Build a file name using the source name if an existing directory was given as the local path.
+        # Otherwise, use the local as the full path to the output file.
+        if pathlib.Path(local).is_dir():
+            output = local / source.name
         else:
-            output = destination
+            output = local
 
         # Open the output file and write the contents of the remote file to it using the FTP library
         log.info(f"Downloading remote file {source} to {output}")
