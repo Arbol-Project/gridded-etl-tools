@@ -22,10 +22,18 @@ from .test_convenience import DummyFtpClient
 
 
 class ConcreteExtractor(Extractor):
+    """
+    Make base class instantiable
+    """
+
     def request(*args, **kwargs):
-        """
-        Make base class instantiable
-        """
+        pass
+
+    def _get_local_file_from_remote(self, remote_file_path):
+        pass
+
+    def _get_local_file_path(self, remote_file_path, local_path):
+        pass
 
 
 class TestExtractor:
@@ -638,7 +646,7 @@ class TestFTPExtractor:
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path)
+        out_path = pathlib.Path(tmp_path)
         with FTPExtractor(dm, host) as ftp:
             ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
 
@@ -655,7 +663,7 @@ class TestFTPExtractor:
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path) / "himom.dat"
+        out_path = pathlib.Path(tmp_path) / "himom.dat"
         with FTPExtractor(dm, host) as ftp:
             ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
 
@@ -672,7 +680,7 @@ class TestFTPExtractor:
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path)
+        out_path = pathlib.Path(tmp_path)
         with FTPExtractor(dm, host) as ftp:
             with pytest.raises(RuntimeError):
                 ftp.request(pathlib.PurePosixPath("two.dat"), out_path)

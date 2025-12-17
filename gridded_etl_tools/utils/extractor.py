@@ -123,6 +123,58 @@ class Extractor(ABC):
         else:
             return self.request(arg)
 
+    def _get_local_file_path(
+        self, remote_file_path: str | pathlib.PurePosixPath, local_path: pathlib.Path | None
+    ) -> pathlib.Path:
+        """
+        Resolve a local file path from a remote file path and optional local path.
+
+        If local_path is None, the file will be saved in the current directory with the remote file's name.
+        If local_path is a directory, the file will be saved in that directory with the remote file's name.
+        If local_path is a file path, it will be used as-is.
+
+        Parameters
+        ----------
+        remote_file_path
+            The remote file path (URL, S3 path, or FTP path)
+        local_path
+            Optional local path - can be None, a directory, or a full file path
+
+        Returns
+        -------
+        pathlib.Path
+            The resolved local file path
+        """
+        file_name = self._get_local_file_from_remote(remote_file_path)
+
+        if local_path is None:
+            local_file_path = file_name
+        elif local_path.is_dir():
+            local_file_path = local_path / file_name
+        else:
+            local_file_path = local_path
+
+        return local_file_path
+
+    @abstractmethod
+    def _get_local_file_from_remote(self, remote_file_path: str | pathlib.PurePosixPath) -> pathlib.Path:
+        """
+        Extract the file name from a remote file path.
+
+        Subclasses implement this to handle their specific remote path formats
+        (URLs for HTTP, S3 paths, FTP paths, etc.).
+
+        Parameters
+        ----------
+        remote_file_path
+            The remote file path
+
+        Returns
+        -------
+        pathlib.Path
+            The extracted file name as a Path object
+        """
+
     @abstractmethod
     def request(self, *args, **kwargs) -> bool:
         """
@@ -407,7 +459,7 @@ class HTTPExtractor(RetryingExtractor):
 
         return href_links
 
-    def perform_extraction(self, remote_file_path: str, local_path: pathlib.Path) -> bool:
+    def perform_extraction(self, remote_file_path: str, local_file_path: pathlib.Path) -> bool:
         """
         Perform the HTTP download operation.
 
@@ -415,8 +467,8 @@ class HTTPExtractor(RetryingExtractor):
         ----------
         remote_file_path
             URL to download from
-        local_path
-            Local path to write file to
+        local_file_path
+            Resolved local file path to write to (already processed by _get_local_file_path in request())
 
         Returns
         -------
@@ -425,7 +477,7 @@ class HTTPExtractor(RetryingExtractor):
         """
         response = self.session.get(remote_file_path)
         response.raise_for_status()
-        with open(local_path, "wb") as outfile:
+        with open(local_file_path, "wb") as outfile:
             outfile.write(response.content)
         return True
 
@@ -477,20 +529,17 @@ class HTTPExtractor(RetryingExtractor):
         log.info(f"Downloading {remote_file_path}")
 
         # Build a dynamic path if a full local path hasn't been given
-        if local_path is None or local_path.is_dir():
-            # Extract the file name from the end of the URL
-            file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
-
-            if local_path is None:
-                local_path = file_name
-            else:
-                local_path /= file_name
+        local_file_path = self._get_local_file_path(remote_file_path, local_path)
 
         return self.retry_with_backoff(
             identifier=remote_file_path,
             remote_file_path=remote_file_path,
-            local_path=local_path,
+            local_file_path=local_file_path,
         )
+
+    def _get_local_file_from_remote(self, remote_file_path: str) -> pathlib.Path:
+        """Extract the file name from an HTTP URL by parsing the path component."""
+        return pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
 
 
 class S3ExtractorBase(RetryingExtractor):
@@ -510,6 +559,10 @@ class S3ExtractorBase(RetryingExtractor):
         """Return FileNotFoundError for S3 failures."""
         return FileNotFoundError(f"Too many ({attempts}) failed download attempts from server requesting {identifier}")
 
+    def _get_local_file_from_remote(self, remote_file_path: str) -> pathlib.Path:
+        """Extract the file name from an S3 path by splitting on '/'."""
+        return pathlib.Path(remote_file_path.split("/")[-1])
+
     def request(
         self,
         remote_file_path: str,
@@ -517,6 +570,7 @@ class S3ExtractorBase(RetryingExtractor):
         tries: int | None = None,
         local_file_path: pathlib.Path | None = None,
         informative_id: str | None = None,
+        local_path: pathlib.Path | None = None,
     ) -> bool:
         """
         Extract/download a remote S3 file with retry logic and error handling.
@@ -530,9 +584,12 @@ class S3ExtractorBase(RetryingExtractor):
         tries
             Allow a number of failed requests before failing permanently. If None, uses instance's retries value.
         local_file_path
-            An optional local file path
+            An optional local file path, which MUST be the complete path, including the file name.
+            Included for backwards compatibility. Takes precedence over the local_path param when both are provided.
         informative_id
             A string to identify the request in logs. Defaults to just the given remote file path
+        local_path:
+            An optional local file path, which may be the complete path, or omit the file name
 
         Returns
         -------
@@ -546,6 +603,9 @@ class S3ExtractorBase(RetryingExtractor):
         """
         if not remote_file_path.lower().startswith("s3://"):
             raise ValueError(f"Given path {remote_file_path} is not an S3 path")
+
+        if local_file_path is None and local_path is not None:
+            local_file_path = self._get_local_file_path(remote_file_path, local_path)
 
         # Default to using the raw file name to identify the request in the log message
         identifier = informative_id if informative_id is not None else remote_file_path
@@ -776,7 +836,11 @@ class FTPExtractor(Extractor):
         except ftplib.error_perm:
             raise RuntimeError("Error changing directory. Is the FTP connection open?")
 
-    def request(self, source: pathlib.PurePosixPath, local: pathlib.PurePosixPath = pathlib.PurePosixPath()) -> bool:
+    def _get_local_file_from_remote(self, remote_file_path: pathlib.PurePosixPath) -> pathlib.Path:
+        """Extract the file name from an FTP path using the .name property."""
+        return pathlib.Path(remote_file_path.name)
+
+    def request(self, remote_file_path: pathlib.PurePosixPath, local_path: pathlib.Path | None = None) -> bool:
         """
         Download the given source path within the FTP server's current working directory to the given local path.
 
@@ -802,22 +866,19 @@ class FTPExtractor(Extractor):
         """
         # Build a file name using the source name if an existing directory was given as the local path.
         # Otherwise, use the local as the full path to the output file.
-        if pathlib.Path(local).is_dir():
-            output = local / source.name
-        else:
-            output = local
+        local_file_path = self._get_local_file_path(remote_file_path, local_path)
 
         # Open the output file and write the contents of the remote file to it using the FTP library
-        log.info(f"Downloading remote file {source} to {output}")
-        with open(output, "wb") as fp:
+        log.info(f"Downloading remote file {remote_file_path} to {local_file_path}")
+        with open(local_file_path, "wb") as fp:
             try:
                 # need separate FTP for each download to take advantage of concurrency
                 with ftplib.FTP(self.host) as download_ftp:
                     download_ftp.login()
                     download_ftp.cwd(str(self.cwd))
-                    download_ftp.retrbinary(f"RETR {source}", fp.write)
+                    download_ftp.retrbinary(f"RETR {remote_file_path}", fp.write)
             except ftplib.error_perm:
-                raise RuntimeError(f"Error retrieving {source} from {self.host} in {self.cwd}")
+                raise RuntimeError(f"Error retrieving {remote_file_path} from {self.host} in {self.cwd}")
 
         # If the exception wasn't raised, the file was downloaded successfully
         return True
