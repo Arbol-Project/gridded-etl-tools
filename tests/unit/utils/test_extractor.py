@@ -22,10 +22,18 @@ from .test_convenience import DummyFtpClient
 
 
 class ConcreteExtractor(Extractor):
+    """
+    Make base class instantiable
+    """
+
     def request(*args, **kwargs):
-        """
-        Make base class instantiable
-        """
+        pass
+
+    def _get_local_file_from_remote(self, remote_file_path):
+        pass
+
+    def _get_local_file_path(self, remote_file_path, local_path):
+        pass
 
 
 class TestExtractor:
@@ -408,7 +416,7 @@ class TestS3ExtractorDownload:
         # Test that extract_from_s3 uses the provided fs
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = tmp_path / "castle1.grib"
-        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.perform_extraction(rfp, local_file_path=lfp)
         mock_s3_fs.download.assert_called_once_with(rfp, str(lfp))
 
     @staticmethod
@@ -422,7 +430,7 @@ class TestS3ExtractorDownload:
 
         rfp = "s3://bucket/sand/castle/castle1.grib"
         lfp = tmp_path / "castle1.grib"
-        extractor.extract_from_s3(rfp, local_file_path=lfp)
+        extractor.perform_extraction(rfp, local_file_path=lfp)
         extractor.s3_fs.download.assert_called_once_with(rfp, str(lfp))
 
         # fs=None should also instantiate a new S3FileSystem
@@ -638,7 +646,7 @@ class TestFTPExtractor:
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path)
+        out_path = pathlib.Path(tmp_path)
         with FTPExtractor(dm, host) as ftp:
             ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
 
@@ -648,14 +656,14 @@ class TestFTPExtractor:
         assert ftp_client.commands == ["RETR two.dat"]
 
     @staticmethod
-    def test_request_destination_is_not_a_directory(tmp_path):
+    def test_request_local_is_not_a_directory(tmp_path):
         dm = Mock()
         ftp_client = ftplib.FTP = DummyFtpClient()
         ftp_client.retrbinary = Mock(side_effect=ftp_client.retrbinary)
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path) / "himom.dat"
+        out_path = pathlib.Path(tmp_path) / "himom.dat"
         with FTPExtractor(dm, host) as ftp:
             ftp.request(pathlib.PurePosixPath("two.dat"), out_path)
 
@@ -672,7 +680,7 @@ class TestFTPExtractor:
 
         host = "what a great host"
 
-        out_path = pathlib.PurePosixPath(tmp_path)
+        out_path = pathlib.Path(tmp_path)
         with FTPExtractor(dm, host) as ftp:
             with pytest.raises(RuntimeError):
                 ftp.request(pathlib.PurePosixPath("two.dat"), out_path)

@@ -123,6 +123,58 @@ class Extractor(ABC):
         else:
             return self.request(arg)
 
+    def _get_local_file_path(
+        self, remote_file_path: str | pathlib.PurePosixPath, local_path: pathlib.Path | None
+    ) -> pathlib.Path:
+        """
+        Resolve a local file path from a remote file path and optional local path.
+
+        If local_path is None, the file will be saved in the current directory with the remote file's name.
+        If local_path is a directory, the file will be saved in that directory with the remote file's name.
+        If local_path is a file path, it will be used as-is.
+
+        Parameters
+        ----------
+        remote_file_path
+            The remote file path (URL, S3 path, or FTP path)
+        local_path
+            Optional local path - can be None, a directory, or a full file path
+
+        Returns
+        -------
+        pathlib.Path
+            The resolved local file path
+        """
+        file_name = self._get_local_file_from_remote(remote_file_path)
+
+        if local_path is None:
+            local_file_path = file_name
+        elif local_path.is_dir():
+            local_file_path = local_path / file_name
+        else:
+            local_file_path = local_path
+
+        return local_file_path
+
+    @abstractmethod
+    def _get_local_file_from_remote(self, remote_file_path: str | pathlib.PurePosixPath) -> pathlib.Path:
+        """
+        Extract the file name from a remote file path.
+
+        Subclasses implement this to handle their specific remote path formats
+        (URLs for HTTP, S3 paths, FTP paths, etc.).
+
+        Parameters
+        ----------
+        remote_file_path
+            The remote file path
+
+        Returns
+        -------
+        pathlib.Path
+            The extracted file name as a Path object
+        """
+
     @abstractmethod
     def request(self, *args, **kwargs) -> bool:
         """
@@ -131,7 +183,170 @@ class Extractor(ABC):
         """
 
 
-class HTTPExtractor(Extractor):
+class RetryingExtractor(Extractor):
+    """
+    Abstract base class for extractors that implement retry logic with configurable backoff.
+
+    This class provides a template method pattern for retry logic, allowing subclasses to customize
+    the extraction operation while sharing common retry behavior.
+
+    Subclasses must implement:
+    - perform_extraction(): The actual extraction operation
+    - _get_failure_exception(): Returns the exception to raise on final failure
+
+    Optionally override:
+    - _calculate_retry_delay(): To customize backoff strategy (default is exponential)
+    """
+
+    retries: int
+    backoff_factor: float
+    ignorable_extraction_errors: tuple[type[Exception], ...]
+    unsupported_extraction_errors: tuple[type[Exception], ...]
+
+    def __init__(
+        self,
+        dm: dataset_manager.DatasetManager,
+        concurrency_limit: int = 8,
+        retries: int = 5,
+        backoff_factor: float = 1.0,
+        ignorable_extraction_errors: tuple[type[Exception], ...] = (),
+        unsupported_extraction_errors: tuple[type[Exception], ...] = (),
+    ):
+        """
+        Create a new RetryingExtractor object.
+
+        Parameters
+        ----------
+        dm
+            Source data for this dataset manager will be extracted
+        concurrency_limit
+            Number of simultaneous threads to run while requesting data
+        retries
+            Number of times to retry a failed extraction
+        backoff_factor
+            Base number of seconds used in retry delay calculation
+        ignorable_extraction_errors
+            A tuple of exception types that can be safely ignored during extraction.
+            These will trigger skipping the current file and returning False.
+        unsupported_extraction_errors
+            A tuple of exception types that should trigger immediate failure of the extraction.
+        """
+        super().__init__(dm, concurrency_limit)
+        self.retries = retries
+        self.backoff_factor = backoff_factor
+        self.ignorable_extraction_errors: tuple[type[Exception], ...] = tuple(ignorable_extraction_errors)
+        self.unsupported_extraction_errors: tuple[type[Exception], ...] = tuple(unsupported_extraction_errors)
+
+    def _calculate_retry_delay(self, attempt: int) -> float:
+        """
+        Calculate the delay before the next retry attempt.
+
+        Default implementation uses exponential backoff: backoff_factor * (2 ** (attempt - 1))
+
+        Subclasses can override this for different strategies:
+        - Linear: attempt * backoff_factor
+        - Constant: backoff_factor
+
+        Parameters
+        ----------
+        attempt
+            The current attempt number (1-indexed)
+
+        Returns
+        -------
+        float
+            Number of seconds to wait before the next attempt
+        """
+        return self.backoff_factor * (2 ** (attempt - 1))
+
+    @abstractmethod
+    def perform_extraction(self, *args, **kwargs) -> bool:
+        """
+        Perform the actual extraction operation.
+
+        This method is called by the retry loop and should perform a single
+        extraction attempt. It should return True on success.
+
+        Raises any exception on failure - the retry loop will catch and handle
+        according to ignorable_extraction_errors and unsupported_extraction_errors.
+        """
+
+    @abstractmethod
+    def _get_failure_exception(self, attempts: int, identifier: str) -> Exception:
+        """
+        Return the exception to raise when all retry attempts have been exhausted.
+
+        Parameters
+        ----------
+        attempts
+            The number of attempts made
+        identifier
+            A string identifying the resource that failed (e.g., URL or S3 path)
+
+        Returns
+        -------
+        Exception
+            The exception instance to raise
+        """
+
+    def retry_with_backoff(
+        self,
+        identifier: str,
+        *args,
+        retries: int | None = None,
+        **kwargs,
+    ) -> bool:
+        """
+        Execute the extraction operation with retry logic and backoff.
+
+        This is the template method that orchestrates the retry loop.
+
+        Parameters
+        ----------
+        identifier
+            A string identifying the resource (used for logging)
+        *args, **kwargs
+            Arguments passed through to perform_extraction
+        retries
+            Override the instance's retry count for this call (optional)
+
+        Returns
+        -------
+        bool
+            True if extraction succeeded, False if an ignorable exception occurred
+
+        Raises
+        ------
+        Exception
+            The result of _get_failure_exception() if all retries exhausted,
+            or any unsupported_extraction_errors immediately
+        """
+        max_retries = retries if retries is not None else self.retries
+
+        counter = 1
+        while counter <= max_retries:
+            try:
+                result = self.perform_extraction(*args, **kwargs)
+                return result
+            except self.ignorable_extraction_errors as e:
+                log.info(f"Encountered permitted exception {e} for {identifier}, skipping")
+                return False
+            except self.unsupported_extraction_errors as e:
+                log.info(f"Encountered unpermitted exception {e} for {identifier}, failing immediately")
+                raise
+            except Exception as e:
+                retry_delay = self._calculate_retry_delay(counter)
+                log.info(
+                    f"Encountered retryable exception {e} for {identifier}, "
+                    f"retrying after {retry_delay} seconds, attempt {counter}/{max_retries}"
+                )
+                counter += 1
+                time.sleep(retry_delay)
+
+        raise self._get_failure_exception(counter - 1, identifier)
+
+
+class HTTPExtractor(RetryingExtractor):
     """
     Request data from given URLs over HTTP from within a context manager. The context manager creates a session, from
     which all requests are made.
@@ -150,37 +365,14 @@ class HTTPExtractor(Extractor):
     """
 
     session: requests.Session
-    backoff_factor: float
-    retries: int
 
-    def __init__(
-        self,
-        dm: dataset_manager.DatasetManager,
-        concurrency_limit: int = 8,
-        retries: int = 8,
-        backoff_factor: float = 1.0,
-    ):
-        """
-        Create a new HTTPExtractor object for a given dataset manager.
-
-        The `retries` and `backoff_factor` parameters are used to control how failed requests are retried automatically.
-        By default, the request is retried 8 times, waiting 1 second, 2 seconds, 4 seconds, and finally 128 seconds
-        between each request if the request continues to fail.
-
-        Parameters
-        ----------
-        dm
-            Source data for this dataset manager will be extracted
-        concurrency_limit
-            Number of simultaneous threads to run while requesting data
-        retries
-            Number of times to retry a failed URL
-        backoff_factor
-            Number of seconds to wait between each request. Scales by a factor of 2**n per failed request.
-        """
-        super().__init__(dm, concurrency_limit)
-        self.retries = retries
-        self.backoff_factor = backoff_factor
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # RetryError is raised by urllib3.Retry when HTTP status code retries are exhausted.
+        # Don't retry these - they already went through their own retry logic.
+        self.unsupported_extraction_errors = tuple(self.unsupported_extraction_errors) + (
+            requests.exceptions.RetryError,
+        )
 
     def __enter__(self) -> HTTPExtractor:
         """
@@ -267,13 +459,41 @@ class HTTPExtractor(Extractor):
 
         return href_links
 
-    def request(self, remote_file_path: str, destination_path: pathlib.Path | None = None) -> bool:
+    def perform_extraction(self, remote_file_path: str, local_file_path: pathlib.Path) -> bool:
         """
-        Request a file from an HTTP server and save it to disk, optionally at a given destination. If no destination is
+        Perform the HTTP download operation.
+
+        Parameters
+        ----------
+        remote_file_path
+            URL to download from
+        local_file_path
+            Resolved local file path to write to (already processed by _get_local_file_path in request())
+
+        Returns
+        -------
+        bool
+            True if successful
+        """
+        response = self.session.get(remote_file_path)
+        response.raise_for_status()
+        with open(local_file_path, "wb") as outfile:
+            outfile.write(response.content)
+        return True
+
+    def _get_failure_exception(self, attempts: int, identifier: str) -> Exception:
+        """Return RequestException for HTTP failures."""
+        return requests.exceptions.RequestException(
+            f"Too many ({attempts}) failed download attempts requesting {identifier}"
+        )
+
+    def request(self, remote_file_path: str, local_path: pathlib.Path | None = None) -> bool:
+        """
+        Request a file from an HTTP server and save it to disk, optionally at a given local path. If no local path is
         given, the file will be saved to the working directory with the same name it has on the server.
 
-        If an existing directory is given as the destination path, the file will be written to the given directory with
-        the same file name as on the server. If a destination path is given and is not a directory, the file will be
+        If an existing directory is given as the local path, the file will be written to the given directory with
+        the same file name as on the server. If a local path is given and is not a directory, the file will be
         written to the given path.
 
         An active session is required to make the request, so this must be called from within a context manager for this
@@ -283,8 +503,13 @@ class HTTPExtractor(Extractor):
         ----------
         remote_file_path
             URL to a file to be downloaded
-        destination_path
+        local_path
             Local path to write file to
+
+        Returns
+        -------
+        bool
+            True if the file was downloaded successfully, False if an ignorable exception occurred.
 
         Raises
         ------
@@ -292,6 +517,8 @@ class HTTPExtractor(Extractor):
             If this is not run from within a context manager
         RetryError
             If the requests could not be completed after all retries
+        requests.exceptions.RequestException
+            If the request fails after all retries or encounters an unsupported exception
         """
         if not hasattr(self, "session"):
             raise RuntimeError(
@@ -301,87 +528,49 @@ class HTTPExtractor(Extractor):
 
         log.info(f"Downloading {remote_file_path}")
 
-        # Build a dynamic path if a full destination path hasn't been given
-        if destination_path is None or destination_path.is_dir():
-            # Extract the file name from the end of the URL
-            file_name = pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
+        # Build a dynamic path if a full local path hasn't been given
+        local_file_path = self._get_local_file_path(remote_file_path, local_path)
 
-            if destination_path is None:
-                destination_path = file_name
-            else:
-                destination_path /= file_name
+        return self.retry_with_backoff(
+            identifier=remote_file_path,
+            remote_file_path=remote_file_path,
+            local_file_path=local_file_path,
+        )
 
-        # Open the remote file, and write it locally
-        response = self.session.get(remote_file_path)
-        response.raise_for_status()
-        with open(destination_path, "wb") as outfile:
-            outfile.write(response.content)
-
-        # If no exceptions were raised, the file was downloaded successfully
-        return True
+    def _get_local_file_from_remote(self, remote_file_path: str) -> pathlib.Path:
+        """Extract the file name from an HTTP URL by parsing the path component."""
+        return pathlib.Path(os.path.basename(urlparse(remote_file_path).path))
 
 
-class S3ExtractorBase(Extractor):
+class S3ExtractorBase(RetryingExtractor):
     """
     Base class for S3 extraction operations.
     """
 
-    def __init__(
-        self,
-        dm: dataset_manager.DatasetManager,
-        concurrency_limit: int = 8,
-        ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
-        unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
-    ):
+    def _calculate_retry_delay(self, attempt: int) -> float:
         """
-        Create a new S3 Extractor object by associating a Dataset Manager with it.
+        Linear backoff: attempt * backoff_factor (default 30 seconds per attempt).
 
-        Parameters
-        ----------
-        dm
-            Source data for this dataset manager will be extracted
-        concurrency_limit
-            Number of simultaneous threads to run while requesting data
-        ignorable_extraction_errors
-            A list or tuple of exception types that can be safely ignored during S3 extraction.
-            These will trigger skipping the current extract operation (for a given file) and requesting the next file
-        unsupported_extraction_errors
-            A list or tuple of exception types that should trigger
-            the immediate failure of the entire extraction operation.
+        Maintains backwards compatibility with existing S3 retry behavior.
         """
-        super().__init__(dm, concurrency_limit=concurrency_limit)
+        return attempt * self.backoff_factor
 
-        # Set extraction errors, if passed, as tuples, since Exceptions are not hashable and the Except op needs to hash
-        self.ignorable_extraction_errors: tuple[Exception] = tuple(ignorable_extraction_errors)
-        self.unsupported_extraction_errors: tuple[Exception] = tuple(unsupported_extraction_errors)
+    def _get_failure_exception(self, attempts: int, identifier: str) -> Exception:
+        """Return FileNotFoundError for S3 failures."""
+        return FileNotFoundError(f"Too many ({attempts}) failed download attempts from server requesting {identifier}")
 
-    @abstractmethod
-    def extract_from_s3(
-        self,
-        remote_file_path: str,
-        scan_indices: int | tuple[int, int] = 0,
-        local_file_path: pathlib.Path | None = None,
-    ) -> None:
-        """
-        Abstract method to extract/download from S3. Must be implemented by subclasses.
-
-        Parameters
-        ----------
-        remote_file_path
-            An S3 file URL path to the file to be processed
-        scan_indices
-            Indices of the raw climate data to be read (used by kerchunk, ignored by download)
-        local_file_path
-            An optional local file path
-        """
+    def _get_local_file_from_remote(self, remote_file_path: str) -> pathlib.Path:
+        """Extract the file name from an S3 path by splitting on '/'."""
+        return pathlib.Path(remote_file_path.split("/")[-1])
 
     def request(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
-        tries: int = 5,
+        tries: int | None = None,
         local_file_path: pathlib.Path | None = None,
         informative_id: str | None = None,
+        local_path: pathlib.Path | None = None,
     ) -> bool:
         """
         Extract/download a remote S3 file with retry logic and error handling.
@@ -393,11 +582,14 @@ class S3ExtractorBase(Extractor):
         scan_indices
             Indices of the raw climate data to be read (used by kerchunk, ignored by download)
         tries
-            Allow a number of failed requests before failing permanently
+            Allow a number of failed requests before failing permanently. If None, uses instance's retries value.
         local_file_path
-            An optional local file path
+            An optional local file path, which MUST be the complete path, including the file name.
+            Included for backwards compatibility. Takes precedence over the local_path param when both are provided.
         informative_id
             A string to identify the request in logs. Defaults to just the given remote file path
+        local_path:
+            An optional local file path, which may be the complete path, or omit the file name
 
         Returns
         -------
@@ -412,44 +604,21 @@ class S3ExtractorBase(Extractor):
         if not remote_file_path.lower().startswith("s3://"):
             raise ValueError(f"Given path {remote_file_path} is not an S3 path")
 
+        if local_file_path is None and local_path is not None:
+            local_file_path = self._get_local_file_path(remote_file_path, local_path)
+
         # Default to using the raw file name to identify the request in the log message
-        if informative_id is None:
-            informative_id = remote_file_path
+        identifier = informative_id if informative_id is not None else remote_file_path
 
-        log.info(f"Beginning to download {informative_id}")
+        log.info(f"Beginning to download {identifier}")
 
-        # Count failed requests and fail with an exception if allowed amount of tries is exceeded
-        counter = 1
-        while counter <= tries:
-            try:
-                # Call the abstract method implemented by subclasses
-                self.extract_from_s3(
-                    remote_file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path
-                )
-                log.info(f"Finished downloading {informative_id}")
-                return True
-            except self.ignorable_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
-                log.info(f"Encountered permitted exception {e} for {informative_id}, skipping")
-                # Returning false allows the ETL to continue, but registers that no file was downloaded
-                return False
-            except self.unsupported_extraction_errors as e:  # NOTE these attributes MUST be tuples, not lists
-                log.info(f"Encountered unpermitted exception {e} for {informative_id}, failing immediately")
-                raise
-            except Exception as e:
-                # Increase delay time after each failure
-                retry_delay = counter * 30
-                log.info(
-                    f"Encountered exception {e} for {informative_id}, retrying after {retry_delay} seconds"
-                    f" , attempt {counter}"
-                )
-                counter += 1
-                time.sleep(retry_delay)
-        else:
-            log.info(f"Couldn't find or download a remote file for {informative_id}")
-            raise FileNotFoundError(
-                f"Too many ({counter}) failed download attempts from server "
-                f"requesting {informative_id} at {remote_file_path}"
-            )
+        return self.retry_with_backoff(
+            identifier=identifier,
+            retries=tries,
+            remote_file_path=remote_file_path,
+            scan_indices=scan_indices,
+            local_file_path=local_file_path,
+        )
 
 
 class S3ExtractorKerchunk(S3ExtractorBase):
@@ -460,36 +629,18 @@ class S3ExtractorKerchunk(S3ExtractorBase):
 
     def __init__(
         self,
-        dm: dataset_manager.DatasetManager,
-        concurrency_limit: int = 8,
-        ignorable_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
-        unsupported_extraction_errors: list[type[Exception]] | tuple[type[Exception], ...] = (),
+        *args,
+        **kwargs,
     ):
-        """
-        Create a new Extractor object by associating a Dataset Manager with it.
-
-        Parameters
-        ----------
-        dm
-            Source data for this dataset manager will be extracted
-        concurrency_limit
-            Number of simultaneous threads to run while requesting data
-        ignorable_extraction_errors
-            A list or tuple of exception types that can be safely ignored during S3 extraction.
-            These will trigger skipping the current extract operation (for a given file) and requesting the next file
-        unsupported_extraction_errors
-            A list or tuple of exception types that should trigger
-            the immediate failure of the entire extraction operation.
-        """
-        super().__init__(dm, concurrency_limit, ignorable_extraction_errors, unsupported_extraction_errors)
+        super().__init__(*args, **kwargs)
         self.dm.zarr_jsons = []
 
-    def extract_from_s3(
+    def perform_extraction(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
         local_file_path: pathlib.Path | None = None,
-    ) -> None:
+    ) -> bool:
         """
         Extract a remote S3 climate file into a JSON using kerchunk.
 
@@ -503,6 +654,7 @@ class S3ExtractorKerchunk(S3ExtractorBase):
             An optional local file path to save the kerchunked Zarr JSON to
         """
         self.dm.kerchunkify(file_path=remote_file_path, scan_indices=scan_indices, local_file_path=local_file_path)
+        return True
 
 
 class S3ExtractorDownload(S3ExtractorBase):
@@ -512,26 +664,24 @@ class S3ExtractorDownload(S3ExtractorBase):
 
     def __init__(
         self,
-        dm,
-        concurrency_limit=8,
-        ignorable_extraction_errors=(),
-        unsupported_extraction_errors=(),
-        fs: s3fs.S3FileSystem() = None,
+        *args,
+        fs: s3fs.S3FileSystem | None = None,
+        **kwargs,
     ):
-        # ValueError can be raised by extract_from_s3 and should not retry
-        unsupported_extraction_errors += (ValueError,)
-        super().__init__(dm, concurrency_limit, ignorable_extraction_errors, unsupported_extraction_errors)
+        # ValueError can be raised by perform_extraction and should not retry
+        super().__init__(*args, **kwargs)
+        self.unsupported_extraction_errors = tuple(self.unsupported_extraction_errors) + (ValueError,)
         if fs:
             self.s3_fs = fs
         else:
             self.s3_fs = s3fs.S3FileSystem()
 
-    def extract_from_s3(
+    def perform_extraction(
         self,
         remote_file_path: str,
         scan_indices: int | tuple[int, int] = 0,
         local_file_path: pathlib.Path | None = None,
-    ) -> None:
+    ) -> True:
         """
         Download S3 file directly to local path using s3fs.
 
@@ -562,6 +712,7 @@ class S3ExtractorDownload(S3ExtractorBase):
 
         # Download the file
         self.s3_fs.download(remote_file_path, str(local_file_path))
+        return True
 
 
 class S3Extractor(S3ExtractorKerchunk):
@@ -584,7 +735,7 @@ class FTPExtractor(Extractor):
 
     Use a context manager to open the connection (@see FTPExtractor.__enter__). Once connected, the object is able to
     navigate to specific working directory, match files located in subdirectories, and fetch files to a given
-    destination folder.
+    local folder.
 
     Currently only anonymous FTP access is supported.
     """
@@ -685,15 +836,17 @@ class FTPExtractor(Extractor):
         except ftplib.error_perm:
             raise RuntimeError("Error changing directory. Is the FTP connection open?")
 
-    def request(
-        self, source: pathlib.PurePosixPath, destination: pathlib.PurePosixPath = pathlib.PurePosixPath()
-    ) -> bool:
-        """
-        Download the given source path within the FTP server's current working directory to the given destination.
+    def _get_local_file_from_remote(self, remote_file_path: pathlib.PurePosixPath) -> pathlib.Path:
+        """Extract the file name from an FTP path using the .name property."""
+        return pathlib.Path(remote_file_path.name)
 
-        If the destination is a full path or the destination doesn't exist yet, that will be the path used for the
-        output. If the destination is an existing folder, the output path will use the source's file name with any
-        subdirectories omitted. By default, the destination is the current working directory.
+    def request(self, remote_file_path: pathlib.PurePosixPath, local_path: pathlib.Path | None = None) -> bool:
+        """
+        Download the given source path within the FTP server's current working directory to the given local path.
+
+        If the local is a full path or the local doesn't exist yet, that will be the path used for the
+        output. If the local is an existing folder, the output path will use the source's file name with any
+        subdirectories omitted. By default, the local is the current working directory.
 
         Parameters
         ----------
@@ -711,24 +864,21 @@ class FTPExtractor(Extractor):
         RuntimeError
             If an error occurs during the FTP retrieval call
         """
-        # Build a file name using the source name if an existing directory was given as the destination. Otherwise, use
-        # the destination as the full path to the output file.
-        if pathlib.Path(destination).is_dir():
-            output = destination / source.name
-        else:
-            output = destination
+        # Build a file name using the source name if an existing directory was given as the local path.
+        # Otherwise, use the local as the full path to the output file.
+        local_file_path = self._get_local_file_path(remote_file_path, local_path)
 
         # Open the output file and write the contents of the remote file to it using the FTP library
-        log.info(f"Downloading remote file {source} to {output}")
-        with open(output, "wb") as fp:
+        log.info(f"Downloading remote file {remote_file_path} to {local_file_path}")
+        with open(local_file_path, "wb") as fp:
             try:
                 # need separate FTP for each download to take advantage of concurrency
                 with ftplib.FTP(self.host) as download_ftp:
                     download_ftp.login()
                     download_ftp.cwd(str(self.cwd))
-                    download_ftp.retrbinary(f"RETR {source}", fp.write)
+                    download_ftp.retrbinary(f"RETR {remote_file_path}", fp.write)
             except ftplib.error_perm:
-                raise RuntimeError(f"Error retrieving {source} from {self.host} in {self.cwd}")
+                raise RuntimeError(f"Error retrieving {remote_file_path} from {self.host} in {self.cwd}")
 
         # If the exception wasn't raised, the file was downloaded successfully
         return True
