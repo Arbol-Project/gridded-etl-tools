@@ -325,3 +325,11 @@ def nc4_input_files(self):
 #         if fil.suffix == ".json"
 #     ]
 #     return jsons
+
+
+# For the CHIRPS system test - don't want to touch actual FTP
+# first argument replaces `self`
+def mocked_ftp_extract_request(_, source, destination):
+    with open(destination / source.name, "w") as f:
+        f.write(f"I'm a file! I came from {source}")
+    return True
