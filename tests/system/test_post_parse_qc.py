@@ -79,8 +79,8 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     """
     caplog.set_level(logging.INFO)
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     # Approves aligned values
     dm.post_parse_quality_check(checks=5)
     dm.post_parse_quality_check(checks=5)
@@ -101,8 +101,8 @@ def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog,
     and fails as anticipated with bad data
     """
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     # Runs without issue for original datasets of length 1 in the time dimension
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_single_time)
     dm.post_parse_quality_check(checks=5)
@@ -114,9 +114,9 @@ def test_raw_file_to_dataset_local(mocker, manager_class, initial_input_path, ap
     local and remote files alike
     """
     # Parse a dataset manager initially, and then for an update, use "h5netcdf" engine for GitHub actions server
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     # Local data
     dm.protocol = "file"
     dm.input_files = Mock(return_value=nc4_input_files(dm))
@@ -146,9 +146,9 @@ def test_reformat_orig_ds_no_time_dim(mocker, manager_class, initial_input_path,
     but in the dimensions
     """
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_dim)
@@ -163,9 +163,9 @@ def test_reformat_orig_ds_no_time_at_all(mocker, manager_class, initial_input_pa
     or coordinate
     """
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_at_all)
@@ -181,9 +181,9 @@ def test_reformat_orig_ds_time_dim_not_in_data_var(mocker, manager_class, initia
     dimensions
     """
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_dim_in_data_var)
@@ -198,9 +198,9 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     time dimension doesn't correspond to the production dataset
     """
     # Prepare a dataset manager, use "h5netcdf" engine for GitHub actions server specifically
+    mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
-    dm.open_dataset_kwargs["engine"] = "h5netcdf"
     mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_normal)
     prod_ds = dm.get_prod_update_ds()
     original_files = list(dm.filter_search_space(prod_ds))
