@@ -358,10 +358,12 @@ class TestLocal:
 
     @staticmethod
     def test_mapper():
-        store = store_module.Local(mock.Mock(
-            custom_output_path=pathlib.Path("el/cami/no"),
-            key=lambda: "Jeremy-daily",
-        ))
+        store = store_module.Local(
+            mock.Mock(
+                custom_output_path=pathlib.Path("el/cami/no"),
+                key=lambda: "Jeremy-daily",
+            )
+        )
         store.fs = mock.Mock()
         fs = store.fs.return_value
         mapper = fs.get_mapper.return_value
@@ -374,10 +376,12 @@ class TestLocal:
 
     @staticmethod
     def test_mapper_refresh():
-        store = store_module.Local(mock.Mock(
-            custom_output_path=pathlib.Path("el/cami/no"),
-            key=lambda: "Jeremy-daily",
-        ))
+        store = store_module.Local(
+            mock.Mock(
+                custom_output_path=pathlib.Path("el/cami/no"),
+                key=lambda: "Jeremy-daily",
+            )
+        )
         store.fs = mock.Mock()
         fs = store.fs.return_value
         mapper = fs.get_mapper.return_value
