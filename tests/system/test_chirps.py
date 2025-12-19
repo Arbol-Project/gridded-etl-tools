@@ -9,6 +9,7 @@ import glob
 from unittest.mock import Mock, patch
 from ..common import (
     run_etl,
+    mocked_ftp_extract_request,
     get_manager,
     clean_up_input_paths,
     patched_key,
@@ -117,6 +118,7 @@ def test_extract(mocker, manager_class, test_chunks, extracted_input_path):
     """
     Test an extract of CHIRPS data.
     """
+    mocker.patch("gridded_etl_tools.utils.extractor.FTPExtractor.request", mocked_ftp_extract_request)
     # Get the CHIRPS manager with rebuild set
     dm = manager_class(custom_input_path=extracted_input_path, rebuild_requested=True, store="local")
     dm.check_if_new_data = Mock(return_value=True)
