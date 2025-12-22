@@ -851,6 +851,27 @@ class TestPublish:
         assert dataset.data.dims == ("time", "latitude", "longitude")
 
     @staticmethod
+    def test_prep_update_dataset_filters_dims(manager_class):
+        """
+        Test that transpose only includes dims present in the dataset
+        """
+        dm = manager_class()
+        dm.set_zarr_metadata = mock.Mock(side_effect=lambda x: x)
+        # Dataset only has 'time' and 'latitude', not 'longitude'
+        update_dataset = mock.Mock()
+        update_dataset.dims = {"time": 10, "latitude": 180}
+        # After sel(), the result also needs dims for the transpose_dims computation
+        selected_dataset = update_dataset.sel.return_value
+        selected_dataset.dims = {"time": 3, "latitude": 180}
+        dm.standard_dims = ["time", "latitude", "longitude"]
+        time_filter_vals = [1, 2, 3]
+
+        dm.prep_update_dataset(update_dataset, time_filter_vals)
+
+        # transpose should only be called with dims that exist in the dataset
+        selected_dataset.transpose.assert_called_once_with("time", "latitude")
+
+    @staticmethod
     def test_calculate_update_time_ranges(
         manager_class,
         fake_original_dataset,

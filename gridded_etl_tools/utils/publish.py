@@ -447,9 +447,11 @@ class Publish(Transform):
         # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update
         # failures.
         if self.time_dim in update_dataset.dims:
-            update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals}).transpose(*self.standard_dims)
+            update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals})
         else:
-            update_dataset = update_dataset.expand_dims(self.time_dim).transpose(*self.standard_dims)
+            update_dataset = update_dataset.expand_dims(self.time_dim)
+        transpose_dims = [dim for dim in self.standard_dims if dim in update_dataset.dims]
+        update_dataset = update_dataset.transpose(*transpose_dims)
 
         # Add metadata to dataset
         update_dataset = self.set_zarr_metadata(update_dataset)

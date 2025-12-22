@@ -663,7 +663,8 @@ class Transform(Metadata, Convenience):
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
-        dataset = dataset.transpose(*self.standard_dims)
+        transpose_dims = [dim for dim in self.standard_dims if dim in dataset.dims]
+        dataset = dataset.transpose(*transpose_dims)
 
         # Add metadata to dataset
         dataset = self.set_zarr_metadata(dataset)
@@ -714,19 +715,13 @@ class Transform(Metadata, Convenience):
         postprocessed_dataset = self.postprocess_zarr(raw_dataset)
         return postprocessed_dataset
 
-    def set_key_dims(self, standard_dims_to_remove: str | list[str] = None):
+    def set_key_dims(self):
         """
         Set the standard and time dimension instance variables based on a dataset's type.
         Valid types are an ensemble dataset, a forecast (ensemble mean) dataset, or a "normal" observational dataset.
 
         The self.dataset_category property defaults to "observation". If a dataset provides a different type of data,
          the property should be specific in that dataset's manager; otherwise the default value suffices.
-
-        Parameters
-        ----------
-        standard_dims_to_remove : str or list[str], optional
-            A dimension or list of dimensions to remove from the standard_dims list.
-            Defaults to None, in which case no dimensions are removed.
 
         Raises
         ------
@@ -756,12 +751,6 @@ class Transform(Metadata, Convenience):
                 "preventing the correct assignment of standard_dims and the time_dim. Please revise the "
                 "dataset's ETL manager to correctly specify one of these properties."
             )
-
-        # Optionally remove dimensions from the standard_dims list to handle non-standard datasets
-        if standard_dims_to_remove:
-            if isinstance(standard_dims_to_remove, str):
-                standard_dims_to_remove = [standard_dims_to_remove]
-            self.standard_dims = [dim for dim in self.standard_dims if dim not in standard_dims_to_remove]
 
     def _standard_dims_except(self, *exclude_dims: list[str]) -> list[str]:
         return [dim for dim in self.standard_dims if dim not in exclude_dims]

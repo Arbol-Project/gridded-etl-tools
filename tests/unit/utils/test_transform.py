@@ -835,6 +835,8 @@ class TestTransform:
         dm.set_zarr_metadata = mock.Mock()
 
         dataset1 = dm.load_dataset_from_disk.return_value
+        # Set dims to include all standard_dims so filtering passes them all through
+        dataset1.dims = {dim: 1 for dim in dm.standard_dims}
         dataset2 = dataset1.transpose.return_value
         dataset3 = dm.set_zarr_metadata.return_value
 
@@ -844,6 +846,26 @@ class TestTransform:
         dm.set_key_dims.assert_called_once_with()
         dataset1.transpose.assert_called_once_with(*dm.standard_dims)
         dm.set_zarr_metadata.assert_called_once_with(dataset2)
+
+    @staticmethod
+    def test_initial_ds_transform_filters_dims(manager_class):
+        """
+        Test that transpose only includes dims present in the dataset
+        """
+        dm = manager_class()
+        dm.load_dataset_from_disk = mock.Mock()
+        dm.set_key_dims = mock.Mock()
+        dm.set_zarr_metadata = mock.Mock()
+
+        dataset1 = dm.load_dataset_from_disk.return_value
+        # Dataset only has 'time' and 'latitude', not 'longitude'
+        dataset1.dims = {"time": 10, "latitude": 180}
+        dm.standard_dims = ["time", "latitude", "longitude"]
+
+        dm.initial_ds_transform()
+
+        # transpose should only be called with dims that exist in the dataset
+        dataset1.transpose.assert_called_once_with("time", "latitude")
 
     @staticmethod
     def test_update_ds_transform(manager_class):
@@ -1055,22 +1077,6 @@ class TestTransform:
             "latitude",
             "longitude",
         ]
-        assert dm.time_dim == "forecast_reference_time"
-
-    @staticmethod
-    def test_set_key_dims_remove_single_dimension(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "forecast"
-        dm.set_key_dims(standard_dims_to_remove="step")
-        assert dm.standard_dims == ["forecast_reference_time", "latitude", "longitude"]
-        assert dm.time_dim == "forecast_reference_time"
-
-    @staticmethod
-    def test_set_key_dims_remove_multiple_dimensions(manager_class):
-        dm = manager_class()
-        dm.dataset_category = "forecast"
-        dm.set_key_dims(standard_dims_to_remove=["step", "forecast_reference_time"])
-        assert dm.standard_dims == ["latitude", "longitude"]
         assert dm.time_dim == "forecast_reference_time"
 
     @staticmethod
