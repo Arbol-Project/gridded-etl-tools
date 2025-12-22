@@ -1058,6 +1058,22 @@ class TestTransform:
         assert dm.time_dim == "forecast_reference_time"
 
     @staticmethod
+    def test_set_key_dims_remove_single_dimension(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "forecast"
+        dm.set_key_dims(standard_dims_to_remove="step")
+        assert dm.standard_dims == ["forecast_reference_time", "latitude", "longitude"]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
+    def test_set_key_dims_remove_multiple_dimensions(manager_class):
+        dm = manager_class()
+        dm.dataset_category = "forecast"
+        dm.set_key_dims(standard_dims_to_remove=["step", "forecast_reference_time"])
+        assert dm.standard_dims == ["latitude", "longitude"]
+        assert dm.time_dim == "forecast_reference_time"
+
+    @staticmethod
     def test_set_key_dims_misspecified(manager_class):
         dm = manager_class()
         dm.dataset_category = "nocast"
