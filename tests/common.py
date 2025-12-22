@@ -329,7 +329,7 @@ def nc4_input_files(self):
 
 # For the CHIRPS system test - don't want to touch actual FTP
 # first argument replaces `self`
-def mocked_ftp_extract_request(_, source, local):
-    with open(local / source.name, "w") as f:
-        f.write(f"I'm a file! I came from {source}")
+def mocked_ftp_extract_request(_, remote_file_path, local_path):
+    with open(local_path / remote_file_path.name, "w") as f:
+        f.write(f"I'm a file! I came from {remote_file_path}")
     return True
