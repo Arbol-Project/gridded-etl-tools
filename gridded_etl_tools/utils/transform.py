@@ -759,7 +759,9 @@ class Transform(Metadata, Convenience):
 
         # Optionally remove dimensions from the standard_dims list to handle non-standard datasets
         if standard_dims_to_remove:
-            self.standard_dims = [dim for dim in self.standard_dims if dim not in set(standard_dims_to_remove)]
+            if isinstance(standard_dims_to_remove, str):
+                standard_dims_to_remove = [standard_dims_to_remove]
+            self.standard_dims = [dim for dim in self.standard_dims if dim not in standard_dims_to_remove]
 
     def _standard_dims_except(self, *exclude_dims: list[str]) -> list[str]:
         return [dim for dim in self.standard_dims if dim not in exclude_dims]
