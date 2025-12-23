@@ -432,8 +432,9 @@ class Publish(Transform):
         Select out and format time ranges you wish to insert or append into the original dataset based on specified
         time range(s) and chunks
 
-        NOTE in some cases a standard dimension will be missing from a dataset -- for example after taking the mean/max/etc.
-        of a given dimension. In these cases, we exempt it from the transpose operation.
+        NOTE in some cases a standard dimension will be missing from a dataset
+        -- for example after taking the mean/max/etc. of a given dimension.
+        In these cases, we exempt it from the transpose operation.
 
         Parameters
         ----------

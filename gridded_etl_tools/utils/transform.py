@@ -653,8 +653,9 @@ class Transform(Metadata, Convenience):
         """
         In-memory transform steps relevant to an initial dataset publish
 
-        NOTE in some cases a standard dimension will be missing from a dataset -- for example after taking the mean/max/etc.
-        of a given dimension. In these cases, we exempt it from the transpose operation.
+        NOTE in some cases a standard dimension will be missing from a dataset
+        -- for example after taking the mean/max/etc. of a given dimension.
+        In these cases, we exempt it from the transpose operation.
 
         Returns
         -------
