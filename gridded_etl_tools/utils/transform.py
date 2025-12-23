@@ -663,6 +663,8 @@ class Transform(Metadata, Convenience):
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
+        # Transpose / order the dimensions of the dataset to the standard dimensions;
+        # if a dataset is missing a standard dimension, exempt it
         transpose_dims = [dim for dim in self.standard_dims if dim in dataset.dims]
         dataset = dataset.transpose(*transpose_dims)
 

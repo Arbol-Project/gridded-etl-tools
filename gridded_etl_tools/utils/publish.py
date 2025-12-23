@@ -444,12 +444,14 @@ class Publish(Transform):
         update_dataset : xr.Dataset
             An xr.Dataset filtered to only the time values in `time_filter_vals`, with correct metadata
         """
-        # Xarray will automatically drop dimensions of size 1. A missing time dimension causes all manner of update
-        # failures.
+        # Xarray will automatically drop dimensions of size 1. A missing time dimension causes updates to fail.
         if self.time_dim in update_dataset.dims:
             update_dataset = update_dataset.sel(**{self.time_dim: time_filter_vals})
         else:
             update_dataset = update_dataset.expand_dims(self.time_dim)
+
+        # Transpose / order the dimensions of the dataset to the standard dimensions;
+        # if a dataset is missing a standard dimension, exempt it
         transpose_dims = [dim for dim in self.standard_dims if dim in update_dataset.dims]
         update_dataset = update_dataset.transpose(*transpose_dims)
 
