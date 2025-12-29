@@ -441,9 +441,9 @@ class Transform(Metadata, Convenience):
             commands.append(list(map(str, command_text + filenames)))
         # CDO responds to an environment variable when assigning file suffixes
         # Convert each command to a Popen call b/c Popen doesn't block, hence processes will run in parallel
-        # Only run 100 processes at a time to prevent BlockingIOErrors
-        for index in range(0, len(commands), 100):
-            commands_slice = [Popen(cmd) for cmd in commands[index : index + 100]]
+        # Only run a number of processes equal to the number of processors simultaneously
+        for index in range(0, len(commands), multiprocessing.cpu_count()):
+            commands_slice = [Popen(cmd) for cmd in commands[index : index + multiprocessing.cpu_count()]]
             for command in commands_slice:
                 command.wait()
                 if not keep_originals:

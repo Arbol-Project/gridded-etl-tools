@@ -550,10 +550,11 @@ class Local(StoreInterface):
         pathlib.Path
             Path to the Zarr on the local filesystem
         """
+        zarr_filename = f"{self.dm.key()}.zarr"
         if self.dm.custom_output_path:
-            return self.dm.custom_output_path
+            return self.dm.custom_output_path.joinpath(zarr_filename)
         else:
-            return self.dm.output_path().joinpath(f"{self.dm.key()}.zarr")
+            return self.dm.output_path().joinpath(zarr_filename)
 
     @property
     def has_existing(self) -> bool:
