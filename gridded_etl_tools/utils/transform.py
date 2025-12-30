@@ -653,6 +653,10 @@ class Transform(Metadata, Convenience):
         """
         In-memory transform steps relevant to an initial dataset publish
 
+        NOTE in some cases a standard dimension will be missing from a dataset
+        -- for example after taking the mean/max/etc. of a given dimension.
+        In these cases, we exempt it from the transpose operation.
+
         Returns
         -------
         dataset : xr.Dataset
@@ -663,7 +667,10 @@ class Transform(Metadata, Convenience):
 
         # Reset standard_dims to Arbol's standard now that loading + preprocessing on the original names is done
         self.set_key_dims()
-        dataset = dataset.transpose(*self.standard_dims)
+        # Transpose / order the dimensions of the dataset to the standard dimensions;
+        # if a dataset is missing a standard dimension, exempt it
+        transpose_dims = [dim for dim in self.standard_dims if dim in dataset.dims]
+        dataset = dataset.transpose(*transpose_dims)
 
         # Add metadata to dataset
         dataset = self.set_zarr_metadata(dataset)
