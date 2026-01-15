@@ -79,6 +79,38 @@ In another example, if you only wanted to download (not parse) data for the firs
 
 Consult the docstring for `dataset_manager.__init__` and `extract` to see acceptable parameters you can pass.
 
+#### Looping a parse
+
+In most cases, the ETL is expected to run each of its phases once within the scope of the program. However, it may be useful to run one or more of the phases in a loop when, for example, resources like disk space, RAM, or CPU are low. This library is able to reset a `DatasetManager` to re-run an ETL, but currently the object must be deleted and re-initialized before re-running.
+
+In the following example, the source data for 1981 to 2025 is downloaded and parsed four years at time. After every run, the `DatasetManager` is deleted, the source data folder is removed completely (to conserve space), and the `DatasetManager` is re-initialized for another ETL. The first run will create a new Zarr on S3, and subsequent runs will append the new data to the existing Zarr.
+
+```python
+if __name__ == "__main__":
+
+    batch_start_date = datetime.datetime(1981, 1, 1)
+    while batch_start_date <= datetime.datetime(2025, 1, 1):
+
+        dm = chirps.CHIRPS3FinalRnl(
+                store="s3",
+                s3_bucket_name="my-bucket",
+                output_zarr3=False,
+                use_local_zarr_jsons=True,
+                skip_pre_parse_nan_check=True,
+                align_update_chunks=True,
+            )
+        dm.log_to_file()
+        dm.extract(date_range=(batch_start_date, datetime.datetime(batch_start_date.year + 3, 12, 31)))
+        dm.transform_data_on_disk()
+        dataset = dm.transform_dataset_in_memory()
+        dataset = dataset.chunk(dm.requested_dask_chunks)
+        dm.parse(dataset)
+        dm.publish_metadata()
+        del dm
+
+        shutil.rmtree("my-datasets/")
+        batch_start_date = datetime.datetime(batch_start_date.year + 4, 1, 1)
+```
 
 ## Retrieving a dataset
 

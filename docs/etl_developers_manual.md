@@ -319,3 +319,48 @@ Metadata creation and updates should adopt the following logic to avoid unantici
 * The `encoding` of a zarr dataset or one of its dimensions or data variables should be as empty as possible. Only chunk size information and fields required by the [Climate and Forecasting Metadata Conventions](https://cfconventions.org/) should be stored under the data variable's encoding.
 
 How the resulting metadata is managed and published is described in the [metadata readme](./metadata_standard.md).
+
+Quality control
+---------------
+
+Before and after the parse stage, there are quality control checks that every ETL will run by default.
+
+Not all checks can be disabled, but there are three quality control related flags that `DatasetManager` objects accept: `skip_pre_parse_nan_check`, `skip_post_parse_qc`, and `skip_post_parse_api_check`. All default to `False`, meaning all quality control checks that can be toggled are enabled by default.
+
+### Pre-parse
+
+Before parsing, four checks are run via the function `Publish.pre_parse_quality_check`. This function is called every time `Publish.to_zarr` is run, at the beginning of the function. The checks are performed on the source data once it has been opened as an `xarray.Dataset`, and before it is parsed to Zarr format and added to the database.
+
+1. Time check
+
+Aggressively assert that the time dimension of the source data is in the anticipated order, meaning the time column is in contiguous order and isn't missing any times. This can be controlled per-dataset.
+
+2. Values check
+
+Look at a random sample of values in the source data, checking for unanticipated NaNs and extreme values.
+
+3. Encoding check
+
+Ensure the source data is stored in a space efficient format by checking the `dtype` of the encoding to make sure it matches with what is expected.
+
+4. NaN check
+
+Ensure that the % of NaN values approximately matches the historical average. This is the only pre-parse check that can be toggled. It can be disabled by setting `DatasetManager.skip_pre_parse_nan_check` to `False`.
+
+### Update check
+
+If the source data is being added to existing data, an additional check will be run before the parse begins. This check ensures that data being appended, rather than inserted, begins immediately following the last date in the existing data.
+
+### Post-parse
+
+After the dataset has been updated, two additional checks are run to ensure the updated Zarr data is written correctly. Although these checks are flagged to run by default, the functions are not run automatically when `Publish.parse` or `Publish.to_zarr` are called.
+
+#### Verification
+
+Open data points in the source data and compare them to data points in the written Zarr and ensure that the data matches exactly. This must be called explicitly by the ETL by calling `Publish.post_parse_quality_check`. This can be flagged to be skipped using `DatasetManager.skip_post_parse_qc`. If the flag is set to `True`, the check will not run when the function is called.
+
+#### API check
+
+There is no built-in API check, other than a flag which can be used to indicate to the ETL programmer whether any API check should be skipped or not. The flag can be set with `DatasetManager.skip_post_parse_api_check`. If the programmer chooses to, they can check the flag to see whether or not an API check should be performed.
+
+In the case of Arbol's ETLs, the stack which runs the ETLs uses this flag to check whether or not a call should be made at the end of an ETL to check whether or not the data is retrievable via the Arbol API.
