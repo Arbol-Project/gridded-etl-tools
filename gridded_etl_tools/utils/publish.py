@@ -840,10 +840,15 @@ class Publish(Transform):
         start_date, end_date = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
         n = len(possible_files)
 
+        self.debug("DEBUGGING filter_search_space")
+        self.debug(f"possible_files: {possible_files}")
+        self.debug(f"start_date: {start_date}, end_date: {end_date}, n: {n}")
+
         # Find leftmost file >= start_date
         left, right = 0, n
         while left < right:
             mid = (left + right) // 2
+            self.debug(f"LEFTMOST left: {left}, right: {right}, mid: {mid}")
             if self.get_file_date(possible_files[mid]) < start_date:
                 left = mid + 1
             else:
@@ -854,11 +859,14 @@ class Publish(Transform):
         left, right = start_idx, n
         while left < right:
             mid = (left + right) // 2
+            self.debug(f"RIGHTMOST left: {left}, right: {right}, mid: {mid}")
             if self.get_file_date(possible_files[mid]) <= end_date:
                 left = mid + 1
             else:
                 right = mid  # pragma NO COVER
         end_idx = right - 1
+
+        self.debug(f"start_idx: {start_idx}, end_idx: {end_idx}")
 
         self.debug(
             f"Found start date: {self.get_file_date(possible_files[start_idx])} "
