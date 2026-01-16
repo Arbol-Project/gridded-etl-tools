@@ -1426,6 +1426,18 @@ class TestPublish:
 
         assert len(dm.filter_search_space(hindcast_dataset)) == 2000
 
+        # Check if files with more than one time step can be handled in the case of only one input file
+
+        dm.input_files = mock.Mock(return_value=["One_file_per_update.mp3"])
+        dm.strings_to_date_range = mock.Mock(
+            return_value=(datetime.datetime(2025, 3, 10), datetime.datetime(2025, 3, 14))
+        )
+        dm.get_file_date = mock.Mock(return_value=datetime.datetime(2025, 1, 1))
+        dm.latest_date_in_file = mock.Mock(return_value=datetime.datetime(2025, 12, 31))
+
+        assert dm.filter_search_space(
+            mock.Mock(attrs={"update_date_range": mock.Mock()})) == ["One_file_per_update.mp3"]
+
     @staticmethod
     def test_dataset_date_in_range(manager_class, fake_original_dataset):
         """Test the dataset_date_in_range method with various date ranges
