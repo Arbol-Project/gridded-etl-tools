@@ -1435,8 +1435,9 @@ class TestPublish:
         dm.get_file_date = mock.Mock(return_value=datetime.datetime(2025, 1, 1))
         dm.latest_date_in_file = mock.Mock(return_value=datetime.datetime(2025, 12, 31))
 
-        assert dm.filter_search_space(
-            mock.Mock(attrs={"update_date_range": mock.Mock()})) == ["One_file_per_update.mp3"]
+        assert dm.filter_search_space(mock.Mock(attrs={"update_date_range": mock.Mock()})) == [
+            "One_file_per_update.mp3"
+        ]
 
     @staticmethod
     def test_dataset_date_in_range(manager_class, fake_original_dataset):
