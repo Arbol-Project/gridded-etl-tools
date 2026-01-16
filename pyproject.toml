@@ -65,6 +65,7 @@ Homepage = "https://arbol.io/"
 
 [project.optional-dependencies]
 testing = [
+    "h5py",
     "pyproj",
     "pytest",
     "pytest-cov",
