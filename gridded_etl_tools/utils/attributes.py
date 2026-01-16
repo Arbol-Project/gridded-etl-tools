@@ -336,6 +336,26 @@ class Attributes(ABC):
     to adjust this value
     """
 
+    release_status: typing.Literal["final", "preliminary", "mixed final and preliminary", "historical"] = "final"
+    """
+    The release_status of the dataset.
+
+    Valid options include "final", "preliminary", "mixed final and preliminary", and "historical".
+
+    Defaults to "final".
+
+    "final" is the default and indicates the latest version of the dataset.
+    "preliminary" indicates a preliminary version of the dataset.
+    "historical" indicates a historical version of the dataset.
+    "mixed final and preliminary" indicates a dataset that contains both final and preliminary versions of the data.
+    """
+
+    version: str | None = None
+    """
+    The version of the dataset, i.e. version 2, version 3, satellite-based, model-based, etc.
+    Flexible to accommodate the quirks of individual providers' publication practices.
+    """
+
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
 Attributes.__init_subclass__()

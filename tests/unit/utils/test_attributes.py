@@ -178,6 +178,14 @@ class TestAttributes:
         assert manager_class.open_dataset_kwargs == {}
 
     @staticmethod
+    def test_release_status(manager_class):
+        assert manager_class.release_status == "final"
+
+    @staticmethod
+    def test_version(manager_class):
+        assert manager_class.version is None
+
+    @staticmethod
     def test_store_with_correct_type(manager_class):
         dm = manager_class()
         local_store = store.Local(dm)
