@@ -294,15 +294,18 @@ class Convenience(Attributes):
         return start, end
 
     def get_date_range_from_file(
-        self, path: str, backend_kwargs: dict = None, **kwargs
+        self, path: pathlib.Path, backend_kwargs: dict | None = None, **kwargs
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Open file and return the start and end date of the data. The dimension name used to store dates should be
         passed as `dimension`.
 
+        This function only handles files which can be opened directly by xarray. Publish.time_range_in_file can
+        additionally handle JSON files which point to datasets.
+
         Parameters
         ----------
-        path : str
+        path : pathlib.Path
             Path to the input dataset file on disk
         backend_kwargs : dict, optional
             Backend arguments for the xr.open_dataset() method
