@@ -1432,12 +1432,20 @@ class TestPublish:
         dm.strings_to_date_range = mock.Mock(
             return_value=(datetime.datetime(2025, 3, 10), datetime.datetime(2025, 3, 14))
         )
-        dm.get_file_date = mock.Mock(return_value=datetime.datetime(2025, 1, 1))
-        dm.latest_date_in_file = mock.Mock(return_value=datetime.datetime(2025, 12, 31))
+        dm.time_range_in_file = mock.Mock(
+            return_value=(datetime.datetime(2025, 1, 1), datetime.datetime(2025, 12, 31))
+        )
 
         assert dm.filter_search_space(mock.Mock(attrs={"update_date_range": mock.Mock()})) == [
             "One_file_per_update.mp3"
         ]
+
+    @staticmethod
+    def test_time_range_in_file(manager_class, fake_original_dataset):
+        """Use a mock xr.Dataset to test whether the date range is returned correctly"""
+        dm = manager_class()
+        dm.raw_file_to_dataset = mock.Mock(return_value=fake_original_dataset)
+        assert dm.time_range_in_file(mock.Mock()) == (datetime.datetime(2021, 9, 16), datetime.datetime(2022, 1, 31))
 
     @staticmethod
     def test_dataset_date_in_range(manager_class, fake_original_dataset):

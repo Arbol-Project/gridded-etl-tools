@@ -820,11 +820,13 @@ class Publish(Transform):
 
     def filter_search_space(self, prod_ds: xr.Dataset) -> list[pathlib.Path]:
         """
-        Filter down all input files to only files that are within the update date range
-        on the production dataset.
+        Filter down all input files to only files that are within the update date range on the production dataset.
 
-        NOTE this implicitly relies on input files being sorted by the time dimension,
-        so that the determined bounds encapsulate the entire range of valid data.
+        NOTE this implicitly relies on input files being sorted by the time dimension, so that the determined bounds
+        encapsulate the entire range of valid data.
+
+        This was originally written for input files containing a single time step each. It now has initial support for
+        input files containing multiple time steps.
 
         Parameters
         ----------
@@ -833,44 +835,47 @@ class Publish(Transform):
 
         Returns
         -------
-        tuple[pathlib.Path]
+        list[pathlib.Path]
             A list of valid input files in pathlib.Path format
         """
         possible_files = list(self.input_files())
         start_date, end_date = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
         n = len(possible_files)
 
-        # Find leftmost file >= start_date
+        # Find leftmost file >= start_date. Use the latest timestamp contained in the file, so the file is checked for
+        # any time steps that exceed the start date.
         left, right = 0, n
         while left < right:
             mid = (left + right) // 2
-            if self.latest_date_in_file(possible_files[mid]) < start_date:
+            if self.time_range_in_file(possible_files[mid])[1] < start_date:
                 left = mid + 1
             else:
                 right = mid
         start_idx = left
 
-        # Find rightmost file <= end_date
+        # Find rightmost file <= end_date. Use the earliest timestamp contained in the file, so the file is checked for
+        # any time steps prior to the end date.
         left, right = start_idx, n
         while left < right:
             mid = (left + right) // 2
-            if self.get_file_date(possible_files[mid]) <= end_date:
+            if self.time_range_in_file(possible_files[mid])[0] <= end_date:
                 left = mid + 1
             else:
                 right = mid  # pragma NO COVER
         end_idx = right - 1
 
         self.debug(
-            f"Found start date: {self.get_file_date(possible_files[start_idx])} "
-            f"and end date: {self.get_file_date(possible_files[end_idx])}"
+            "Date range of filtered input files starts with"
+            f" {self.time_range_in_file(possible_files[start_idx])[0]}"
+            f" and ends with {self.time_range_in_file(possible_files[end_idx])[1]}"
         )
 
         return possible_files[start_idx : end_idx + 1]
 
-    def get_file_date(self, file_path: pathlib.Path) -> datetime.datetime:
+    def time_range_in_file(self, file_path: pathlib.Path) -> tuple[datetime.datetime, datetime.datetime]:
         """
-        Convenience function to extract the date from a file.
-        Assumes the file is valid and corresponds to a single time step
+        Convert a file to an xarray.Dataset and return the start and end of the list of timestamps contained in the time
+        dimension.
 
         Parameters
         ----------
@@ -879,28 +884,11 @@ class Publish(Transform):
 
         Returns
         -------
-        datetime.datetime
-            The date of the file
-        """
-        dataset = self.raw_file_to_dataset(file_path)
-        return self.numpydate_to_py(dataset[self.time_dim].values[0])
-
-    def latest_date_in_file(self, file_path: pathlib.Path) -> datetime.datetime:
-        """
-        Convert a single file to an xarray.Dataset and return the latest date contained in the time dimension.
-
-        Parameters
-        ----------
-        file_path : pathlib.Path
-            The path to the original file, on disk or remotely
-
-        Returns
-        -------
-        datetime.datetime
+        tuple[datetime.datetime, datetime.datetime]
             The latest date contained in the time dimension
         """
         dataset = self.raw_file_to_dataset(file_path)
-        return self.numpydate_to_py(dataset[self.time_dim].values[-1])
+        return self.get_date_range_from_dataset(dataset)
 
     def dataset_date_in_range(
         self, date_range: tuple[datetime.datetime, datetime.datetime], file_path: pathlib.Path
