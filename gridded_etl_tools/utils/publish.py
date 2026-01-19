@@ -799,18 +799,31 @@ class Publish(Transform):
             i = 0
             while i < checks:
                 # Open and reformat the original dataset such that it's comparable with the prod dataset
-                orig_ds = self.raw_file_to_dataset(random.choice(possible_files))
+                sample_file = random.choice(possible_files)
+                orig_ds = self.raw_file_to_dataset(sample_file)
 
-                # Run the checks
-                self.check_written_value(orig_ds, prod_ds, threshold)
-                i += 1
+                # Make sure only dates available in the update are checked. A source file may contain data already
+                # parsed in a past update.
+                orig_ds = orig_ds.where(orig_ds.time.isin(prod_ds.time), drop=True)
 
-                # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
-                # go ahead and bail.
-                elapsed = time.perf_counter() - start_checking
-                if elapsed > TWENTY_MINUTES:
-                    self.info(f"Breaking from checking loop after {datetime.timedelta(seconds=elapsed)}")
-                    break
+                # There should always be more than one time step available because the source files have been filtered,
+                # so log a warning if no times are found.
+                if len(orig_ds.time) > 0:
+
+                    # Run the checks
+                    self.check_written_value(orig_ds, prod_ds, threshold)
+                    i += 1
+
+                    # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
+                    # go ahead and bail.
+                    elapsed = time.perf_counter() - start_checking
+                    if elapsed > TWENTY_MINUTES:
+                        self.info(f"Breaking from checking loop after {datetime.timedelta(seconds=elapsed)}")
+                        break
+
+                else:
+                    self.warn("No times in randomly selected source file coincide with the update time range: "
+                              f"{sample_file}")
 
             elapsed = time.perf_counter() - start_checking
             self.info(
