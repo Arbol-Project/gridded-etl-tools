@@ -1192,10 +1192,11 @@ class TestPublish:
         orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
         prod_ds = dm.get_prod_update_ds.return_value
 
-        def check_written_value(dataset1, dataset2, threshold):
+        def check_written_value(dataset1, dataset2, threshold, checks):
             assert dataset1 is orig_ds
             assert dataset2 is prod_ds
             assert threshold == 10e-5
+            assert checks == 1
 
         dm.check_written_value = check_written_value
 
@@ -1247,10 +1248,11 @@ class TestPublish:
         orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
         prod_ds = dm.get_prod_update_ds.return_value
 
-        def check_written_value(dataset1, dataset2, threshold):
+        def check_written_value(dataset1, dataset2, threshold, checks):
             assert dataset1 is orig_ds
             assert dataset2 is prod_ds
             assert threshold == 10e-5
+            assert checks == 1
 
         dm.check_written_value = check_written_value
 
