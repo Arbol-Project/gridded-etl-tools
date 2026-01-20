@@ -1187,7 +1187,7 @@ class TestPublish:
         dm.get_prod_update_ds = mock.Mock()
         dm.filter_search_space = mock.Mock()
         random = mocker.patch("gridded_etl_tools.utils.publish.random")
-        len = mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
+        mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
 
         orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
         prod_ds = dm.get_prod_update_ds.return_value
@@ -1243,7 +1243,7 @@ class TestPublish:
         dm.get_prod_update_ds = mock.Mock()
         dm.filter_search_space = mock.Mock()
         random = mocker.patch("gridded_etl_tools.utils.publish.random")
-        len = mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
+        mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
 
         orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
         prod_ds = dm.get_prod_update_ds.return_value

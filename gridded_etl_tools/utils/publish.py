@@ -824,16 +824,18 @@ class Publish(Transform):
                     self.check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
                     i += 1
 
-                    # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
-                    # go ahead and bail.
+                    # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking
+                    # for, go ahead and bail.
                     elapsed = time.perf_counter() - start_checking
                     if elapsed > TWENTY_MINUTES:
                         self.info(f"Breaking from checking loop after {datetime.timedelta(seconds=elapsed)}")
                         break
 
                 else:
-                    self.warn("No times in randomly selected source file coincide with the update time range: "
-                              f"{sample_file}")
+                    self.warn(
+                        "No times in randomly selected source file coincide with the update time range: "
+                        f"{sample_file}"
+                    )
 
             elapsed = time.perf_counter() - start_checking
             self.info(
