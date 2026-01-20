@@ -51,7 +51,7 @@ def system(session):
         "--cov-config",
         HERE / ".coveragerc",
         "--cov-report=term-missing",
-        "--cov-fail-under=99",
+        "--cov-fail-under=100",
         "tests/system",
     )
 

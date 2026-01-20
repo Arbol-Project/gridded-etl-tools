@@ -814,11 +814,11 @@ class Publish(Transform):
 
                 # Make sure only dates available in the update are checked. A source file may contain data already
                 # parsed in a past update.
-                orig_ds = orig_ds.where(orig_ds.time.isin(prod_ds.time), drop=True)
+                orig_ds = orig_ds.where(orig_ds[self.time_dim].isin(prod_ds[self.time_dim]), drop=True)
 
                 # There should always be more than one time step available because the source files have been filtered,
                 # so log a warning if no times are found.
-                if len(orig_ds.time) > 0:
+                if len(orig_ds[self.time_dim]) > 0:
 
                     # Run the checks
                     self.check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
@@ -900,8 +900,7 @@ class Publish(Transform):
 
     def time_range_in_file(self, file_path: pathlib.Path) -> tuple[datetime.datetime, datetime.datetime]:
         """
-        Convert a file to an xarray.Dataset and return the start and end of the list of timestamps contained in the time
-        dimension.
+        Open a file as an xarray.Dataset and return the first and last timestamps in the time dimension.
 
         Parameters
         ----------
