@@ -9,7 +9,6 @@ from numcodecs import Blosc
 import zarr
 import xarray as xr
 
-
 # Imports used for legacy encoding change tests
 # import os
 # from time import sleep
