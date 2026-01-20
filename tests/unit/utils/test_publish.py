@@ -1178,23 +1178,21 @@ class TestPublish:
         assert dm.are_times_in_expected_order(times, delta) is False
 
     @staticmethod
-    def test_post_parse_quality_check(manager_class, mocker):
+    def test_post_parse_quality_check(manager_class, fake_original_dataset, mocker):
         dm = manager_class()
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
         dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
-        dm.raw_file_to_dataset = mock.Mock()
-        dm.get_prod_update_ds = mock.Mock()
+        mocker.patch("xarray.Dataset.where")
+        dm.raw_file_to_dataset = mock.Mock(return_value=fake_original_dataset)
+        dm.get_prod_update_ds = mock.Mock(return_value=fake_original_dataset)
         dm.filter_search_space = mock.Mock()
         random = mocker.patch("gridded_etl_tools.utils.publish.random")
         mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
 
-        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
-        prod_ds = dm.get_prod_update_ds.return_value
-
         def check_written_value(dataset1, dataset2, threshold, checks):
-            assert dataset1 is orig_ds
-            assert dataset2 is prod_ds
+            assert dataset1 is dm.raw_file_to_dataset.return_value.where.return_value
+            assert dataset2 is dm.get_prod_update_ds.return_value
             assert threshold == 10e-5
             assert checks == 1
 
@@ -1204,13 +1202,15 @@ class TestPublish:
 
         # assert setup functions called once
         dm.set_key_dims.assert_called_once_with()
-        dm.filter_search_space.assert_called_once_with(prod_ds)
+        dm.filter_search_space.assert_called_once_with(dm.get_prod_update_ds.return_value)
         dm.get_prod_update_ds.assert_called_once_with()
         # assert functions called in loop
         assert random.choice.call_count == 100
         random.choice.assert_called_with(dm.filter_search_space())
         assert dm.raw_file_to_dataset.call_count == 100
-        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
+        dm.raw_file_to_dataset.assert_called_with(
+            random.choice(dm.filter_search_space(dm.get_prod_update_ds.return_value))
+        )
 
     @staticmethod
     def test_post_parse_quality_check_skip_it(manager_class, mocker):
@@ -1231,7 +1231,7 @@ class TestPublish:
         dm.check_written_value.assert_not_called()
 
     @staticmethod
-    def test_post_parse_quality_check_timeout(manager_class, mocker):
+    def test_post_parse_quality_check_timeout(manager_class, fake_original_dataset, mocker):
         time = mocker.patch("gridded_etl_tools.utils.publish.time")
         time.perf_counter = mock.Mock(side_effect=[0, 1, 2, 5000, 5001])
 
@@ -1239,18 +1239,16 @@ class TestPublish:
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
         dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
-        dm.raw_file_to_dataset = mock.Mock()
-        dm.get_prod_update_ds = mock.Mock()
+        mocker.patch("xarray.Dataset.where")
+        dm.raw_file_to_dataset = mock.Mock(return_value=fake_original_dataset)
+        dm.get_prod_update_ds = mock.Mock(return_value=fake_original_dataset)
         dm.filter_search_space = mock.Mock()
         random = mocker.patch("gridded_etl_tools.utils.publish.random")
         mocker.patch("gridded_etl_tools.utils.publish.len", return_value=1000)
 
-        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
-        prod_ds = dm.get_prod_update_ds.return_value
-
         def check_written_value(dataset1, dataset2, threshold, checks):
-            assert dataset1 is orig_ds
-            assert dataset2 is prod_ds
+            assert dataset1 is dm.raw_file_to_dataset.return_value.where.return_value
+            assert dataset2 is dm.get_prod_update_ds.return_value
             assert threshold == 10e-5
             assert checks == 1
 
@@ -1260,32 +1258,32 @@ class TestPublish:
 
         # assert setup functions called once
         dm.set_key_dims.assert_called_once_with()
-        dm.filter_search_space.assert_called_once_with(prod_ds)
+        dm.filter_search_space.assert_called_once_with(dm.get_prod_update_ds.return_value)
         dm.get_prod_update_ds.assert_called_once_with()
         # assert functions called in loop
         assert random.choice.call_count == 3
         random.choice.assert_called_with(dm.filter_search_space())
         assert dm.raw_file_to_dataset.call_count == 3
-        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
+        dm.raw_file_to_dataset.assert_called_with(
+            random.choice(dm.filter_search_space(dm.get_prod_update_ds.return_value))
+        )
 
     @staticmethod
-    def test_post_parse_quality_check_constrained(manager_class, mocker):
+    def test_post_parse_quality_check_constrained(manager_class, fake_original_dataset, mocker):
         dm = manager_class()
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
         dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
-        dm.raw_file_to_dataset = mock.Mock()
-        dm.get_prod_update_ds = mock.Mock()
+        mocker.patch("xarray.Dataset.where")
+        dm.raw_file_to_dataset = mock.Mock(return_value=fake_original_dataset)
+        dm.get_prod_update_ds = mock.Mock(return_value=fake_original_dataset)
         dm.filter_search_space = mock.Mock()
         random = mocker.patch("gridded_etl_tools.utils.publish.random")
         mocker.patch("gridded_etl_tools.utils.publish.len", return_value=5)
 
-        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
-        prod_ds = dm.get_prod_update_ds.return_value
-
         def check_written_value(dataset1, dataset2, threshold, checks):
-            assert dataset1 is orig_ds
-            assert dataset2 is prod_ds
+            assert dataset1 is dm.raw_file_to_dataset.return_value.where.return_value
+            assert dataset2 is dm.get_prod_update_ds.return_value
             assert threshold == 10e-5
             assert checks == 10
 
@@ -1297,20 +1295,21 @@ class TestPublish:
         assert random.choice.call_count == 5
         random.choice.assert_called_with(dm.filter_search_space())
         assert dm.raw_file_to_dataset.call_count == 5
-        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
+        dm.raw_file_to_dataset.assert_called_with(
+            random.choice(dm.filter_search_space(dm.get_prod_update_ds.return_value))
+        )
 
     @staticmethod
-    def test_post_parse_quality_check_warn(manager_class, mocker):
+    def test_post_parse_quality_check_warn(manager_class, fake_original_dataset, mocker):
         dm = manager_class()
         dm.set_key_dims = mock.Mock()
         dm.get_random_coords = mock.Mock()
         dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
-        dm.raw_file_to_dataset = mock.Mock()
-        dm.get_prod_update_ds = mock.Mock()
+        fake_original_dataset = fake_original_dataset.drop_vars("data")
+        fake_original_dataset["time"] = []
+        dm.raw_file_to_dataset = mock.Mock(return_value=fake_original_dataset)
+        dm.get_prod_update_ds = mock.Mock(return_value=fake_original_dataset)
         dm.filter_search_space = mock.Mock(return_value=["Do_you_like_jazz.mp3"])
-
-        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
-        orig_ds.time = []
 
         # Verify that the warning is called
         dm.warn = mock.Mock()
