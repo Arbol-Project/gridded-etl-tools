@@ -836,6 +836,7 @@ class Publish(Transform):
                         "No times in randomly selected source file coincide with the update time range: "
                         f"{sample_file}"
                     )
+                    break
 
             elapsed = time.perf_counter() - start_checking
             self.info(

@@ -1269,6 +1269,55 @@ class TestPublish:
         dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
 
     @staticmethod
+    def test_post_parse_quality_check_constrained(manager_class, mocker):
+        dm = manager_class()
+        dm.set_key_dims = mock.Mock()
+        dm.get_random_coords = mock.Mock()
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
+        dm.raw_file_to_dataset = mock.Mock()
+        dm.get_prod_update_ds = mock.Mock()
+        dm.filter_search_space = mock.Mock()
+        random = mocker.patch("gridded_etl_tools.utils.publish.random")
+        mocker.patch("gridded_etl_tools.utils.publish.len", return_value=5)
+
+        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
+        prod_ds = dm.get_prod_update_ds.return_value
+
+        def check_written_value(dataset1, dataset2, threshold, checks):
+            assert dataset1 is orig_ds
+            assert dataset2 is prod_ds
+            assert threshold == 10e-5
+            assert checks == 10
+
+        dm.check_written_value = check_written_value
+
+        dm.post_parse_quality_check()
+
+        # Verify number of checks is correct
+        assert random.choice.call_count == 5
+        random.choice.assert_called_with(dm.filter_search_space())
+        assert dm.raw_file_to_dataset.call_count == 5
+        dm.raw_file_to_dataset.assert_called_with(random.choice(dm.filter_search_space(prod_ds)))
+
+    @staticmethod
+    def test_post_parse_quality_check_warn(manager_class, mocker):
+        dm = manager_class()
+        dm.set_key_dims = mock.Mock()
+        dm.get_random_coords = mock.Mock()
+        dm.get_random_coords.return_value = ({"a": i} for i in range(1000))  # pragma NO COVER
+        dm.raw_file_to_dataset = mock.Mock()
+        dm.get_prod_update_ds = mock.Mock()
+        dm.filter_search_space = mock.Mock(return_value=["Do_you_like_jazz.mp3"])
+
+        orig_ds = dm.raw_file_to_dataset.return_value.where.return_value
+        orig_ds.time = []
+
+        # Verify that the warning is called
+        dm.warn = mock.Mock()
+        dm.post_parse_quality_check()
+        assert dm.warn.call_count == 1
+
+    @staticmethod
     def test_get_prod_update_ds(manager_class, fake_original_dataset):
         fake_original_dataset.attrs["update_date_range"] = ("2021120100", "2022010100")
 
@@ -1378,6 +1427,18 @@ class TestPublish:
 
     @staticmethod
     def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
+        dm = manager_class()
+        prod_ds = fake_original_dataset.copy(deep=True)
+        coord_indices = (42, 2, 3)
+        check_coords = {dim: prod_ds[dim].values[i] for dim, i in zip(fake_original_dataset.dims, coord_indices)}
+        dm.get_random_coords = mock.Mock(return_value=check_coords)
+
+        prod_ds.data[coord_indices] = np.nan
+        fake_original_dataset.data[coord_indices] = np.nan
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+
+    @staticmethod
+    def test_check_written_value_multiple_checks(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
