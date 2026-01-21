@@ -83,6 +83,7 @@ class DatasetManager(Logging, Publish, ABC):
         global_log_level=logging.DEBUG,
         store=None,
         s3_bucket_name=None,
+        s3_profile=None,
         allow_overwrite=False,
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
@@ -198,7 +199,7 @@ class DatasetManager(Logging, Publish, ABC):
         if store is None or store == "local":
             self.store = Local(self)
         elif store == "s3":
-            self.store = S3(self, s3_bucket_name)
+            self.store = S3(self, s3_bucket_name, profile=s3_profile)
         else:
             raise ValueError("Store must be one of 'local' or 's3'")
 
