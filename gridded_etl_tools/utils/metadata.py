@@ -12,7 +12,6 @@ import xarray as xr
 from .encryption import EncryptionFilter
 from .convenience import Convenience
 
-from abc import abstractmethod
 from requests.exceptions import Timeout as TimeoutError
 
 XARRAY_ENCODING_FIELDS = [
@@ -143,11 +142,73 @@ class Metadata(Convenience):
         }
 
     @property
-    @abstractmethod
-    def static_metadata(cls):
+    def static_metadata(self):
         """
-        Placeholder for static metadata pertaining to each ETL
+        Property returning a dictionary of metadata fields for this ETL.
+
+        This is the primary extension point for managers to define dataset-specific metadata.
+        Since this is a property with access to ``self``, it can include both:
+
+        1. **Class attributes**: Static values defined on the manager class (e.g., ``self.title``,
+           ``self.publisher``, ``self.dataset_description``). These should be defined as class
+           attributes on your manager for simple, unchanging values.
+
+        2. **Dynamic values**: Values computed from instance state at property access time
+           (e.g., ``f"More info at {self.dataset_info_url}"``). Use this for values that
+           depend on other instance attributes.
+
+        **Inheritance Pattern**:
+        Subclasses should call ``super().static_metadata`` and update the returned dict
+        rather than defining a complete new dictionary::
+
+            @property
+            def static_metadata(self):
+                metadata = super().static_metadata
+                metadata["custom_field"] = self.some_dynamic_value
+                return metadata
+
+        For simple overrides, prefer setting class attributes instead of overriding this
+        property. The base implementation automatically picks up class attributes like
+        ``title``, ``publisher``, ``dataset_description``, etc.
+
+        Returns
+        -------
+        dict
+            Dictionary of metadata key-value pairs to be written to Zarr attributes
+            and STAC metadata.
+
+        See Also
+        --------
+        populate_metadata : For metadata that requires runtime ETL state (rare cases).
         """
+        return {
+            "name": self.dataset_name,
+            "updated": str(datetime.datetime.now(tz=datetime.timezone.utc)),
+            "missing value": self.missing_value,
+            "tags": self.tags,
+            "standard name": self.standard_name,
+            "long name": self.long_name,
+            "unit of measurement": self.unit_of_measurement,
+            "final lag in days": self.final_lag_in_days,
+            "preliminary lag in days": self.preliminary_lag_in_days,
+            "expected_nan_frequency": self.expected_nan_frequency,
+            "coordinate reference system": self.coordinate_reference_system,
+            "spatial resolution": self.spatial_resolution,
+            "spatial precision": self.spatial_precision,
+            "temporal resolution": str(self.time_resolution),
+            "update cadence": self.update_cadence,
+            "provider url": self.provider_url,
+            "data download url": self.data_download_url,
+            "publisher": self.publisher,
+            "title": self.title,
+            "provider description": self.provider_description,
+            "dataset description": self.dataset_description,
+            "license": self.license,
+            "terms of service": self.terms_of_service,
+            "version": self.version,
+            "release status": self.release_status,
+            "region": self.region,
+        }
 
     def check_stac_exists(self, title: str, stac_type: StacType) -> bool:
         """Check if a STAC entity exists in the backing store
@@ -550,9 +611,44 @@ class Metadata(Convenience):
 
     def populate_metadata(self):
         """
-        Override point for managers to populate metadata.
+        Populate ``self.metadata`` with values for this ETL run.
 
-        The default implementation simply uses ``self.static_metadata``.
+        The default implementation simply assigns ``self.static_metadata`` to
+        ``self.metadata``. This method is called during the parse phase before
+        metadata is written to the Zarr store.
+
+        **When to Override**:
+        Only override this method when you need to add metadata that depends on
+        **runtime ETL state** that isn't available at property access time. For example:
+
+        - Data computed during the extract/transform phases (e.g., ``input_history``)
+        - Values that depend on the actual data being processed
+
+        **Prefer static_metadata Instead**:
+        For most use cases, override the ``static_metadata`` property instead of this
+        method. Since ``static_metadata`` is a property with access to ``self``, it can
+        handle dynamic values that depend on instance attributes::
+
+            # PREFERRED: Use static_metadata for dynamic values based on instance attrs
+            @property
+            def static_metadata(self):
+                metadata = super().static_metadata
+                metadata["dataset description"] = f"Info at {self.dataset_info_url}"
+                return metadata
+
+            # ONLY USE populate_metadata for runtime ETL state
+            def populate_metadata(self):
+                super().populate_metadata()
+                # self.input_history is populated during extract(), not available earlier
+                self.metadata["finalization date"] = self.input_history.get("final_date")
+
+        **Inheritance Pattern**:
+        Always call ``super().populate_metadata()`` first to ensure base metadata is
+        populated before adding custom fields.
+
+        See Also
+        --------
+        static_metadata : The primary extension point for dataset metadata (preferred).
         """
         self.metadata = self.static_metadata
 

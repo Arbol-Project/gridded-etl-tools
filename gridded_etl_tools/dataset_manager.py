@@ -359,7 +359,6 @@ class DatasetManager(Logging, Publish, ABC):
 
     # Attributes
 
-    @abstractmethod
     def static_metadata(self):
         """
         Placeholder indicating necessity of instantiating static metadata at the top of an ETL manager script
