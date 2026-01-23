@@ -196,7 +196,7 @@ class Metadata(Convenience):
             "spatial resolution": self.spatial_resolution,
             "spatial precision": self.spatial_precision,
             "temporal resolution": str(self.time_resolution),
-            "update cadence": self.update_cadence,
+            "update cadence": str(self.update_cadence) if self.update_cadence else None,
             "provider url": self.provider_url,
             "data download url": self.data_download_url,
             "publisher": self.publisher,

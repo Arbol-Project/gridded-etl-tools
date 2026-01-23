@@ -359,10 +359,15 @@ class DatasetManager(Logging, Publish, ABC):
 
     # Attributes
 
+    @property
     def static_metadata(self):
         """
-        Placeholder indicating necessity of instantiating static metadata at the top of an ETL manager script
+        Property returning a dictionary of metadata fields for this ETL.
+
+        This is inherited from the Metadata mixin and can be extended by subclasses.
+        See :py:meth:`gridded_etl_tools.utils.metadata.Metadata.static_metadata` for details.
         """
+        return super().static_metadata
 
     @property
     @abstractmethod

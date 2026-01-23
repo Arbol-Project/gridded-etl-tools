@@ -9,7 +9,6 @@ from numcodecs import Blosc
 import zarr
 import xarray as xr
 
-
 # Imports used for legacy encoding change tests
 # import os
 # from time import sleep
@@ -168,10 +167,61 @@ class TestMetadata:
 
     @staticmethod
     def test_populate_metadata(manager_class):
-        md = {"hi": "mom", "hello": "dad"}
         dm = manager_class(static_metadata={"hi": "mom", "hello": "dad"})
         dm.populate_metadata()
-        assert dm.metadata == md
+        # Extra metadata should be merged into base static_metadata
+        assert dm.metadata["hi"] == "mom"
+        assert dm.metadata["hello"] == "dad"
+        # Base fields should still be present
+        assert "name" in dm.metadata
+        assert "updated" in dm.metadata
+
+    @staticmethod
+    def test_static_metadata_contains_base_fields(manager_class):
+        dm = manager_class()
+        metadata = dm.static_metadata
+        # Check all base fields from Metadata.static_metadata are present
+        expected_keys = [
+            "name",
+            "updated",
+            "missing value",
+            "tags",
+            "standard name",
+            "long name",
+            "unit of measurement",
+            "final lag in days",
+            "preliminary lag in days",
+            "expected_nan_frequency",
+            "coordinate reference system",
+            "spatial resolution",
+            "spatial precision",
+            "temporal resolution",
+            "update cadence",
+            "provider url",
+            "data download url",
+            "publisher",
+            "title",
+            "provider description",
+            "dataset description",
+            "license",
+            "terms of service",
+            "version",
+            "release status",
+            "region",
+        ]
+        for key in expected_keys:
+            assert key in metadata, f"Missing expected key: {key}"
+
+    @staticmethod
+    def test_static_metadata_inheritance(manager_class):
+        """Test that static_metadata properly inherits and extends base values"""
+        dm = manager_class(static_metadata={"custom_field": "custom_value"})
+        metadata = dm.static_metadata
+        # Custom field is added
+        assert metadata["custom_field"] == "custom_value"
+        # Base fields are still present
+        assert metadata["name"] == "DummyManager"
+        assert metadata["temporal resolution"] == "daily"
 
     @staticmethod
     def test_check_stac_exists(manager_class):
@@ -1251,16 +1301,20 @@ class TestMetadata:
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["created"] == "2000-01-01T0Z"
+        assert dataset.attrs["update_previous_end_date"] == "2021091600"
+        assert dataset.attrs["date range"] == ("2000010100", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
+        # Verify base static_metadata fields are present
+        assert "name" in dataset.attrs
+        assert "temporal resolution" in dataset.attrs
 
     @staticmethod
     def test_merge_in_outside_metadata_new_creation_date(manager_class, fake_original_dataset, mocker):
@@ -1281,16 +1335,18 @@ class TestMetadata:
         )
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2020-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify existing creation date is preserved (not overwritten)
+        assert dataset.attrs["created"] == "2020-01-01T0Z"
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["update_previous_end_date"] == "2021091600"
+        assert dataset.attrs["date range"] == ("2000010100", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
 
     @staticmethod
     def test_merge_in_outside_metadata_no_previous_dataset(manager_class, fake_original_dataset, mocker):
@@ -1306,16 +1362,19 @@ class TestMetadata:
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "",
-            "date range": ("2021091600", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify new creation date when no previous dataset
+        assert dataset.attrs["created"] == "2000-01-01T0Z"
+        # Verify no previous end date when no existing store
+        assert dataset.attrs["update_previous_end_date"] == ""
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["date range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
 
     @staticmethod
     @pytest.fixture
