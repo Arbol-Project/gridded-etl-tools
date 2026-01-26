@@ -803,7 +803,7 @@ class Metadata(Convenience):
 
         # Ensure a type-appropriate _FillValue is populated to each coordinate
         for coord in dataset.coords:
-            if coord != self.data_var:
+            if coord != self.data_var:  # pragma: no branch
                 if coord == self.time_dim or np.issubdtype(
                     dataset[coord].dtype, np.integer
                 ):  # will include time dim(s)
