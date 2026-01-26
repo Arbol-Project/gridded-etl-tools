@@ -63,6 +63,8 @@ class Metadata(Convenience):
         dm.metadata["custom"] = "value"      # Modification persists
         print(dm.metadata["custom"])         # "value"
 
+    This is the anticipated base access pattern for metadata management in Zarr ETLs.
+
     **Adding metadata in subclasses** (preferred for fields using class attributes):
 
     Override ``initial_metadata`` to add fields that depend on ``self``::
@@ -96,6 +98,7 @@ class Metadata(Convenience):
 
         On first access, copies ``initial_metadata`` and caches the result. Subsequent accesses return the cached dict,
         allowing modifications to persist. Can also be fully replaced via assignment (``self.metadata = {...}``).
+
         """
         if self._metadata is None:
             self._metadata = self.initial_metadata.copy()

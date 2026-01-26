@@ -1,6 +1,0 @@
-# Constraints for local macOS development
-# numba/llvmlite require specific LLVM versions that are difficult to match locally.
-# These are optional dependencies (via xarray[complete] -> sparse) and not needed for testing.
-numba==0.0.0
-llvmlite==0.0.0
-sparse==0.0.0
