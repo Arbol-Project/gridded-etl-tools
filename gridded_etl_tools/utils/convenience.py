@@ -41,7 +41,7 @@ class Convenience(Attributes):
 
     # NAMES
 
-    def zarr_json_path(self) -> pathlib.Path:
+    def _zarr_json_path(self) -> pathlib.Path:
         """
         A path to the local final Zarr
 
@@ -114,7 +114,7 @@ class Convenience(Attributes):
             if not entry.name.startswith(".") and not entry.name.endswith(".idx") and entry.is_file():
                 yield pathlib.Path(root / entry.name)
 
-    def get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
+    def _get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
         """
         Return a folder path inside `self.output_root` with the folder name based on `self.temporal_resolution()`
         and the passed `datetime`. If `omit_root` is set, remove `self.output_root` from the path.
@@ -293,7 +293,7 @@ class Convenience(Attributes):
             end = self.numpydate_to_py(dataset[self.time_dim][-1].values)
         return start, end
 
-    def get_date_range_from_file(
+    def _get_date_range_from_file(
         self, path: pathlib.Path, backend_kwargs: dict | None = None, **kwargs
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
@@ -362,7 +362,7 @@ class Convenience(Attributes):
             datetime.datetime.strptime(date_range[1], parse_string),
         )
 
-    def get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
+    def _get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
         """
         Return the date range of the newest local file
 
@@ -372,7 +372,7 @@ class Convenience(Attributes):
             The start and end date of the newest local file
 
         """
-        return self.get_date_range_from_file(list(self.input_files())[-1], **kwargs)
+        return self._get_date_range_from_file(list(self.input_files())[-1], **kwargs)
 
     @property
     def next_date(self) -> datetime.datetime:
@@ -454,7 +454,7 @@ class Convenience(Attributes):
             round(float(dataset.latitude.values.max()), self.bbox_rounding_value),
         )
 
-    def json_to_bytes(self, obj: dict) -> bytes:
+    def _json_to_bytes(self, obj: dict) -> bytes:
         """
         Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata over HTTP
 
@@ -470,7 +470,7 @@ class Convenience(Attributes):
         """
         return io.BytesIO(json.dumps(obj).encode("utf-8"))
 
-    def check_if_new_data(self, compare_date: datetime.datetime) -> bool:
+    def _check_if_new_data(self, compare_date: datetime.datetime) -> bool:
         """
         Check if the downloaded data contains any new records relative to the existing dataset.
         Return a boolean indicating whether to proceed with a transform/parse based on the presence of new records.
@@ -489,7 +489,7 @@ class Convenience(Attributes):
 
         # check if newest file on our server has newer data
         try:
-            newest_file_end_date = self.get_newest_file_date_range()[1]
+            newest_file_end_date = self._get_newest_file_date_range()[1]
         except IndexError as e:
             self.info(
                 f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}"

@@ -441,9 +441,9 @@ class DatasetManager(Logging, Publish, ABC):
         # Load the single dataset and perform any necessary transformations of it using Xarray
         self.info("Transforming in-memory dataset to its final format")
         if self.store.has_existing and not self.rebuild_requested:
-            publish_dataset = self.update_ds_transform()
+            publish_dataset = self._update_ds_transform()
         elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
-            publish_dataset = self.initial_ds_transform()
+            publish_dataset = self._initial_ds_transform()
         else:
             raise RuntimeError(
                 "There is already a zarr at the specified path and a rebuild is requested, "

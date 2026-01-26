@@ -93,7 +93,7 @@ class Publish(Transform):
                         else:
                             self.info(f"Data at {self.store} will be replaced.")
                         self.info(f"Now writing to {self.store}")
-                        self.write_initial_zarr(publish_dataset)
+                        self._write_initial_zarr(publish_dataset)
                     else:
                         raise RuntimeError(
                             "There is already a zarr at the specified path and a rebuild is requested, "
@@ -123,13 +123,13 @@ class Publish(Transform):
             self.set_key_dims()
 
         # This will do nothing if catalog already exists
-        self.create_root_stac_catalog()
+        self._create_root_stac_catalog()
 
         # This will update the stac collection if it already exists
-        self.create_stac_collection(current_zarr)
+        self._create_stac_collection(current_zarr)
 
         # Create and publish metadata as a STAC Item
-        self.create_stac_item(current_zarr)
+        self._create_stac_item(current_zarr)
 
     def to_zarr(self, dataset: xr.Dataset, *args, **kwargs):
         """
@@ -172,7 +172,7 @@ class Publish(Transform):
             If "zarr_format" is passed as a keyword argument
         """
         # First check that the data makes sense
-        self.pre_parse_quality_check(dataset)
+        self._pre_parse_quality_check(dataset)
 
         # Exit script if dry_run specified
         if self.dry_run:
@@ -268,7 +268,7 @@ class Publish(Transform):
 
     # INITIAL
 
-    def write_initial_zarr(self, publish_dataset: xr.Dataset):
+    def _write_initial_zarr(self, publish_dataset: xr.Dataset):
         """
         Writes the first iteration of zarr for the dataset to the store specified at initialization.
 
@@ -306,7 +306,7 @@ class Publish(Transform):
         # Create a list of any datetimes to insert and/or append
         insert_times, append_times = self.prepare_update_times(original_dataset, publish_dataset)
         # First check that the data is not obviously wrong
-        self.update_quality_check(original_dataset, insert_times, append_times)
+        self._update_quality_check(original_dataset, insert_times, append_times)
         # Now write out updates to existing data using the 'region=' command...
         if len(insert_times) > 0:
             if not self.allow_overwrite:
@@ -315,12 +315,12 @@ class Publish(Transform):
                     "flag has not been set."
                 )
             else:
-                self.insert_into_dataset(original_dataset, publish_dataset, insert_times)
+                self._insert_into_dataset(original_dataset, publish_dataset, insert_times)
         else:
             self.info("No modified records to insert into original zarr")
         # ...then write new data (appends) using the 'append_dim=' command
         if len(append_times) > 0:
-            self.append_to_dataset(publish_dataset, append_times)
+            self._append_to_dataset(publish_dataset, append_times)
         else:
             self.info("No new records to append to original zarr")
 
@@ -353,7 +353,7 @@ class Publish(Transform):
 
         return insert_times, append_times
 
-    def insert_into_dataset(
+    def _insert_into_dataset(
         self,
         original_dataset: xr.Dataset,
         update_dataset: xr.Dataset,
@@ -371,8 +371,8 @@ class Publish(Transform):
         insert_times : list
             Datetimes corresponding to existing records to be replaced in the original dataset
         """
-        insert_dataset = self.prep_update_dataset(update_dataset, insert_times)
-        date_ranges, regions = self.calculate_update_time_ranges(original_dataset, insert_dataset)
+        insert_dataset = self._prep_update_dataset(update_dataset, insert_times)
+        date_ranges, regions = self._calculate_update_time_ranges(original_dataset, insert_dataset)
         for dates, region in zip(date_ranges, regions):
             insert_slice = insert_dataset.sel(**{self.time_dim: slice(*dates)})
             insert_dataset.attrs["update_is_append_only"] = False
@@ -399,7 +399,7 @@ class Publish(Transform):
                 "range(s) to original zarr"
             )
 
-    def append_to_dataset(self, update_dataset: xr.Dataset, append_times: list):
+    def _append_to_dataset(self, update_dataset: xr.Dataset, append_times: list):
         """
         Append new records to an existing dataset along its time dimension using the `append_dim=` flag.
 
@@ -410,13 +410,13 @@ class Publish(Transform):
         append_times : list
             Datetimes corresponding to all new records to append to the original dataset
         """
-        append_dataset = self.prep_update_dataset(update_dataset, append_times)
+        append_dataset = self._prep_update_dataset(update_dataset, append_times)
 
         # Align incoming time chunks with chunks in the existing Zarr. Chunks must be aligned or an exception will
         # be raised by xarray, but this is left configurable for backward compatibility with older ETLs which are
         # aligned by default from having time chunk length of 1.
         if self.align_update_chunks:
-            append_dataset = self.rechunk_append_dataset(append_dataset)
+            append_dataset = self._rechunk_append_dataset(append_dataset)
             self.info(f"Chunks after rechunking the update data are {append_dataset.chunks}")
 
         # Write the Zarr
@@ -427,7 +427,7 @@ class Publish(Transform):
         if not self.dry_run:
             self.info(f"Appended records for {len(append_dataset[self.time_dim].values)} datetimes to original zarr")
 
-    def prep_update_dataset(self, update_dataset: xr.Dataset, time_filter_vals: list) -> xr.Dataset:
+    def _prep_update_dataset(self, update_dataset: xr.Dataset, time_filter_vals: list) -> xr.Dataset:
         """
         Select out and format time ranges you wish to insert or append into the original dataset based on specified
         time range(s) and chunks
@@ -467,7 +467,7 @@ class Publish(Transform):
         self.info(f"Update dataset\n{update_dataset}")
         return update_dataset
 
-    def rechunk_append_dataset(self, append_dataset: xr.Dataset) -> xr.Dataset:
+    def _rechunk_append_dataset(self, append_dataset: xr.Dataset) -> xr.Dataset:
         """
         Prepare the chunks for the append dataset such that they align neatly with the initial dataset.
         The science behind this is described in detail under docs/Aligning_update_chunks.md
@@ -502,7 +502,7 @@ class Publish(Transform):
         # Apply the chunks to the append dataset.
         return append_dataset.chunk(**rechunk_dims)
 
-    def calculate_update_time_ranges(
+    def _calculate_update_time_ranges(
         self, original_dataset: xr.Dataset, update_dataset: xr.Dataset
     ) -> tuple[list[datetime.datetime], list[tuple[int, int]]]:
         """
@@ -572,7 +572,7 @@ class Publish(Transform):
 
     # QUALITY CHECKS
 
-    def pre_parse_quality_check(self, dataset: xr.Dataset):
+    def _pre_parse_quality_check(self, dataset: xr.Dataset):
         """
         Guard against corrupted source data by applying quality checks to all datasets we parse, initial or update
         Intended to be run on a dataset prior to parsing.
@@ -592,7 +592,7 @@ class Publish(Transform):
         times = dataset[self.time_dim].values
         if len(times) >= 2:
             expected_delta = times[1] - times[0]
-            if not self.are_times_in_expected_order(times=times, expected_delta=expected_delta):
+            if not self._are_times_in_expected_order(times=times, expected_delta=expected_delta):
                 raise IndexError("Dataset does not contain contiguous time data")
 
         # VALUES CHECK
@@ -610,7 +610,7 @@ class Publish(Transform):
         # NAN CHECK
         # Check that the % of NaN values approximately matches the historical average. Not applicable on first run.
         if self.store.has_existing and not self.skip_pre_parse_nan_check and not self.rebuild_requested:
-            self.check_nan_frequency()
+            self._check_nan_frequency()
 
         self.info(f"Checking dataset took {datetime.timedelta(seconds=time.perf_counter() - start_checking)}")
 
@@ -650,7 +650,7 @@ class Publish(Transform):
                             f"{limit_vals} for data in units {unit}. Found at {random_coords}"
                         )
 
-    def check_nan_frequency(self):
+    def _check_nan_frequency(self):
         """
         Use a binomial test to check whether the percentage of NaN values matches
         the anticipated percentage within the dataset, based on the observed ratio of NaNs in historical data
@@ -677,7 +677,7 @@ class Publish(Transform):
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
             )
 
-    def update_quality_check(
+    def _update_quality_check(
         self,
         original_dataset: xr.Dataset,
         insert_times: tuple[datetime.datetime],
@@ -720,14 +720,16 @@ class Publish(Transform):
             original_append_bridge_times = [original_dataset[self.time_dim].values[-1], append_times[0]]
             expected_delta = original_dataset[self.time_dim][1] - original_dataset[self.time_dim][0]
             # Check these two values against the expected delta. All append times will be checked later in the stand
-            if not self.are_times_in_expected_order(times=original_append_bridge_times, expected_delta=expected_delta):
+            if not self._are_times_in_expected_order(
+                times=original_append_bridge_times, expected_delta=expected_delta
+            ):
                 raise IndexError("Append would create out of order or incomplete dataset, aborting")
 
         # Raise an exception if there is no data to write
         if not insert_times and not append_times:
             raise ValueError("Update started with no new records to insert or append to original zarr")
 
-    def are_times_in_expected_order(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
+    def _are_times_in_expected_order(self, times: tuple[datetime.datetime], expected_delta: np.timedelta64) -> bool:
         """
         Return false if a given iterable of times is out of order and/or does not follow the previous time,
         or falls outside of an acceptable range of timedeltas
@@ -771,7 +773,7 @@ class Publish(Transform):
         # Return True if no problems found
         return True
 
-    def post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
+    def _post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
         """
         Master function to check values written after a parse for discrepancies with the source data
 
@@ -792,17 +794,17 @@ class Publish(Transform):
 
             # Instantiate needed objects
             self.set_key_dims()  # in case running w/out Transform/Parse
-            prod_ds = self.get_prod_update_ds()
-            possible_files = self.filter_search_space(prod_ds)
+            prod_ds = self._get_prod_update_ds()
+            possible_files = self._filter_search_space(prod_ds)
 
             # Run the data check N times
             i = 0
             while i < checks:
                 # Open and reformat the original dataset such that it's comparable with the prod dataset
-                orig_ds = self.raw_file_to_dataset(random.choice(possible_files))
+                orig_ds = self._raw_file_to_dataset(random.choice(possible_files))
 
                 # Run the checks
-                self.check_written_value(orig_ds, prod_ds, threshold)
+                self._check_written_value(orig_ds, prod_ds, threshold)
                 i += 1
 
                 # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
@@ -818,7 +820,7 @@ class Publish(Transform):
                 f"Checking dataset took {datetime.timedelta(seconds=elapsed)}"
             )
 
-    def filter_search_space(self, prod_ds: xr.Dataset) -> list[pathlib.Path]:
+    def _filter_search_space(self, prod_ds: xr.Dataset) -> list[pathlib.Path]:
         """
         Filter down all input files to only files that are within the update date range on the production dataset.
 
@@ -847,7 +849,7 @@ class Publish(Transform):
         left, right = 0, n
         while left < right:
             mid = (left + right) // 2
-            if self.time_range_in_file(possible_files[mid])[1] < start_date:
+            if self._time_range_in_file(possible_files[mid])[1] < start_date:
                 left = mid + 1
             else:
                 right = mid
@@ -858,7 +860,7 @@ class Publish(Transform):
         left, right = start_idx, n
         while left < right:
             mid = (left + right) // 2
-            if self.time_range_in_file(possible_files[mid])[0] <= end_date:
+            if self._time_range_in_file(possible_files[mid])[0] <= end_date:
                 left = mid + 1
             else:
                 right = mid  # pragma NO COVER
@@ -866,13 +868,13 @@ class Publish(Transform):
 
         self.debug(
             "Date range of filtered input files starts with"
-            f" {self.time_range_in_file(possible_files[start_idx])[0]}"
-            f" and ends with {self.time_range_in_file(possible_files[end_idx])[1]}"
+            f" {self._time_range_in_file(possible_files[start_idx])[0]}"
+            f" and ends with {self._time_range_in_file(possible_files[end_idx])[1]}"
         )
 
         return possible_files[start_idx : end_idx + 1]
 
-    def time_range_in_file(self, file_path: pathlib.Path) -> tuple[datetime.datetime, datetime.datetime]:
+    def _time_range_in_file(self, file_path: pathlib.Path) -> tuple[datetime.datetime, datetime.datetime]:
         """
         Convert a file to an xarray.Dataset and return the start and end of the list of timestamps contained in the time
         dimension.
@@ -887,10 +889,10 @@ class Publish(Transform):
         tuple[datetime.datetime, datetime.datetime]
             The latest date contained in the time dimension
         """
-        dataset = self.raw_file_to_dataset(file_path)
+        dataset = self._raw_file_to_dataset(file_path)
         return self.get_date_range_from_dataset(dataset)
 
-    def dataset_date_in_range(
+    def _dataset_date_in_range(
         self, date_range: tuple[datetime.datetime, datetime.datetime], file_path: pathlib.Path
     ) -> bool:
         """
@@ -909,14 +911,14 @@ class Publish(Transform):
         bool
             An indication of whether a single datetime dataset falls within a specified date range
         """
-        orig_ds = self.raw_file_to_dataset(file_path)
+        orig_ds = self._raw_file_to_dataset(file_path)
 
         if date_range[0] <= self.numpydate_to_py(orig_ds[self.time_dim].values[0]) <= date_range[1]:
             return True
         else:
             return False
 
-    def get_prod_update_ds(self) -> xr.Dataset:
+    def _get_prod_update_ds(self) -> xr.Dataset:
         """
         Get the prod dataset and filter it to the temporal extent of the latest update
 
@@ -933,7 +935,7 @@ class Publish(Transform):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def check_written_value(
+    def _check_written_value(
         self,
         orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
@@ -1011,7 +1013,7 @@ class Publish(Transform):
             f"\nQuery parameters: {selection_coords}"
         )
 
-    def raw_file_to_dataset(self, file_path: pathlib.Path) -> xr.Dataset:
+    def _raw_file_to_dataset(self, file_path: pathlib.Path) -> xr.Dataset:
         """
         Open a raw file as an Xarray Dataset based on the anticipated input file type
 
@@ -1062,7 +1064,7 @@ class Publish(Transform):
             The original dataset, reformatted similarly to the production dataset
         """
         # Apply standard postprocessing to get other data variables in order
-        ds = self.rename_data_variable(ds)
+        ds = self._rename_data_variable(ds)
         # Expand any 1D dimensions as needed. This is necessary for later `sel` operations.
         for time_dim in [
             time_dim

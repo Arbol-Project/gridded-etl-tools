@@ -264,7 +264,7 @@ class Metadata(Convenience):
             "region": self.region,
         }
 
-    def check_stac_exists(self, title: str, stac_type: StacType) -> bool:
+    def _check_stac_exists(self, title: str, stac_type: StacType) -> bool:
         """Check if a STAC entity exists in the backing store
 
         Parameters
@@ -281,7 +281,7 @@ class Metadata(Convenience):
         """
         return self.store.metadata_exists(title, stac_type.value)
 
-    def publish_stac(self, title: str, stac_content: dict, stac_type: StacType):
+    def _publish_stac(self, title: str, stac_content: dict, stac_type: StacType):
         """Publish a STAC entity to the backing store
 
         Parameters
@@ -295,7 +295,7 @@ class Metadata(Convenience):
         """
         self.store.push_metadata(title, stac_content, stac_type.value)
 
-    def retrieve_stac(self, title: str, stac_type: StacType) -> tuple[dict, str]:
+    def _retrieve_stac(self, title: str, stac_type: StacType) -> tuple[dict, str]:
         """Retrieve a STAC entity and its href from the backing store
 
         Parameters
@@ -312,7 +312,7 @@ class Metadata(Convenience):
         """
         return self.store.retrieve_metadata(title, stac_type.value)
 
-    def get_href(self, title: str, stac_type: StacType) -> str:
+    def _get_href(self, title: str, stac_type: StacType) -> str:
         """Get a STAC entity's href from the backing store. Might be
         an IPNS name, a local path or a s3 path depending on the store
 
@@ -330,16 +330,16 @@ class Metadata(Convenience):
         """
         return self.store.get_metadata_path(title, stac_type.value)
 
-    def create_root_stac_catalog(self):
+    def _create_root_stac_catalog(self):
         """
         Prepare a root catalog for your organization if it doesn't already exist.
         """
         root_catalog = self.default_root_stac_catalog()
-        root_catalog_exists = self.check_stac_exists(root_catalog["title"], StacType.CATALOG)
+        root_catalog_exists = self._check_stac_exists(root_catalog["title"], StacType.CATALOG)
         if not root_catalog_exists:
             # Publish the root catalog if it doesn't exist
             self.info(f"Publishing root {self.organization} STAC Catalog")
-            catalog_href = self.get_href(root_catalog["title"], StacType.CATALOG)
+            catalog_href = self._get_href(root_catalog["title"], StacType.CATALOG)
             root_catalog["links"] = [
                 {
                     "rel": "root",
@@ -354,11 +354,11 @@ class Metadata(Convenience):
                     "title": f"{self.organization} root catalog",
                 },
             ]
-            self.publish_stac(root_catalog["title"], root_catalog, StacType.CATALOG)
+            self._publish_stac(root_catalog["title"], root_catalog, StacType.CATALOG)
         else:
             self.info(f"Root {self.organization} STAC Catalog already exists, building collection")
 
-    def create_stac_collection(self, dataset: xr.Dataset, rebuild: bool = False):
+    def _create_stac_collection(self, dataset: xr.Dataset, rebuild: bool = False):
         """
         Prepare a parent collection for the dataset the first time it's created. In order to check for the collection's
         existence we must populate the relevant dictionary first in order to use its attributes.
@@ -377,7 +377,7 @@ class Metadata(Convenience):
         stac_coll = self.default_stac_collection
         # Check if the collection already exists to avoid duplication of effort
         # Populate and publish a collection if one doesn't exist, or a rebuild was requested
-        if rebuild or not self.check_stac_exists(self.collection_name, StacType.COLLECTION):
+        if rebuild or not self._check_stac_exists(self.collection_name, StacType.COLLECTION):
             if rebuild:
                 self.info(
                     "Collection rebuild requested. Creating new collection, pushing it to the store, "
@@ -393,9 +393,9 @@ class Metadata(Convenience):
                 ]
             ]
             # Create an href corresponding to the collection in order to note this in the collection and root catalog.
-            href = self.get_href(self.collection_name, StacType.COLLECTION)
+            href = self._get_href(self.collection_name, StacType.COLLECTION)
             # Append collection to the root catalog if it doesn't already exist
-            root_catalog, root_catalog_href = self.retrieve_stac(
+            root_catalog, root_catalog_href = self._retrieve_stac(
                 self.default_root_stac_catalog()["title"], StacType.CATALOG
             )
             if not any(stac_coll["title"] in link_dict.values() for link_dict in root_catalog["links"]):
@@ -408,7 +408,7 @@ class Metadata(Convenience):
                         "title": stac_coll["title"],
                     }
                 )
-                self.publish_stac(
+                self._publish_stac(
                     root_catalog["title"],
                     root_catalog,
                     StacType.CATALOG,
@@ -431,12 +431,12 @@ class Metadata(Convenience):
                     "title": f"{self.organization} root catalog",
                 },
             ]
-            self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
+            self._publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
         else:
             self.info("Found existing STAC Collection for this dataset, skipping creation and updating instead")
-            self.update_stac_collection(dataset)
+            self._update_stac_collection(dataset)
 
-    def create_stac_item(self, dataset: xr.Dataset):
+    def _create_stac_item(self, dataset: xr.Dataset):
         """
         Reformat previously prepared metadata and prepare key overviews of a dataset's spatial, temporal,
         and data dimensions into a STAC Item-compliant JSON. Push this JSON to the store and its relevant parent
@@ -479,7 +479,7 @@ class Metadata(Convenience):
         stac_item["assets"]["zmetadata"]["href"] = zarr_href
         stac_item["properties"] = properties_dict
         # Push to backing store w/ link to href
-        self.register_stac_item(stac_item)
+        self._register_stac_item(stac_item)
 
     def zarr_md_to_stac_format(self, dataset: xr.Dataset) -> dict:
         """
@@ -542,7 +542,7 @@ class Metadata(Convenience):
 
         return properties_dict
 
-    def register_stac_item(self, stac_item: dict):
+    def _register_stac_item(self, stac_item: dict):
         """'
         Register a new dataset in an existing STAC Collection and/or replace a dataset's STAC Item with an updated one
 
@@ -553,7 +553,7 @@ class Metadata(Convenience):
         """
         self.info("Registering STAC Item in the store and its parent STAC Collection")
         # Generate variables of interest
-        stac_coll, collection_href = self.retrieve_stac(self.collection_name, StacType.COLLECTION)
+        stac_coll, collection_href = self._retrieve_stac(self.collection_name, StacType.COLLECTION)
         # Register links
         stac_item["links"].append(
             {
@@ -566,7 +566,7 @@ class Metadata(Convenience):
         # Check if an older version of the STAC Item exists and if so create a "previous" link for them in the new STAC
         # Item
         try:
-            old_stac_item, href = self.retrieve_stac(self.key(), StacType.ITEM)
+            old_stac_item, href = self._retrieve_stac(self.key(), StacType.ITEM)
 
         # TODO: It would be better to not have KeyError in here, as it it's easy for that to be a different exception
         # than the one you think you're catching. It would be better to have retrieve_stac return
@@ -574,7 +574,7 @@ class Metadata(Convenience):
         except (KeyError, TimeoutError, FileNotFoundError):
             # Otherwise create a STAC name for your new dataset
             self.info("No previous STAC Item found")
-            href = self.get_href(self.key(), StacType.ITEM)
+            href = self._get_href(self.key(), StacType.ITEM)
 
         stac_item["links"].append(
             {
@@ -586,7 +586,7 @@ class Metadata(Convenience):
         )
         # push final STAC Item to backing store
         self.info("Pushing STAC Item to backing store")
-        self.publish_stac(self.key(), stac_item, StacType.ITEM)
+        self._publish_stac(self.key(), stac_item, StacType.ITEM)
         # register item as a link in the relevant collection, if not already there,
         # and push updated collection to the store
         if any(
@@ -606,9 +606,9 @@ class Metadata(Convenience):
                     "title": stac_item["assets"]["zmetadata"]["title"],
                 }
             )
-            self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
+            self._publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
 
-    def update_stac_collection(self, dataset: xr.Dataset):
+    def _update_stac_collection(self, dataset: xr.Dataset):
         """'
         Update fields in STAC Collection corresponding to a dataset
 
@@ -619,7 +619,7 @@ class Metadata(Convenience):
         """
         self.info("Updating dataset's parent STAC Collection")
         # Get existing STAC Collection and add new datasets to it, if necessary
-        stac_coll = self.retrieve_stac(self.collection_name, StacType.COLLECTION)[0]
+        stac_coll = self._retrieve_stac(self.collection_name, StacType.COLLECTION)[0]
         # Update spatial extent
         min_bbox_coords = np.minimum(stac_coll["extent"]["spatial"]["bbox"][0], [self.bbox_coords(dataset)])[0][0:2]
         max_bbox_coords = np.maximum(stac_coll["extent"]["spatial"]["bbox"][0], [self.bbox_coords(dataset)])[0][2:4]
@@ -632,9 +632,9 @@ class Metadata(Convenience):
             ]
         ]
         # Publish STAC Collection with updated fields
-        self.publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
+        self._publish_stac(self.collection_name, stac_coll, StacType.COLLECTION)
 
-    def load_stac_metadata(self, key: str = None) -> str | dict:
+    def _load_stac_metadata(self, key: str = None) -> str | dict:
         """
         Return the latest version of a dataset's STAC Item from S3
 
@@ -652,7 +652,7 @@ class Metadata(Convenience):
         if not key:
             key = self.key()
         try:
-            stac, _ = self.retrieve_stac(key, StacType.ITEM)
+            stac, _ = self._retrieve_stac(key, StacType.ITEM)
             return stac
         except (KeyError, TimeoutError, FileNotFoundError):
             self.warn(
@@ -684,19 +684,19 @@ class Metadata(Convenience):
             The dataset being published, after metadata update
         """
         # Rename data variable to desired name, if necessary.
-        dataset = self.rename_data_variable(dataset)
+        dataset = self._rename_data_variable(dataset)
         # Set all fields to uncompressed and remove filters leftover from input files
-        self.remove_unwanted_fields(dataset)
+        self._remove_unwanted_fields(dataset)
         # Consistently apply Blosc lz4 compression to all coordinates and the data variable
-        self.set_initial_compression(dataset)
+        self._set_initial_compression(dataset)
         # Encode data types and missing value indicators for the data variable
-        self.encode_ds(dataset)
+        self._encode_ds(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
-        self.merge_in_outside_metadata(dataset)
+        self._merge_in_outside_metadata(dataset)
 
         return dataset
 
-    def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Rename data variables to desired name if they are not already set
         Normally this would take place w/in `postprocess_zarr` but as it's a classmethod it can't
@@ -721,7 +721,7 @@ class Metadata(Convenience):
             self.info(f"Duplicate name conflict detected during rename, leaving {data_var} in place")
             return dataset
 
-    def encode_ds(self, dataset: xr.Dataset):
+    def _encode_ds(self, dataset: xr.Dataset):
         """
         Encode important data points related to the data and time variables. These are useful both for reference and to
         control Xarray's reading/writing behavior.
@@ -818,7 +818,7 @@ class Metadata(Convenience):
                 encoding["filters"] = filters = []
             filters.append(EncryptionFilter(self.encryption_key))
 
-    def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Join metadata fields from ``self.metadata`` to the dataset's attributes.
 
@@ -835,7 +835,7 @@ class Metadata(Convenience):
         dataset.attrs = {**dataset.attrs, **self.metadata}
 
         # Get existing stac_metadata, if possible
-        stac_metadata = self.load_stac_metadata()
+        stac_metadata = self._load_stac_metadata()
 
         # Determine date to use for "created" field. On S3 and local, use current time.
         if stac_metadata and "created" in stac_metadata["properties"]:
@@ -871,7 +871,7 @@ class Metadata(Convenience):
         dataset.attrs["update_is_append_only"] = True
         self.info("If updating, indicating the dataset is only appending data")
 
-    def remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Remove filters, compression, and other unwanted encoding/metadata inheritances from input files
 
@@ -887,7 +887,7 @@ class Metadata(Convenience):
             dataset[coord].encoding.pop("missing_value", None)
         dataset[self.data_var].encoding.pop("filters", None)
 
-    def set_initial_compression(self, dataset: xr.Dataset):
+    def _set_initial_compression(self, dataset: xr.Dataset):
         """
         If the dataset is new and uses compression, compress all coordinate and data variables in the dataset.
         Does nothing if the dataset is not new; use `update_array_encoding` to change compression in this case.
@@ -909,7 +909,7 @@ class Metadata(Convenience):
                 dataset[coord].encoding["compressors"] = compressor
             dataset[self.data_var].encoding["compressors"] = compressor
 
-    def update_array_encoding(
+    def _update_array_encoding(
         self,
         target_array: str,
         update_key: dict,
@@ -924,9 +924,9 @@ class Metadata(Convenience):
         update_key : dict
             A key:value pair to insert into or update in the array encoding
         """
-        self._modify_array_encoding(target_array, update_key=update_key, remove_key=None)
+        self.__modify_array_encoding(target_array, update_key=update_key, remove_key=None)
 
-    def remove_array_encoding(
+    def _remove_array_encoding(
         self,
         target_array: str,
         remove_key: str,
@@ -941,9 +941,9 @@ class Metadata(Convenience):
         remove_key : str
             The key to remove from the array encoding
         """
-        self._modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
+        self.__modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
 
-    def _modify_array_encoding(
+    def __modify_array_encoding(
         self,
         target_array: str,
         update_key: dict | None = None,

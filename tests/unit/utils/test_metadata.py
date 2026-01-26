@@ -114,7 +114,7 @@ class TestMetadata:
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.store.has_existing = False
 
-        dm.set_initial_compression(dataset)
+        dm._set_initial_compression(dataset)
         for coord in dataset.coords:
             assert dataset[coord].encoding["compressors"] == numcodecs.Blosc()
         assert dataset["data"].encoding["compressors"] == numcodecs.Blosc()
@@ -123,7 +123,7 @@ class TestMetadata:
         dm.store = mock.Mock(spec=store.StoreInterface)
         dm.store.has_existing = False
 
-        dm.set_initial_compression(dataset)
+        dm._set_initial_compression(dataset)
         for coord in dataset.coords:
             assert dataset[coord].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
         assert dataset["data"].encoding["compressors"] == zarr.codecs.BloscCodec(cname="lz4")
@@ -136,7 +136,7 @@ class TestMetadata:
         dm.store.has_existing = False
 
         dataset = fake_original_dataset
-        dm.set_initial_compression(dataset)
+        dm._set_initial_compression(dataset)
 
         # Check that compressor is None for coordinates and data variable
         for coord in dataset.coords:
@@ -157,7 +157,7 @@ class TestMetadata:
             dataset[coord].encoding.pop("compressors", None)
         dataset[dm.data_var].encoding.pop("compressors", None)
 
-        dm.set_initial_compression(dataset)
+        dm._set_initial_compression(dataset)
 
         # Check that no compression was added
         for coord in dataset.coords:
@@ -274,7 +274,8 @@ class TestMetadata:
         dm.check_stac_on_ipns = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert (
-            dm.check_stac_exists("The Jungle Book", metadata.StacType.CATALOG) is dm.store.metadata_exists.return_value
+            dm._check_stac_exists("The Jungle Book", metadata.StacType.CATALOG)
+            is dm.store.metadata_exists.return_value
         )
         dm.check_stac_on_ipns.assert_not_called()
         dm.store.metadata_exists.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
@@ -285,7 +286,7 @@ class TestMetadata:
         dm.json_to_bytes = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
-        dm.publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
+        dm._publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
         dm.json_to_bytes.assert_not_called()
         dm.store.push_metadata.assert_called_once_with(
             "The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG.value
@@ -296,7 +297,7 @@ class TestMetadata:
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
         assert (
-            dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
+            dm._retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
         )
         dm.store.retrieve_metadata.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
@@ -304,19 +305,19 @@ class TestMetadata:
     def test_get_href(manager_class):
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
-        assert dm.get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
+        assert dm._get_href("The Jungle Book", metadata.StacType.CATALOG) is dm.store.get_metadata_path.return_value
         dm.store.get_metadata_path.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod
     def test_create_root_stac_catalog(organized_manager_class):
         dm = organized_manager_class()
-        dm.publish_stac = mock.Mock()
+        dm._publish_stac = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.check_stac_exists = mock.Mock(return_value=False)
-        dm.get_href = mock.Mock(return_value="/it/is/here.json")
+        dm._check_stac_exists = mock.Mock(return_value=False)
+        dm._get_href = mock.Mock(return_value="/it/is/here.json")
 
-        dm.create_root_stac_catalog()
-        dm.publish_stac.assert_called_once_with(
+        dm._create_root_stac_catalog()
+        dm._publish_stac.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog",
             {
                 "id": "Church of the Flying Spaghetti Monster_data_catalog",
@@ -344,20 +345,20 @@ class TestMetadata:
             },
             metadata.StacType.CATALOG,
         )
-        dm.check_stac_exists.assert_called_once_with(
+        dm._check_stac_exists.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
-        dm.get_href.assert_called_once_with(
+        dm._get_href.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
 
     @staticmethod
     def test_create_root_stac_catalog_already_exists(manager_class):
         dm = manager_class()
-        dm.publish_stac = mock.Mock()
-        dm.check_stac_exists = mock.Mock(return_value=True)
-        dm.create_root_stac_catalog()
-        dm.publish_stac.assert_not_called()
+        dm._publish_stac = mock.Mock()
+        dm._check_stac_exists = mock.Mock(return_value=True)
+        dm._create_root_stac_catalog()
+        dm._publish_stac.assert_not_called()
 
     @staticmethod
     def test_create_stac_collection(organized_manager_class, fake_original_dataset, mocker):
@@ -373,8 +374,8 @@ class TestMetadata:
             }
         )
         _ = dm.metadata  # Access to trigger auto-population
-        dm.publish_stac = mock.Mock()
-        dm.retrieve_stac = mock.Mock(
+        dm._publish_stac = mock.Mock()
+        dm._retrieve_stac = mock.Mock(
             return_value=(
                 {
                     "id": "Church of the Flying Spaghetti Monster_data_catalog",
@@ -403,15 +404,15 @@ class TestMetadata:
                 "proto://path/to/catalog",
             )
         )
-        dm.update_stac_collection = mock.Mock()
+        dm._update_stac_collection = mock.Mock()
         stac_collection = dm.default_stac_collection
         stac_collection["links"].append({"rel": "not myself today"})
         mocker.patch("gridded_etl_tools.utils.metadata.Metadata.default_stac_collection", stac_collection)
-        dm.get_href = mock.Mock(return_value="/here/is/the/collection.json")
+        dm._get_href = mock.Mock(return_value="/here/is/the/collection.json")
 
-        dm.create_stac_collection(fake_original_dataset)
+        dm._create_stac_collection(fake_original_dataset)
 
-        dm.publish_stac.assert_has_calls(
+        dm._publish_stac.assert_has_calls(
             [
                 mock.call(
                     "Church of the Flying Spaghetti Monster Data Catalog",
@@ -504,11 +505,11 @@ class TestMetadata:
                 ),
             ]
         )
-        dm.retrieve_stac.assert_called_once_with(
+        dm._retrieve_stac.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
-        dm.update_stac_collection.assert_not_called()
-        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
+        dm._update_stac_collection.assert_not_called()
+        dm._get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_rebuild(organized_manager_class, fake_original_dataset):
@@ -524,8 +525,8 @@ class TestMetadata:
             }
         )
         _ = dm.metadata  # Access to trigger auto-population
-        dm.publish_stac = mock.Mock()
-        dm.retrieve_stac = mock.Mock(
+        dm._publish_stac = mock.Mock()
+        dm._retrieve_stac = mock.Mock(
             return_value=(
                 {
                     "id": "Church of the Flying Spaghetti Monster_data_catalog",
@@ -554,13 +555,13 @@ class TestMetadata:
                 "proto://path/to/catalog",
             )
         )
-        dm.update_stac_collection = mock.Mock()
-        dm.check_stac_exists = mock.Mock(return_value=True)
-        dm.get_href = mock.Mock(return_value="/path/to/collection.json")
+        dm._update_stac_collection = mock.Mock()
+        dm._check_stac_exists = mock.Mock(return_value=True)
+        dm._get_href = mock.Mock(return_value="/path/to/collection.json")
 
-        dm.create_stac_collection(fake_original_dataset, rebuild=True)
+        dm._create_stac_collection(fake_original_dataset, rebuild=True)
 
-        dm.publish_stac.assert_has_calls(
+        dm._publish_stac.assert_has_calls(
             [
                 mock.call(
                     "Church of the Flying Spaghetti Monster Data Catalog",
@@ -652,11 +653,11 @@ class TestMetadata:
                 ),
             ]
         )
-        dm.retrieve_stac.assert_called_once_with(
+        dm._retrieve_stac.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
-        dm.update_stac_collection.assert_not_called()
-        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
+        dm._update_stac_collection.assert_not_called()
+        dm._get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_root_catalog_already_in_links(organized_manager_class, fake_original_dataset):
@@ -672,8 +673,8 @@ class TestMetadata:
             }
         )
         _ = dm.metadata  # Access to trigger auto-population
-        dm.publish_stac = mock.Mock()
-        dm.retrieve_stac = mock.Mock(
+        dm._publish_stac = mock.Mock()
+        dm._retrieve_stac = mock.Mock(
             return_value=(
                 {
                     "id": "Church of the Flying Spaghetti Monster_data_catalog",
@@ -709,12 +710,12 @@ class TestMetadata:
                 "proto://path/to/catalog",
             )
         )
-        dm.update_stac_collection = mock.Mock()
-        dm.get_href = mock.Mock(return_value="/path/to/collection.json")
+        dm._update_stac_collection = mock.Mock()
+        dm._get_href = mock.Mock(return_value="/path/to/collection.json")
 
-        dm.create_stac_collection(fake_original_dataset)
+        dm._create_stac_collection(fake_original_dataset)
 
-        dm.publish_stac.assert_called_once_with(
+        dm._publish_stac.assert_called_once_with(
             "Vintage Guitars",
             {
                 "id": "Vintage Guitars",
@@ -768,11 +769,11 @@ class TestMetadata:
             },
             metadata.StacType.COLLECTION,
         )
-        dm.retrieve_stac.assert_called_once_with(
+        dm._retrieve_stac.assert_called_once_with(
             "Church of the Flying Spaghetti Monster Data Catalog", metadata.StacType.CATALOG
         )
-        dm.update_stac_collection.assert_not_called()
-        dm.get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
+        dm._update_stac_collection.assert_not_called()
+        dm._get_href.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
 
     @staticmethod
     def test_create_stac_collection_already_created(manager_class, fake_original_dataset, mocker):
@@ -788,18 +789,18 @@ class TestMetadata:
             }
         )
         _ = dm.metadata  # Access to trigger auto-population
-        dm.publish_stac = mock.Mock()
-        dm.retrieve_stac = mock.Mock()
-        dm.update_stac_collection = mock.Mock()
+        dm._publish_stac = mock.Mock()
+        dm._retrieve_stac = mock.Mock()
+        dm._update_stac_collection = mock.Mock()
         stac_collection = dm.default_stac_collection
         stac_collection["links"].append({"rel": "not myself today"})
         mocker.patch("gridded_etl_tools.utils.metadata.Metadata.default_stac_collection", stac_collection)
-        dm.check_stac_exists = mock.Mock(return_value=True)
-        dm.create_stac_collection(fake_original_dataset)
+        dm._check_stac_exists = mock.Mock(return_value=True)
+        dm._create_stac_collection(fake_original_dataset)
 
-        dm.publish_stac.assert_not_called()
-        dm.retrieve_stac.assert_not_called()
-        dm.update_stac_collection.assert_called_once_with(fake_original_dataset)
+        dm._publish_stac.assert_not_called()
+        dm._retrieve_stac.assert_not_called()
+        dm._update_stac_collection.assert_called_once_with(fake_original_dataset)
 
     @staticmethod
     def test_create_stac_item(manager_class, fake_original_dataset, mocker):
@@ -809,10 +810,10 @@ class TestMetadata:
 
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
-        dm.register_stac_item = mock.Mock()
-        dm.create_stac_item(fake_original_dataset)
+        dm._register_stac_item = mock.Mock()
+        dm._create_stac_item(fake_original_dataset)
 
-        dm.register_stac_item.assert_called_once_with(
+        dm._register_stac_item.assert_called_once_with(
             {
                 "stac_version": "1.0.0",
                 "type": "Feature",
@@ -851,10 +852,10 @@ class TestMetadata:
         dm = manager_class()
         dm.time_dim = "forecast_reference_time"
         dm.store = mock.Mock(spec=store.StoreInterface, path="it/goes/here")
-        dm.register_stac_item = mock.Mock()
-        dm.create_stac_item(forecast_dataset)
+        dm._register_stac_item = mock.Mock()
+        dm._create_stac_item(forecast_dataset)
 
-        dm.register_stac_item.assert_called_once_with(
+        dm._register_stac_item.assert_called_once_with(
             {
                 "stac_version": "1.0.0",
                 "type": "Feature",
@@ -931,16 +932,16 @@ class TestMetadata:
         }
 
         md = manager_class()
-        md.publish_stac = mock.Mock()
+        md._publish_stac = mock.Mock()
         md.store = mock.Mock(spec=store.StoreInterface)
-        md.retrieve_stac = mock.Mock(
+        md._retrieve_stac = mock.Mock(
             side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
         )
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
+        md._get_href = mock.Mock(return_value="/path/to/new/item")
 
-        md.register_stac_item(stac_item)
+        md._register_stac_item(stac_item)
 
-        md.publish_stac.assert_called_once_with(
+        md._publish_stac.assert_called_once_with(
             "DummyManager-daily",
             {
                 "Look": "I'm",
@@ -963,26 +964,26 @@ class TestMetadata:
             },
             metadata.StacType.ITEM,
         )
-        md.retrieve_stac.assert_has_calls(
+        md._retrieve_stac.assert_has_calls(
             [
                 mock.call("Vintage Guitars", metadata.StacType.COLLECTION),
                 mock.call("DummyManager-daily", metadata.StacType.ITEM),
             ]
         )
-        md.get_href.assert_not_called()
+        md._get_href.assert_not_called()
 
     @staticmethod
     def test_update_stac_collection(manager_class, fake_original_dataset):
         md = manager_class()
-        md.publish_stac = mock.Mock()
+        md._publish_stac = mock.Mock()
 
         stac_collection = [{"extent": {"spatial": {"bbox": [-24, -12, 24, 12]}, "temporal": {}}}, {"nothing": "here"}]
-        md.retrieve_stac = mock.Mock(return_value=stac_collection)
+        md._retrieve_stac = mock.Mock(return_value=stac_collection)
 
-        md.update_stac_collection(fake_original_dataset)
+        md._update_stac_collection(fake_original_dataset)
 
-        md.retrieve_stac.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
-        md.publish_stac.assert_called_once_with(
+        md._retrieve_stac.assert_called_once_with("Vintage Guitars", metadata.StacType.COLLECTION)
+        md._publish_stac.assert_called_once_with(
             "Vintage Guitars",
             {
                 "extent": {
@@ -997,62 +998,62 @@ class TestMetadata:
     def test_load_stac_metadata(manager_class):
         md = manager_class()
         md.store = mock.Mock(spec=store.Local)
-        md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
+        md._retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
-        assert md.load_stac_metadata() == "foo"
+        assert md._load_stac_metadata() == "foo"
 
-        md.retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        md._retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
 
     @staticmethod
     def test_load_stac_metadata_pass_key(manager_class):
         md = manager_class()
         md.store = mock.Mock(spec=store.Local)
-        md.retrieve_stac = mock.Mock(return_value=["foo", "bar"])
+        md._retrieve_stac = mock.Mock(return_value=["foo", "bar"])
 
-        assert md.load_stac_metadata(key="chiave") == "foo"
+        assert md._load_stac_metadata(key="chiave") == "foo"
 
-        md.retrieve_stac.assert_called_once_with("chiave", metadata.StacType.ITEM)
+        md._retrieve_stac.assert_called_once_with("chiave", metadata.StacType.ITEM)
 
     @staticmethod
     def test_load_stac_metadata_timeout(manager_class):
         md = manager_class()
         md.store = mock.Mock(spec=store.Local)
-        md.retrieve_stac = mock.Mock(side_effect=Timeout)
+        md._retrieve_stac = mock.Mock(side_effect=Timeout)
 
-        assert md.load_stac_metadata() == {}
+        assert md._load_stac_metadata() == {}
 
-        md.retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        md._retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
 
     @staticmethod
     def test_load_stac_metadata_keyerror(manager_class):
         md = manager_class()
         md.store = mock.Mock(spec=store.StoreInterface)
-        md.retrieve_stac = mock.Mock(side_effect=KeyError)
+        md._retrieve_stac = mock.Mock(side_effect=KeyError)
 
-        assert md.load_stac_metadata() == {}
+        assert md._load_stac_metadata() == {}
 
-        md.retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        md._retrieve_stac.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
 
     @staticmethod
     def test_set_zarr_metadata(manager_class):
         dataset = mock.Mock()
         md = manager_class()
 
-        md.rename_data_variable = mock.Mock()
-        renamed = md.rename_data_variable.return_value
+        md._rename_data_variable = mock.Mock()
+        renamed = md._rename_data_variable.return_value
 
-        md.remove_unwanted_fields = mock.Mock()
-        md.encode_ds = mock.Mock()
-        md.set_initial_compression = mock.Mock()
-        md.merge_in_outside_metadata = mock.Mock()
+        md._remove_unwanted_fields = mock.Mock()
+        md._encode_ds = mock.Mock()
+        md._set_initial_compression = mock.Mock()
+        md._merge_in_outside_metadata = mock.Mock()
 
         dataset.attrs = {}
         assert md.set_zarr_metadata(dataset) is renamed
 
-        md.rename_data_variable.assert_called_once_with(dataset)
-        md.remove_unwanted_fields.assert_called_once_with(renamed)
-        md.set_initial_compression.assert_called_once_with(renamed)
-        md.encode_ds.assert_called_once_with(renamed)
+        md._rename_data_variable.assert_called_once_with(dataset)
+        md._remove_unwanted_fields.assert_called_once_with(renamed)
+        md._set_initial_compression.assert_called_once_with(renamed)
+        md._encode_ds.assert_called_once_with(renamed)
 
     @staticmethod
     def test_rename_data_variable(manager_class):
@@ -1060,7 +1061,7 @@ class TestMetadata:
         renamed = dataset.rename_vars.return_value
 
         md = manager_class()
-        assert md.rename_data_variable(dataset) is renamed
+        assert md._rename_data_variable(dataset) is renamed
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
@@ -1070,7 +1071,7 @@ class TestMetadata:
         dataset.rename_vars.side_effect = ValueError
 
         md = manager_class()
-        assert md.rename_data_variable(dataset) is dataset
+        assert md._rename_data_variable(dataset) is dataset
 
         dataset.rename_vars.assert_called_once_with({"one": "data"})
 
@@ -1086,7 +1087,7 @@ class TestMetadata:
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
@@ -1128,7 +1129,7 @@ class TestMetadata:
         md = manager_class()
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
@@ -1171,7 +1172,7 @@ class TestMetadata:
         md.time_dim = "forecast_reference_time"
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "step": 1, "forecast_reference_time": 1}
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
@@ -1221,7 +1222,7 @@ class TestMetadata:
             "hindcast_reference_time": 1,
         }
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        md.encode_ds(dataset) is dataset
+        md._encode_ds(dataset) is dataset
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
@@ -1263,7 +1264,7 @@ class TestMetadata:
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 1
@@ -1280,7 +1281,7 @@ class TestMetadata:
 
         encryption_key = encryption.generate_encryption_key()
         md = manager_class(encryption_key=encryption_key)
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
 
         filters = dataset["data"].encoding["filters"]
         assert len(filters) == 2
@@ -1299,7 +1300,7 @@ class TestMetadata:
         md = manager_class()
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
         md.requested_zarr_chunks = {"latitude": 1, "longitude": 1, "time": 1}
-        md.encode_ds(dataset)
+        md._encode_ds(dataset)
         mv = md.missing_value
 
         assert dataset.encoding == {"data": {"dtype": "<f4", "_FillValue": mv}}
@@ -1344,7 +1345,7 @@ class TestMetadata:
         mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
         md.store.dataset = mock.Mock(return_value=mock_dataset)
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
-        md.merge_in_outside_metadata(dataset)
+        md._merge_in_outside_metadata(dataset)
 
         # Verify original attrs preserved
         assert dataset.attrs["foo"] == "bar"
@@ -1378,7 +1379,7 @@ class TestMetadata:
         md.store.retrieve_metadata = mock.Mock(
             return_value=({"foo": "bar", "properties": {"created": "2020-01-01T0Z"}}, "foo/bar")
         )
-        md.merge_in_outside_metadata(dataset)
+        md._merge_in_outside_metadata(dataset)
 
         # Verify original attrs preserved
         assert dataset.attrs["foo"] == "bar"
@@ -1405,7 +1406,7 @@ class TestMetadata:
         _ = md.metadata  # Access to trigger auto-population
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
-        md.merge_in_outside_metadata(dataset)
+        md._merge_in_outside_metadata(dataset)
 
         # Verify original attrs preserved
         assert dataset.attrs["foo"] == "bar"
@@ -1439,7 +1440,7 @@ class TestMetadata:
         """
         md = manager_class(initial_metadata={"bar": "baz"})
         md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
-        md.encode_ds(fake_original_dataset_float_coords)
+        md._encode_ds(fake_original_dataset_float_coords)
 
         # Save and re-open
         zarr_path = tmp_path / "test.zarr"
@@ -1480,7 +1481,7 @@ class TestMetadata:
         """
         md = manager_class(initial_metadata={"bar": "baz"})
         md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
-        md.encode_ds(fake_original_dataset)
+        md._encode_ds(fake_original_dataset)
 
         # Save and re-open
         zarr_path = tmp_path / "test.zarr"
