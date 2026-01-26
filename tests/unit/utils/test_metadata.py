@@ -197,6 +197,31 @@ class TestMetadata:
         assert dm.metadata == {"completely": "new"}
 
     @staticmethod
+    def test_metadata_cached_after_first_access(manager_class):
+        """Test that metadata is cached after first access (initial_metadata not called again)"""
+        dm = manager_class()
+        # First access populates from initial_metadata
+        first_access = dm.metadata
+        # Add a field
+        dm.metadata["added_field"] = "test"
+        # Second access should return the same cached dict with the added field
+        second_access = dm.metadata
+        assert second_access is first_access  # Same object
+        assert second_access["added_field"] == "test"
+
+    @staticmethod
+    def test_metadata_isolated_between_instances(manager_class):
+        """Test that each instance has its own metadata dict"""
+        dm1 = manager_class()
+        dm2 = manager_class()
+        dm1.metadata["instance1_field"] = "value1"
+        dm2.metadata["instance2_field"] = "value2"
+        assert "instance1_field" in dm1.metadata
+        assert "instance2_field" not in dm1.metadata
+        assert "instance2_field" in dm2.metadata
+        assert "instance1_field" not in dm2.metadata
+
+    @staticmethod
     def test_initial_metadata_contains_base_fields(manager_class):
         dm = manager_class()
         metadata = dm.initial_metadata

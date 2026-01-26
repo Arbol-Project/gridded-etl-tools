@@ -42,45 +42,6 @@ ZARR_ENCODING_FIELDS = [
 ]
 
 
-class MetadataDescriptor:
-    """
-    Descriptor that provides lazy-loading metadata from initial_metadata.
-
-    On first access, populates the instance's metadata dict from initial_metadata.
-    Supports both reading and direct assignment.
-
-    Usage
-    -----
-    Access ``self.metadata`` to get the metadata dict, which auto-populates
-    from ``initial_metadata`` on first access::
-
-        dm = MyManager()
-        print(dm.metadata["name"])  # Auto-populated from initial_metadata
-
-    Add dynamic fields directly::
-
-        dm.metadata["custom_field"] = some_computed_value
-    """
-
-    def __set_name__(self, owner, name):
-        self.private_name = f"__{name}"
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-
-        # Check if metadata already exists on instance
-        if not hasattr(obj, self.private_name) or getattr(obj, self.private_name) is None:
-            # Auto-populate from initial_metadata
-            setattr(obj, self.private_name, obj.initial_metadata.copy())
-
-        return getattr(obj, self.private_name)
-
-    def __set__(self, obj, value):
-        # Allow direct assignment
-        setattr(obj, self.private_name, value)
-
-
 class StacType(Enum):
     ITEM = "datasets"
     COLLECTION = "collections"
@@ -94,12 +55,14 @@ class Metadata(Convenience):
 
     Metadata Handling
     -----------------
-    The ``metadata`` attribute auto-populates from ``initial_metadata`` on first access.
-    This means you can access ``self.metadata`` anywhere in your ETL without explicit
-    initialization::
+    The ``metadata`` property auto-populates from ``initial_metadata`` on first access
+    and caches the result. Subsequent accesses return the cached dict, so modifications
+    persist::
 
         dm = MyManager()
         print(dm.metadata["name"])  # Auto-populated from initial_metadata
+        dm.metadata["custom"] = "value"  # Modification persists
+        print(dm.metadata["custom"])  # "value"
 
     **Adding metadata in subclasses** (preferred for fields using class attributes):
     Override ``initial_metadata`` to add fields that depend on ``self``::
@@ -123,8 +86,24 @@ class Metadata(Convenience):
     primary extension point for dataset-specific metadata.
     """
 
-    # Descriptor that auto-populates from initial_metadata on first access
-    metadata = MetadataDescriptor()
+    _metadata = None
+
+    @property
+    def metadata(self):
+        """
+        Auto-populating metadata dict.
+
+        On first access, copies ``initial_metadata`` and caches the result.
+        Subsequent accesses return the cached dict, allowing modifications to persist.
+        Can also be fully replaced via assignment (``self.metadata = {...}``).
+        """
+        if self._metadata is None:
+            self._metadata = self.initial_metadata.copy()
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value):
+        self._metadata = value
 
     @classmethod
     def default_stac_item(cls) -> dict:
