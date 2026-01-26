@@ -1,17 +1,32 @@
 import pathlib
+import platform
 
 import nox
 
 # numba is not supported on Python 3.12
 ALL_INTERPRETERS = "3.12"
+
+
 CODE = "gridded_etl_tools"
 DEFAULT_INTERPRETER = "3.12"
 HERE = pathlib.Path(__file__).parent
 
 
+def _get_local_constraints(session):
+    """Return constraint args to skip problematic packages on local macOS builds."""
+    if platform.system() == "Darwin":
+        # numba/llvmlite require specific LLVM versions that are hard to match locally.
+        # Exclude them on macOS - they're optional dependencies via xarray[complete].
+        return [
+            "--constraint",
+            f"{HERE}/constraints-local.txt",
+        ]
+    return []
+
+
 @nox.session(py=ALL_INTERPRETERS)
 def unit(session):
-    session.install("-e", ".[testing]")
+    session.install(*_get_local_constraints(session), "-e", ".[testing]")
     session.run(
         "pytest",
         "--log-level=INFO",
@@ -42,7 +57,7 @@ def blacken(session):
 
 @nox.session(py=DEFAULT_INTERPRETER)
 def system(session):
-    session.install("-e", ".[testing]")
+    session.install(*_get_local_constraints(session), "-e", ".[testing]")
     session.run(
         "pytest",
         "--log-level=INFO",
