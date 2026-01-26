@@ -248,7 +248,6 @@ class TestPublish:
         dm.metadata = {"hi": "mom!"}
         dm.time_dims = ["what", "is", "time", "really?"]
         dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.populate_metadata = mock.Mock()
         dm.set_key_dims = mock.Mock()
         dm.create_root_stac_catalog = mock.Mock()
         dm.create_stac_collection = mock.Mock()
@@ -257,7 +256,6 @@ class TestPublish:
 
         dm.publish_metadata()
 
-        dm.populate_metadata.assert_not_called()
         dm.set_key_dims.assert_not_called()
         dm.create_root_stac_catalog.assert_called_once_with()
         dm.create_stac_collection.assert_called_once_with(current_zarr)
@@ -269,7 +267,6 @@ class TestPublish:
         dm.metadata = {"hi": "mom!"}
         dm.time_dims = ["what", "is", "time", "really?"]
         dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.populate_metadata = mock.Mock()
         dm.set_key_dims = mock.Mock()
         dm.create_root_stac_catalog = mock.Mock()
         dm.create_stac_collection = mock.Mock()
@@ -279,18 +276,17 @@ class TestPublish:
         with pytest.raises(RuntimeError):
             dm.publish_metadata()
 
-        dm.populate_metadata.assert_not_called()
         dm.set_key_dims.assert_not_called()
         dm.create_root_stac_catalog.assert_not_called()
         dm.create_stac_collection.assert_not_called()
         dm.create_stac_item.assert_not_called()
 
     @staticmethod
-    def test_publish_metadata_populate_metadata(manager_class):
+    def test_publish_metadata_auto_populates(manager_class):
+        """Test that publish_metadata auto-populates metadata from initial_metadata"""
         dm = manager_class()
         dm.time_dims = ["what", "is", "time", "really?"]
         dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.populate_metadata = mock.Mock()
         dm.set_key_dims = mock.Mock()
         dm.create_root_stac_catalog = mock.Mock()
         dm.create_stac_collection = mock.Mock()
@@ -299,7 +295,8 @@ class TestPublish:
 
         dm.publish_metadata()
 
-        dm.populate_metadata.assert_called_once_with()
+        # Metadata should have been auto-populated
+        assert "name" in dm.metadata
         dm.set_key_dims.assert_not_called()
         dm.create_root_stac_catalog.assert_called_once_with()
         dm.create_stac_collection.assert_called_once_with(current_zarr)
@@ -310,7 +307,6 @@ class TestPublish:
         dm = manager_class()
         dm.metadata = {"hi": "mom!"}
         dm.store = mock.Mock(spec=store.StoreInterface)
-        dm.populate_metadata = mock.Mock()
         dm.set_key_dims = mock.Mock()
         dm.create_root_stac_catalog = mock.Mock()
         dm.create_stac_collection = mock.Mock()
@@ -319,7 +315,6 @@ class TestPublish:
 
         dm.publish_metadata()
 
-        dm.populate_metadata.assert_not_called()
         dm.set_key_dims.assert_called_once_with()
         dm.create_root_stac_catalog.assert_called_once_with()
         dm.create_stac_collection.assert_called_once_with(current_zarr)

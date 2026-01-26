@@ -360,14 +360,14 @@ class DatasetManager(Logging, Publish, ABC):
     # Attributes
 
     @property
-    def static_metadata(self):
+    def initial_metadata(self):
         """
         Property returning a dictionary of metadata fields for this ETL.
 
         This is inherited from the Metadata mixin and can be extended by subclasses.
-        See :py:meth:`gridded_etl_tools.utils.metadata.Metadata.static_metadata` for details.
+        See :py:meth:`gridded_etl_tools.utils.metadata.Metadata.initial_metadata` for details.
         """
-        return super().static_metadata
+        return super().initial_metadata
 
     @property
     @abstractmethod
@@ -412,8 +412,6 @@ class DatasetManager(Logging, Publish, ABC):
         Modify the child methods it calls to tailor the methods to the individual dataset and resolve any issues
         """
         self.info("Transforming raw files to an in-memory dataset")
-        # Dynamically adjust metadata based on fields calculated during `extract`, if necessary (usually not)
-        self.populate_metadata()
         # Create 1 file per measurement span (hour, day, week, etc.) so Kerchunk has consistently chunked inputs for
         # MultiZarring
         if not self.skip_prepare_input_files:  # in some circumstances it may be useful to skip file prep
@@ -468,18 +466,11 @@ class DatasetManager(Logging, Publish, ABC):
             An optional flag to preserve the original files for debugging purposes. Defaults to True.
         """
 
-    def populate_metadata(self):  # pragma NO COVER
-        """Override point for managers to populate metadata.
-
-        The default implementation simply uses ``self.static_metadata``.
-        """
-        super().populate_metadata()
-
     def set_zarr_metadata(self, dataset) -> xr.Dataset:  # pragma NO COVER
         """
         Placeholder indicating necessity of possibly editing Zarr metadata within an ETL manager script
         Method to align Zarr metadata with requirements of Zarr exports and STAC metadata format
-        Happens after `populate_metadata` and immediately before data publication.
+        Happens immediately before data publication.
         """
         return super().set_zarr_metadata(dataset)
 

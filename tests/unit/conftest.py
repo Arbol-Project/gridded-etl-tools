@@ -219,7 +219,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         if requested_zarr_chunks is None:
             requested_zarr_chunks = {}
 
-        self._extra_static_metadata = kwargs.pop("static_metadata", {})
+        self._extra_initial_metadata = kwargs.pop("initial_metadata", {})
         super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         if set_key_dims:
             self.set_key_dims()
@@ -238,9 +238,9 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         return datetime.datetime(1975, 7, 7, 0, 0, 0)
 
     @property
-    def static_metadata(self):
-        metadata = super().static_metadata
-        metadata.update(self._extra_static_metadata)
+    def initial_metadata(self):
+        metadata = super().initial_metadata
+        metadata.update(self._extra_initial_metadata)
         return metadata
 
 

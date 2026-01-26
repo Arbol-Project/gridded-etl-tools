@@ -220,12 +220,10 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_data_on_disk(manager_class):
         dm = manager_class()
-        dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
         dm.transform_data_on_disk()
 
-        dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_called_once_with()
         dm.create_zarr_json.assert_called_once_with()
 
@@ -274,12 +272,10 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_data_on_disk_skip_prepare_input_files(manager_class):
         dm = manager_class(skip_prepare_input_files=True)
-        dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
         dm.transform_data_on_disk()
 
-        dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_not_called()
         dm.create_zarr_json.assert_called_once_with()
 

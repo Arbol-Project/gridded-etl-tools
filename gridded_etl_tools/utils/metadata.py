@@ -42,6 +42,45 @@ ZARR_ENCODING_FIELDS = [
 ]
 
 
+class MetadataDescriptor:
+    """
+    Descriptor that provides lazy-loading metadata from initial_metadata.
+
+    On first access, populates the instance's metadata dict from initial_metadata.
+    Supports both reading and direct assignment.
+
+    Usage
+    -----
+    Access ``self.metadata`` to get the metadata dict, which auto-populates
+    from ``initial_metadata`` on first access::
+
+        dm = MyManager()
+        print(dm.metadata["name"])  # Auto-populated from initial_metadata
+
+    Add dynamic fields directly::
+
+        dm.metadata["custom_field"] = some_computed_value
+    """
+
+    def __set_name__(self, owner, name):
+        self.private_name = f"__{name}"
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+
+        # Check if metadata already exists on instance
+        if not hasattr(obj, self.private_name) or getattr(obj, self.private_name) is None:
+            # Auto-populate from initial_metadata
+            setattr(obj, self.private_name, obj.initial_metadata.copy())
+
+        return getattr(obj, self.private_name)
+
+    def __set__(self, obj, value):
+        # Allow direct assignment
+        setattr(obj, self.private_name, value)
+
+
 class StacType(Enum):
     ITEM = "datasets"
     COLLECTION = "collections"
@@ -50,9 +89,42 @@ class StacType(Enum):
 
 class Metadata(Convenience):
     """
-    Base class containing metadata creation and editing methods Zarr ETLs
-    Includes STAC Metadata templates for Items, Collections, and the root Catalog
+    Base class containing metadata creation and editing methods for Zarr ETLs.
+    Includes STAC Metadata templates for Items, Collections, and the root Catalog.
+
+    Metadata Handling
+    -----------------
+    The ``metadata`` attribute auto-populates from ``initial_metadata`` on first access.
+    This means you can access ``self.metadata`` anywhere in your ETL without explicit
+    initialization::
+
+        dm = MyManager()
+        print(dm.metadata["name"])  # Auto-populated from initial_metadata
+
+    **Adding metadata in subclasses** (preferred for fields using class attributes):
+    Override ``initial_metadata`` to add fields that depend on ``self``::
+
+        @property
+        def initial_metadata(self):
+            metadata = super().initial_metadata
+            metadata.update({
+                "data download url": self.dataset_download_url,
+                "custom field": self.some_class_attribute,
+            })
+            return metadata
+
+    **Adding runtime metadata** (for fields computed during ETL execution):
+    Assign directly to ``self.metadata`` where the data becomes available::
+
+        # In publish_metadata() or similar, after extract() has run
+        self.metadata["finalization date"] = self.input_history.get("final_date")
+
+    The ``initial_metadata`` property defines the base metadata fields and is the
+    primary extension point for dataset-specific metadata.
     """
+
+    # Descriptor that auto-populates from initial_metadata on first access
+    metadata = MetadataDescriptor()
 
     @classmethod
     def default_stac_item(cls) -> dict:
@@ -142,44 +214,47 @@ class Metadata(Convenience):
         }
 
     @property
-    def static_metadata(self):
+    def initial_metadata(self):
         """
         Property returning a dictionary of metadata fields for this ETL.
 
         This is the primary extension point for managers to define dataset-specific metadata.
-        Since this is a property with access to ``self``, it can include both:
-
-        1. **Class attributes**: Static values defined on the manager class (e.g., ``self.title``,
-           ``self.publisher``, ``self.dataset_description``). These should be defined as class
-           attributes on your manager for simple, unchanging values.
-
-        2. **Dynamic values**: Values computed from instance state at property access time
-           (e.g., ``f"More info at {self.dataset_info_url}"``). Use this for values that
-           depend on other instance attributes.
+        Since this is a property with access to ``self``, it can reference class attributes
+        and instance properties to build metadata dynamically.
 
         **Inheritance Pattern**:
-        Subclasses should call ``super().static_metadata`` and update the returned dict
-        rather than defining a complete new dictionary::
+        Subclasses should call ``super().initial_metadata`` and update the returned dict
+        using ``metadata.update()`` rather than defining a complete new dictionary::
 
             @property
-            def static_metadata(self):
-                metadata = super().static_metadata
-                metadata["custom_field"] = self.some_dynamic_value
+            def initial_metadata(self):
+                metadata = super().initial_metadata
+                metadata.update({
+                    "data download url http": self.dataset_download_url_http,
+                    "data download url ftp": self.dataset_download_ftp_server,
+                })
                 return metadata
 
-        For simple overrides, prefer setting class attributes instead of overriding this
-        property. The base implementation automatically picks up class attributes like
-        ``title``, ``publisher``, ``dataset_description``, etc.
+        This pattern ensures that:
+
+        1. Base metadata fields from parent classes are preserved
+        2. Child classes can add or override specific fields
+        3. Fields can reference ``self`` to access class attributes and properties
+
+        **How it connects to self.metadata**:
+        The ``self.metadata`` attribute auto-populates from this property on first access.
+        Once populated, ``self.metadata`` is cached and won't call ``initial_metadata`` again.
+        To add fields that depend on runtime state (e.g., data computed during ``extract()``),
+        assign directly to ``self.metadata`` after it has been accessed::
+
+            # In publish_metadata(), after extract() has populated self.input_history
+            self.metadata["finalization date"] = self.input_history.get("final_date")
 
         Returns
         -------
         dict
             Dictionary of metadata key-value pairs to be written to Zarr attributes
             and STAC metadata.
-
-        See Also
-        --------
-        populate_metadata : For metadata that requires runtime ETL state (rare cases).
         """
         return {
             "name": self.dataset_name,
@@ -609,53 +684,15 @@ class Metadata(Convenience):
 
     # NON-STAC METADATA
 
-    def populate_metadata(self):
-        """
-        Populate ``self.metadata`` with values for this ETL run.
-
-        The default implementation simply assigns ``self.static_metadata`` to
-        ``self.metadata``. This method is called during the parse phase before
-        metadata is written to the Zarr store.
-
-        **When to Override**:
-        Only override this method when you need to add metadata that depends on
-        **runtime ETL state** that isn't available at property access time. For example:
-
-        - Data computed during the extract/transform phases (e.g., ``input_history``)
-        - Values that depend on the actual data being processed
-
-        **Prefer static_metadata Instead**:
-        For most use cases, override the ``static_metadata`` property instead of this
-        method. Since ``static_metadata`` is a property with access to ``self``, it can
-        handle dynamic values that depend on instance attributes::
-
-            # PREFERRED: Use static_metadata for dynamic values based on instance attrs
-            @property
-            def static_metadata(self):
-                metadata = super().static_metadata
-                metadata["dataset description"] = f"Info at {self.dataset_info_url}"
-                return metadata
-
-            # ONLY USE populate_metadata for runtime ETL state
-            def populate_metadata(self):
-                super().populate_metadata()
-                # self.input_history is populated during extract(), not available earlier
-                self.metadata["finalization date"] = self.input_history.get("final_date")
-
-        **Inheritance Pattern**:
-        Always call ``super().populate_metadata()`` first to ensure base metadata is
-        populated before adding custom fields.
-
-        See Also
-        --------
-        static_metadata : The primary extension point for dataset metadata (preferred).
-        """
-        self.metadata = self.static_metadata
-
     def set_zarr_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
-        Function to append to or update key metadata information to the attributes and encoding of the output Zarr.
+        Append or update key metadata information to the attributes and encoding of the output Zarr.
         Additionally filters out unwanted or invalid keys and fields.
+
+        This method is called during the parse phase and will access ``self.metadata``,
+        which auto-populates from ``initial_metadata`` on first access. Any dynamic
+        metadata fields should be added to ``self.metadata`` before this method is called,
+        typically in ``publish_metadata()`` or a custom transform method.
 
         Parameters
         ----------
@@ -804,7 +841,11 @@ class Metadata(Convenience):
 
     def merge_in_outside_metadata(self, dataset: xr.Dataset) -> xr.Dataset:
         """
-        Join static/STAC metadata fields to the dataset's metadata fields and adjust them as appropriate
+        Join metadata fields from ``self.metadata`` to the dataset's attributes.
+
+        This method merges the auto-populated ``self.metadata`` dict (from ``initial_metadata``)
+        plus any dynamically added fields into the dataset's attributes. It also adds
+        computed fields like date range and bounding box.
 
         Parameters
         ----------

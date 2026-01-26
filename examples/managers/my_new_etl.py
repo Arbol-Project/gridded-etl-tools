@@ -4,11 +4,11 @@ All filled fields are examples that can be replaced; all unfilled fields must be
 
 METADATA PATTERN:
 -----------------
-The base Metadata class provides a `static_metadata` property that returns all common metadata fields
+The base Metadata class provides a `initial_metadata` property that returns all common metadata fields
 from class attributes. Managers should:
 
 1. Define metadata as class attributes (preferred for static values)
-2. Override `static_metadata` property only when dynamic values are needed
+2. Override `initial_metadata` property only when dynamic values are needed
 
 See gridded_etl_tools/utils/metadata.py for the full list of metadata fields.
 """
@@ -25,8 +25,8 @@ class MyNewETL(DatasetManager, ABC):
     """
     Base class for datasets from a provider. For example's sake assumes that such data are published in NetCDF format.
 
-    Metadata attributes are defined as class attributes and automatically included in static_metadata.
-    Override static_metadata property only for truly dynamic values that depend on instance state.
+    Metadata attributes are defined as class attributes and automatically included in initial_metadata.
+    Override initial_metadata property only for truly dynamic values that depend on instance state.
     """
 
     def __init__(
@@ -43,7 +43,7 @@ class MyNewETL(DatasetManager, ABC):
         self.standard_dims = ["latitude", "longitude", "time"]
 
     # Dataset-level metadata attributes (override these in subclasses)
-    # These are automatically included in static_metadata via the base Metadata class
+    # These are automatically included in initial_metadata via the base Metadata class
     coordinate_reference_system = "EPSG:4326"
     spatial_precision = 0.01
     update_cadence = "daily"
