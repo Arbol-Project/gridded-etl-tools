@@ -533,7 +533,7 @@ class TestTransform:
         dm = manager_class()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
-        dm._parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
 
         expected = [
             DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
@@ -582,7 +582,7 @@ class TestTransform:
 
         assert "CDO_FILE_SUFFIX" not in os.environ
 
-        dm._parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat")
 
         expected = [
             DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
@@ -629,7 +629,7 @@ class TestTransform:
 
         assert "CDO_FILE_SUFFIX" not in os.environ
 
-        dm._parallel_subprocess_files(input_files, ["cdo", "--cat"], ".nc4")
+        dm.parallel_subprocess_files(input_files, ["cdo", "--cat"], ".nc4")
 
         expected = [
             DummyPopen(["cdo", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}"], waited=True, append=False)
@@ -673,7 +673,7 @@ class TestTransform:
         dm._archive_original_files = mock.Mock()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
-        dm._parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", keep_originals=True)
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", keep_originals=True)
 
         expected = [
             DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.dog", f"fido_{n:03d}.cat"], waited=True, append=False)
@@ -717,7 +717,7 @@ class TestTransform:
         dm = manager_class()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
-        dm._parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", invert_file_order=True)
+        dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", invert_file_order=True)
 
         expected = [
             DummyPopen(["convertpet", "--cat", f"fido_{n:03d}.cat", f"fido_{n:03d}.dog"], waited=True, append=False)
@@ -731,10 +731,10 @@ class TestTransform:
     @staticmethod
     def test_convert_to_lowest_common_time_denom(manager_class):
         dm = manager_class()
-        dm._parallel_subprocess_files = mock.Mock()
+        dm.parallel_subprocess_files = mock.Mock()
 
-        dm._convert_to_lowest_common_time_denom(["a", "b", "c"])
-        dm._parallel_subprocess_files.assert_called_once_with(
+        dm.convert_to_lowest_common_time_denom(["a", "b", "c"])
+        dm.parallel_subprocess_files.assert_called_once_with(
             input_files=["a", "b", "c"],
             command_text=["cdo", "-f", "nc4c", "splitsel,1"],
             replacement_suffix=".nc4",
@@ -745,15 +745,15 @@ class TestTransform:
     def test_convert_to_lowest_common_time_denom_no_files(manager_class):
         dm = manager_class()
         with pytest.raises(ValueError):
-            dm._convert_to_lowest_common_time_denom([])
+            dm.convert_to_lowest_common_time_denom([])
 
     @staticmethod
     def test_convert_to_lowest_common_time_denom_keep_originals(manager_class):
         dm = manager_class()
-        dm._parallel_subprocess_files = mock.Mock()
+        dm.parallel_subprocess_files = mock.Mock()
 
-        dm._convert_to_lowest_common_time_denom(["a", "b", "c"], keep_originals=True)
-        dm._parallel_subprocess_files.assert_called_once_with(
+        dm.convert_to_lowest_common_time_denom(["a", "b", "c"], keep_originals=True)
+        dm.parallel_subprocess_files.assert_called_once_with(
             input_files=["a", "b", "c"],
             command_text=["cdo", "-f", "nc4c", "splitsel,1"],
             replacement_suffix=".nc4",
@@ -767,12 +767,12 @@ class TestTransform:
                 f.write("hi mom!")
 
         dm = manager_class(custom_input_path=tmpdir)
-        dm._parallel_subprocess_files = mock.Mock()
+        dm.parallel_subprocess_files = mock.Mock()
 
-        dm._ncs_to_nc4s()
+        dm.ncs_to_nc4s()
 
         expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
-        dm._parallel_subprocess_files.assert_called_once_with(
+        dm.parallel_subprocess_files.assert_called_once_with(
             input_files=expected_files,
             command_text=["nccopy", "-k", "netCDF-4 classic model"],
             replacement_suffix=".nc4",
@@ -783,7 +783,7 @@ class TestTransform:
     def test_ncs_to_nc4s_no_files(manager_class, tmpdir):
         dm = manager_class(custom_input_path=tmpdir)
         with pytest.raises(FileNotFoundError):
-            dm._ncs_to_nc4s()
+            dm.ncs_to_nc4s()
 
     @staticmethod
     def test_ncs_to_nc4s_keep_originals(manager_class, tmpdir):
@@ -792,12 +792,12 @@ class TestTransform:
                 f.write("hi mom!")
 
         dm = manager_class(custom_input_path=tmpdir)
-        dm._parallel_subprocess_files = mock.Mock()
+        dm.parallel_subprocess_files = mock.Mock()
 
-        dm._ncs_to_nc4s(True)
+        dm.ncs_to_nc4s(True)
 
         expected_files = sorted([tmpdir / fname for fname in ("one.nc", "four.nc", "five.nc")])
-        dm._parallel_subprocess_files.assert_called_once_with(
+        dm.parallel_subprocess_files.assert_called_once_with(
             input_files=expected_files,
             command_text=["nccopy", "-k", "netCDF-4 classic model"],
             replacement_suffix=".nc4",

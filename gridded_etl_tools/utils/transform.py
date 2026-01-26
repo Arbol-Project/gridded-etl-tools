@@ -397,7 +397,7 @@ class Transform(Metadata, Convenience):
 
     # CONVERT FILES
 
-    def _parallel_subprocess_files(
+    def parallel_subprocess_files(
         self,
         input_files: list[pathlib.Path],
         command_text: list[str],
@@ -458,7 +458,7 @@ class Transform(Metadata, Convenience):
             self._archive_original_files(input_files)
         self.info("Cleanup finished")
 
-    def _convert_to_lowest_common_time_denom(self, raw_files: list, keep_originals: bool = False):
+    def convert_to_lowest_common_time_denom(self, raw_files: list, keep_originals: bool = False):
         """
         Decompose a set of raw files aggregated by week, month, year, or other irregular time denominator
         into a set of smaller files, one per the lowest common time denominator -- hour, day, etc.
@@ -482,14 +482,14 @@ class Transform(Metadata, Convenience):
         if len(raw_files) == 0:
             raise ValueError("No files found to convert, exiting script")
         command_text = ["cdo", "-f", "nc4c", "splitsel,1"]
-        self._parallel_subprocess_files(
+        self.parallel_subprocess_files(
             input_files=raw_files,
             command_text=command_text,
             replacement_suffix=".nc4",
             keep_originals=keep_originals,
         )
 
-    def _ncs_to_nc4s(self, keep_originals: bool = False):
+    def ncs_to_nc4s(self, keep_originals: bool = False):
         """
         Find all NetCDF files in the input folder and batch convert them
         in parallel to NetCDF4-Classic files that play nicely with Kerchunk
@@ -514,7 +514,7 @@ class Transform(Metadata, Convenience):
         # convert raw NetCDFs to NetCDF4-Classics in parallel
         self.info(f"Converting {(len(raw_files))} NetCDFs to NetCDF4 Classic files")
         command_text = ["nccopy", "-k", "netCDF-4 classic model"]
-        self._parallel_subprocess_files(
+        self.parallel_subprocess_files(
             input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
         )
 

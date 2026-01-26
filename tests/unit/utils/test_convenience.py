@@ -305,7 +305,7 @@ class TestConvenience:
 
         dm = manager_class()
         dm.input_files = Mock(return_value=("notthisone", "thisone"))
-        assert dm._get_newest_file_date_range(engine="Rolls Royce") == (
+        assert dm.get_newest_file_date_range(engine="Rolls Royce") == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
@@ -384,15 +384,15 @@ class TestConvenience:
     @staticmethod
     def test_check_if_new_data(manager_class):
         dm = manager_class()
-        dm._get_newest_file_date_range = Mock(return_value=["foo", datetime.datetime(1066, 10, 14, 0, 0, 0)])
-        assert dm._check_if_new_data(datetime.datetime(1066, 10, 13, 0, 0, 0)) is True
-        assert dm._check_if_new_data(datetime.datetime(1066, 10, 15, 0, 0, 0)) is False
+        dm.get_newest_file_date_range = Mock(return_value=["foo", datetime.datetime(1066, 10, 14, 0, 0, 0)])
+        assert dm.check_if_new_data(datetime.datetime(1066, 10, 13, 0, 0, 0)) is True
+        assert dm.check_if_new_data(datetime.datetime(1066, 10, 15, 0, 0, 0)) is False
 
     @staticmethod
     def test_check_if_new_data_last_existing_date_unavailable(manager_class):
         dm = manager_class()
-        dm._get_newest_file_date_range = Mock(return_value=["foo"])
-        assert dm._check_if_new_data(datetime.datetime(1066, 10, 13, 0, 0, 0)) is False
+        dm.get_newest_file_date_range = Mock(return_value=["foo"])
+        assert dm.check_if_new_data(datetime.datetime(1066, 10, 13, 0, 0, 0)) is False
 
     @staticmethod
     def test_standardize_longitudes(manager_class, manager_y_x_class, fake_original_dataset):

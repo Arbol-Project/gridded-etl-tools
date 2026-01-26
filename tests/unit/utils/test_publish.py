@@ -1193,7 +1193,7 @@ class TestPublish:
 
         dm._check_written_value = check_written_value
 
-        dm._post_parse_quality_check()
+        dm.post_parse_quality_check()
 
         # assert setup functions called once
         dm.set_key_dims.assert_called_once_with()
@@ -1215,7 +1215,7 @@ class TestPublish:
         dm._filter_search_space = mock.Mock()
         dm._check_written_value = mock.Mock()
 
-        dm._post_parse_quality_check()
+        dm.post_parse_quality_check()
 
         dm.set_key_dims.assert_not_called()
         dm._get_prod_update_ds.assert_not_called()
@@ -1247,7 +1247,7 @@ class TestPublish:
 
         dm._check_written_value = check_written_value
 
-        dm._post_parse_quality_check()
+        dm.post_parse_quality_check()
 
         # assert setup functions called once
         dm.set_key_dims.assert_called_once_with()

@@ -362,7 +362,7 @@ class Convenience(Attributes):
             datetime.datetime.strptime(date_range[1], parse_string),
         )
 
-    def _get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
+    def get_newest_file_date_range(self, **kwargs) -> datetime.datetime:
         """
         Return the date range of the newest local file
 
@@ -470,7 +470,7 @@ class Convenience(Attributes):
         """
         return io.BytesIO(json.dumps(obj).encode("utf-8"))
 
-    def _check_if_new_data(self, compare_date: datetime.datetime) -> bool:
+    def check_if_new_data(self, compare_date: datetime.datetime) -> bool:
         """
         Check if the downloaded data contains any new records relative to the existing dataset.
         Return a boolean indicating whether to proceed with a transform/parse based on the presence of new records.
@@ -489,7 +489,7 @@ class Convenience(Attributes):
 
         # check if newest file on our server has newer data
         try:
-            newest_file_end_date = self._get_newest_file_date_range()[1]
+            newest_file_end_date = self.get_newest_file_date_range()[1]
         except IndexError as e:
             self.info(
                 f"Date range operation failed due to absence of input files. Exiting script. Full error message: {e}"

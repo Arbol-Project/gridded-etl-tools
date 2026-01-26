@@ -773,7 +773,7 @@ class Publish(Transform):
         # Return True if no problems found
         return True
 
-    def _post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
+    def post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
         """
         Master function to check values written after a parse for discrepancies with the source data
 
