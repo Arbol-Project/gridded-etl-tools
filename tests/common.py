@@ -218,7 +218,7 @@ def patched_key(self):
     return f"{self.dataset_name}-{self.time_resolution.__str__()}_test_initial"
 
 
-original_zarr_json_path = DatasetManager.zarr_json_path
+original_zarr_json_path = DatasetManager._zarr_json_path
 
 
 def patched_zarr_json_path(self):
@@ -246,7 +246,7 @@ def patched_update_cadence_bounds(self):
     return [np.timedelta64(3, "D"), np.timedelta64(4, "D")]
 
 
-original_raw_file_to_dataset = DatasetManager.raw_file_to_dataset
+original_raw_file_to_dataset = DatasetManager._raw_file_to_dataset
 
 
 def original_ds_normal(self, *args, **kwargs):

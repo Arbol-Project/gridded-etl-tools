@@ -231,41 +231,41 @@ class TestDatasetManager:
     def test_transform_dataset_in_memory_new_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True)
         dm.store = mocker.Mock(spec=store.Local, has_existing=False)
-        dm.update_ds_transform = unittest.mock.Mock()
-        dm.initial_ds_transform = unittest.mock.Mock()
+        dm._update_ds_transform = unittest.mock.Mock()
+        dm._initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
 
-        dm.update_ds_transform.assert_not_called()
-        dm.initial_ds_transform.assert_called_once_with()
+        dm._update_ds_transform.assert_not_called()
+        dm._initial_ds_transform.assert_called_once_with()
 
     @staticmethod
     def test_transform_dataset_in_memory_update(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=False)
         dm.store = mocker.Mock(spec=store.Local, has_existing=True)
-        dm.update_ds_transform = unittest.mock.Mock()
-        dm.initial_ds_transform = unittest.mock.Mock()
+        dm._update_ds_transform = unittest.mock.Mock()
+        dm._initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
 
-        dm.update_ds_transform.assert_called_once_with()
-        dm.initial_ds_transform.assert_not_called()
+        dm._update_ds_transform.assert_called_once_with()
+        dm._initial_ds_transform.assert_not_called()
 
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=True)
         dm.store = mocker.Mock(spec=store.Local, has_existing=True)
-        dm.update_ds_transform = unittest.mock.Mock()
-        dm.initial_ds_transform = unittest.mock.Mock()
+        dm._update_ds_transform = unittest.mock.Mock()
+        dm._initial_ds_transform = unittest.mock.Mock()
         dm.transform_dataset_in_memory()
 
-        dm.update_ds_transform.assert_not_called()
-        dm.initial_ds_transform.assert_called_once_with()
+        dm._update_ds_transform.assert_not_called()
+        dm._initial_ds_transform.assert_called_once_with()
 
     @staticmethod
     def test_transform_dataset_in_memory_update_rebuild_initial_but_overwrite_not_allowed(mocker, manager_class):
         dm = manager_class(skip_prepare_input_files=True, rebuild_requested=True, allow_overwrite=False)
         dm.store = mocker.Mock(spec=store.Local, has_existing=True)
-        dm.update_ds_transform = unittest.mock.Mock()
-        dm.initial_ds_transform = unittest.mock.Mock()
+        dm._update_ds_transform = unittest.mock.Mock()
+        dm._initial_ds_transform = unittest.mock.Mock()
         with pytest.raises(RuntimeError):
             dm.transform_dataset_in_memory()
 
@@ -282,13 +282,13 @@ class TestDatasetManager:
     @staticmethod
     def test_skip_post_parse_qc(manager_class):
         dm = manager_class(skip_post_parse_qc=True)
-        dm.get_prod_update_ds = unittest.mock.Mock()
+        dm._get_prod_update_ds = unittest.mock.Mock()
         dm.get_original_ds = unittest.mock.Mock()
         dm.input_files = unittest.mock.Mock()
         dm.get_random_coords = unittest.mock.Mock()
         dm.post_parse_quality_check()
 
-        dm.get_prod_update_ds.assert_not_called()
+        dm._get_prod_update_ds.assert_not_called()
         dm.input_files.assert_not_called()
         dm.get_original_ds.assert_not_called()
         dm.get_random_coords.assert_not_called()

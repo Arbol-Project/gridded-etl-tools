@@ -46,7 +46,7 @@ def assign_crs_to_dataset(dataset: xr.Dataset, cf_dict: dict[str, Any]) -> xr.Da
 def drop_coord_encoding(dataset: xr.Dataset, coords: list[str]):
     """
     Remove various encodings from the coords in a dataset. This happens automatically
-    for dimensions due to metadata.Metadata.remove_unwanted_fields, but this function
+    for dimensions due to metadata.Metadata._remove_unwanted_fields, but this function
     must be applied in postprocess to coords that aren't dims
 
     Parameters

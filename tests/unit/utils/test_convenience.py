@@ -94,7 +94,7 @@ class TestConvenience:
     def test_zarr_json_path(manager_class):
         dm = manager_class()
         dm._root_directory = pathlib.Path("/the/root")
-        assert dm.zarr_json_path() == pathlib.Path("/the/root/datasets/merged_zarr_jsons/DummyManager_zarr.json")
+        assert dm._zarr_json_path() == pathlib.Path("/the/root/datasets/merged_zarr_jsons/DummyManager_zarr.json")
 
     @staticmethod
     def test_key(manager_class):
@@ -145,14 +145,14 @@ class TestConvenience:
         dm = manager_class()
         dm._root_directory = pathlib.Path("/theroot")
         date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/20100512")
+        assert dm._get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/20100512")
 
     @staticmethod
     def test_get_folder_path_from_date_omit_root(manager_class):
         dm = manager_class()
         dm._root_directory = pathlib.Path("/theroot")
         date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date, omit_root=True) == pathlib.Path("20100512")
+        assert dm._get_folder_path_from_date(date, omit_root=True) == pathlib.Path("20100512")
 
     @staticmethod
     def test_get_folder_path_from_date_hourly(manager_class):
@@ -160,7 +160,7 @@ class TestConvenience:
         dm._root_directory = pathlib.Path("/theroot")
         dm.time_resolution = dm.SPAN_HOURLY
         date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/2010051202")
+        assert dm._get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/2010051202")
 
     @staticmethod
     def test_output_path(manager_class):
@@ -267,7 +267,7 @@ class TestConvenience:
         )
 
     @staticmethod
-    def test_get_date_range_from_file(mocker, manager_class, fake_original_dataset):
+    def testget_date_range_from_file(mocker, manager_class, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.convenience.xr")
         xr.open_dataset.return_value = fake_original_dataset
 
@@ -376,7 +376,7 @@ class TestConvenience:
     @staticmethod
     def test_json_to_bytes(manager_class):
         dm = manager_class()
-        encoded = dm.json_to_bytes({"foo": "bar"})
+        encoded = dm._json_to_bytes({"foo": "bar"})
         encoded.seek(0)  # rewind
         decoded = json.load(encoded)
         assert decoded == {"foo": "bar"}

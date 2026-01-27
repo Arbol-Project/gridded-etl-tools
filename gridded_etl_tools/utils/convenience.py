@@ -41,7 +41,7 @@ class Convenience(Attributes):
 
     # NAMES
 
-    def zarr_json_path(self) -> pathlib.Path:
+    def _zarr_json_path(self) -> pathlib.Path:
         """
         A path to the local final Zarr
 
@@ -114,7 +114,7 @@ class Convenience(Attributes):
             if not entry.name.startswith(".") and not entry.name.endswith(".idx") and entry.is_file():
                 yield pathlib.Path(root / entry.name)
 
-    def get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
+    def _get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
         """
         Return a folder path inside `self.output_root` with the folder name based on `self.temporal_resolution()`
         and the passed `datetime`. If `omit_root` is set, remove `self.output_root` from the path.
@@ -454,7 +454,7 @@ class Convenience(Attributes):
             round(float(dataset.latitude.values.max()), self.bbox_rounding_value),
         )
 
-    def json_to_bytes(self, obj: dict) -> bytes:
+    def _json_to_bytes(self, obj: dict) -> bytes:
         """
         Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata over HTTP
 

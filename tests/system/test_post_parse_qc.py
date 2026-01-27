@@ -85,12 +85,12 @@ def test_post_parse_quality_check(mocker, manager_class, caplog, initial_input_p
     dm.post_parse_quality_check(checks=5)
     dm.post_parse_quality_check(checks=5)
     # Rejects misaligned values
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_bad_data)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_bad_data)
     with pytest.raises(ValueError):
         dm.post_parse_quality_check(checks=5)
     # Skipping the QC
     dm.skip_post_parse_qc = True
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_normal)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_normal)
     dm.post_parse_quality_check(checks=5)
     assert "Skipping post-parse quality check" in caplog.text
 
@@ -104,7 +104,7 @@ def test_post_parse_quality_check_single_datetime(mocker, manager_class, caplog,
     mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path)
     # Runs without issue for original datasets of length 1 in the time dimension
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_single_time)
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_single_time)
     dm.post_parse_quality_check(checks=5)
 
 
@@ -121,7 +121,7 @@ def test_raw_file_to_dataset_local(mocker, manager_class, initial_input_path, ap
     dm.protocol = "file"
     dm.input_files = Mock(return_value=nc4_input_files(dm))
     input_files = nc4_input_files(dm)
-    assert dm.raw_file_to_dataset(random.choice(input_files))
+    assert dm._raw_file_to_dataset(random.choice(input_files))
 
 
 # NOTE disabled due to regression in fsspec capabilities
@@ -137,7 +137,7 @@ def test_raw_file_to_dataset_local(mocker, manager_class, initial_input_path, ap
 #     # Remote data
 #     dm.protocol = "s3"
 #     input_files = json_input_files(dm)
-#     assert dm.raw_file_to_dataset(random.choice(input_files))
+#     assert dm._raw_file_to_dataset(random.choice(input_files))
 
 
 def test_reformat_orig_ds_no_time_dim(mocker, manager_class, initial_input_path, qc_input_path):
@@ -151,8 +151,8 @@ def test_reformat_orig_ds_no_time_dim(mocker, manager_class, initial_input_path,
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_dim)
-    raw_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_no_time_dim)
+    raw_ds = dm._raw_file_to_dataset(random.choice(original_files))
     orig_ds = dm.reformat_orig_ds(raw_ds, "irrelevant/path")
     assert "time" in orig_ds.dims
 
@@ -168,8 +168,8 @@ def test_reformat_orig_ds_no_time_at_all(mocker, manager_class, initial_input_pa
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_at_all)
-    raw_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_no_time_at_all)
+    raw_ds = dm._raw_file_to_dataset(random.choice(original_files))
     orig_ds = dm.reformat_orig_ds(raw_ds, "precip_1700-01-01.nc4")
     assert "time" in orig_ds
     assert orig_ds["time"].values[0] == np.datetime64("1700-01-01")
@@ -186,8 +186,8 @@ def test_reformat_orig_ds_time_dim_not_in_data_var(mocker, manager_class, initia
     dm = run_etl(manager_class, input_path=qc_input_path, use_local_zarr_jsons=False)
     original_files = list(dm.input_files())
     # Populates time dimension from filename if missing dataset
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_no_time_dim_in_data_var)
-    raw_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_no_time_dim_in_data_var)
+    raw_ds = dm._raw_file_to_dataset(random.choice(original_files))
     orig_ds = dm.reformat_orig_ds(raw_ds, "irrelevant/path")
     assert "time" in orig_ds[dm.data_var].dims
 
@@ -201,22 +201,22 @@ def test_check_values(mocker, manager_class, initial_input_path, appended_input_
     mocker.patch("gridded_etl_tools.utils.attributes.Attributes.open_dataset_kwargs", {"engine": "h5netcdf"})
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False)
     dm = run_etl(manager_class, input_path=appended_input_path, use_local_zarr_jsons=False)
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_normal)
-    prod_ds = dm.get_prod_update_ds()
-    original_files = list(dm.filter_search_space(prod_ds))
-    orig_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_normal)
+    prod_ds = dm._get_prod_update_ds()
+    original_files = list(dm._filter_search_space(prod_ds))
+    orig_ds = dm._raw_file_to_dataset(random.choice(original_files))
 
     # pass if values match
-    dm.check_written_value(orig_ds, prod_ds)
+    dm._check_written_value(orig_ds, prod_ds)
 
     # raise ValueError if one dataset doesn't match the other
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_random)
-    orig_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_random)
+    orig_ds = dm._raw_file_to_dataset(random.choice(original_files))
     with pytest.raises(ValueError):
-        dm.check_written_value(orig_ds, prod_ds)
+        dm._check_written_value(orig_ds, prod_ds)
 
     # raise ValueError if one dataset is all NaNs
-    mocker.patch("gridded_etl_tools.utils.publish.Publish.raw_file_to_dataset", original_ds_null)
-    orig_ds = dm.raw_file_to_dataset(random.choice(original_files))
+    mocker.patch("gridded_etl_tools.utils.publish.Publish._raw_file_to_dataset", original_ds_null)
+    orig_ds = dm._raw_file_to_dataset(random.choice(original_files))
     with pytest.raises(ValueError):
-        dm.check_written_value(orig_ds, prod_ds)
+        dm._check_written_value(orig_ds, prod_ds)
