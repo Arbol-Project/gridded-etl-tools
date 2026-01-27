@@ -37,13 +37,13 @@ class CHIRPS(DatasetManager):
         self.standard_dims = ["latitude", "longitude", "time"]
 
     @property
-    def static_metadata(self):
+    def initial_metadata(self):
         """
         Dict containing static fields in the metadata. These will be populated into STAC metadata and Zarr metadata.
         Fields that are static should be manually specified here. Fields that change per child class should be defined
         as properties or class methods under the relevant child class
         """
-        static_metadata = {
+        initial_metadata = {
             "coordinate reference system": "EPSG:4326",
             "update cadence": self.update_cadence,
             "temporal resolution": str(self.time_resolution),
@@ -83,7 +83,7 @@ class CHIRPS(DatasetManager):
             "expected_nan_frequency": self.expected_nan_frequency,
         }
 
-        return static_metadata
+        return initial_metadata
 
     organization = "My Organization"
     dataset_name = "chirps"
@@ -289,9 +289,11 @@ class CHIRPSFinal(CHIRPS, ABC):
     def update_cadence(self) -> str:
         return "monthly"
 
-    def populate_metadata(self):
-        super().populate_metadata()
-        self.metadata["revision"] = "final"
+    @property
+    def initial_metadata(self):
+        metadata = super().initial_metadata
+        metadata["revision"] = "final"
+        return metadata
 
     final_lag_in_days = 30
 
@@ -387,9 +389,11 @@ class CHIRPSPrelim05(CHIRPS):
     def update_cadence(self) -> str:
         return "weekly"
 
-    def populate_metadata(self):
-        super().populate_metadata()
-        self.metadata["revision"] = "preliminary"
+    @property
+    def initial_metadata(self):
+        metadata = super().initial_metadata
+        metadata["revision"] = "preliminary"
+        return metadata
 
     final_lag_in_days = 30
 
