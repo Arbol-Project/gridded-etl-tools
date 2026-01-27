@@ -93,7 +93,7 @@
 #     publish_dataset = manager.transform_dataset_in_memory()
 #     manager.parse(publish_dataset)
 #     manager.publish_metadata()
-#     manager.zarr_json_path().unlink(missing_ok=True)
+#     manager._zarr_json_path().unlink(missing_ok=True)
 #     # Open xarray.open_zarr and compare two data points with
 #     # the same data points in a local GRIB file
 #     generated_dataset = manager.store.dataset()

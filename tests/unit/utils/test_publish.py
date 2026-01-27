@@ -1800,9 +1800,9 @@ def test_insert_into_dataset_non_dry_run(manager_class):
     dm = manager_class()
     dm.dry_run = False
     dm.store = mock.Mock(spec=store.StoreInterface)
-    dm.prep_update_dataset = mock.Mock()
-    dm.calculate_update_time_ranges = mock.Mock()
-    dm.calculate_update_time_ranges.return_value = (
+    dm._prep_update_dataset = mock.Mock()
+    dm._calculate_update_time_ranges = mock.Mock()
+    dm._calculate_update_time_ranges.return_value = (
         (("2021-10-01", "2021-10-05"),),
         ((0, 5),),
     )
@@ -1813,14 +1813,14 @@ def test_insert_into_dataset_non_dry_run(manager_class):
     update_dataset = object()
     insert_times = object()
 
-    insert_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+    insert_dataset = dm._prep_update_dataset.return_value = mock.MagicMock()
     insert_dataset.attrs = {}
     insert_dataset.__getitem__.return_value.values = [1, 2, 3, 4, 5]
 
     slice_mock = mock.Mock()
     insert_dataset.sel.return_value = slice_mock
 
-    dm.insert_into_dataset(original_dataset, update_dataset, insert_times)
+    dm._insert_into_dataset(original_dataset, update_dataset, insert_times)
 
     # Check that info was called with the expected log message
     dm.info.assert_any_call("Inserted records for 5 times from 1 date range(s) to original zarr")
@@ -1831,21 +1831,21 @@ def test_append_to_dataset_non_dry_run(manager_class):
     dm = manager_class()
     dm.dry_run = False
     dm.store = mock.Mock(spec=store.StoreInterface)
-    dm.prep_update_dataset = mock.Mock()
+    dm._prep_update_dataset = mock.Mock()
     dm.to_zarr = mock.Mock()
     dm.info = mock.Mock()
 
     update_dataset = object()
     append_times = object()
 
-    append_dataset = dm.prep_update_dataset.return_value = mock.MagicMock()
+    append_dataset = dm._prep_update_dataset.return_value = mock.MagicMock()
     append_dataset.attrs = {}
     # Mock the time dimension values
     time_values_mock = mock.Mock()
     time_values_mock.values = [1, 2, 3, 4, 5, 6, 7]
     append_dataset.__getitem__.return_value = time_values_mock
 
-    dm.append_to_dataset(update_dataset, append_times)
+    dm._append_to_dataset(update_dataset, append_times)
 
     # Check that info was called with the expected log message
     dm.info.assert_any_call("Appended records for 7 datetimes to original zarr")
@@ -1879,7 +1879,7 @@ def test_rechunk_append_dataset(manager_class):
     )
     append_dataset = xr.Dataset({"data": data})
 
-    result = dm.rechunk_append_dataset(append_dataset)
+    result = dm._rechunk_append_dataset(append_dataset)
 
     # Check that the dataset was rechunked
     assert result.chunks is not None
@@ -1909,7 +1909,7 @@ def test_rechunk_append_dataset_no_existing(manager_class):
     )
     append_dataset = xr.Dataset({"data": data})
 
-    result = dm.rechunk_append_dataset(append_dataset)
+    result = dm._rechunk_append_dataset(append_dataset)
 
     # When no existing dataset, existing_final_chunk_length should be 0
     assert result.chunks is not None

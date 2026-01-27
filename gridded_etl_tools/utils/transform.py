@@ -53,7 +53,7 @@ class Transform(Metadata, Convenience):
         Parameters
         ----------
         force_overwrite : bool, optional
-            Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
+            Switch to use (or not) an existing MultiZarr JSON at `DatasetManager._zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
         file_filters
             A list of strings used to further filter down input files for kerchunkifying.
@@ -61,7 +61,7 @@ class Transform(Metadata, Convenience):
             Defaults to None.
         outfile_path
             A custom string path for the final, merged Zarr JSON.
-            Defaults to None, in which case Zarr JSONs are output to self.zarr_json_path.
+            Defaults to None, in which case Zarr JSONs are output to self._zarr_json_path.
         """
         self._zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.

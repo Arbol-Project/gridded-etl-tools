@@ -227,7 +227,7 @@ class CHIRPS(DatasetManager):
 
         self.info("Finished preparing input files")
 
-    def remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _remove_unwanted_fields(self, dataset: xr.Dataset) -> xr.Dataset:
         """
         Function to append to or update key metadata information to the attributes and encoding of the output Zarr.
         Extends existing class method to create attributes or encoding specific to this dataset.
@@ -242,7 +242,7 @@ class CHIRPS(DatasetManager):
         dataset: xarray.Dataset dataset
             The dataset prepared for parsing, after removing unwanted fields specific to the dataset
         """
-        super().remove_unwanted_fields(dataset)
+        super()._remove_unwanted_fields(dataset)
         for variable in dataset.variables:
             dataset[variable].encoding["_FillValue"] = self.missing_value
         # Remove extraneous data from the data variable's attributes

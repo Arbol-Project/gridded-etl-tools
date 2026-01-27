@@ -423,7 +423,7 @@ class DatasetManager(Logging, Publish, ABC):
     def transform_dataset_in_memory(self) -> xr.Dataset:
         """
         Get an `xr.Dataset` that can be passed to the appropriate writing method when writing a new Zarr. Read the
-        virtual Zarr JSON at the path returned by `Creation.zarr_json_path` and *lazily* normalize the axes,
+        virtual Zarr JSON at the path returned by `Creation._zarr_json_path` and *lazily* normalize the axes,
         re-chunk the dataset according to this object's chunking parameters,
         and add custom metadata defined by this class.
 

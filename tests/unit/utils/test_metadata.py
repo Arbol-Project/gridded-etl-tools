@@ -987,20 +987,20 @@ class TestMetadata:
         }
 
         md = manager_class()
-        md.publish_stac = mock.Mock()
+        md._publish_stac = mock.Mock()
         md.store = mock.Mock(spec=store.StoreInterface)
         # First call returns collection, second call raises KeyError (no item found)
-        md.retrieve_stac = mock.Mock(
+        md._retrieve_stac = mock.Mock(
             side_effect=[(stac_collection, "/path/to/stac/collection"), KeyError("No item found")]
         )
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
+        md._get_href = mock.Mock(return_value="/path/to/new/item")
 
-        md.register_stac_item(stac_item)
+        md._register_stac_item(stac_item)
 
-        # Should have called get_href to generate a new item href
-        md.get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
-        # publish_stac should be called twice: once for item, once for collection
-        assert md.publish_stac.call_count == 2
+        # Should have called _get_href to generate a new item href
+        md._get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        # _publish_stac should be called twice: once for item, once for collection
+        assert md._publish_stac.call_count == 2
 
     @staticmethod
     def test_register_stac_item_no_item_in_collection(manager_class):
@@ -1022,19 +1022,19 @@ class TestMetadata:
         }
 
         md = manager_class()
-        md.publish_stac = mock.Mock()
+        md._publish_stac = mock.Mock()
         md.store = mock.Mock(spec=store.StoreInterface)
-        md.retrieve_stac = mock.Mock(
+        md._retrieve_stac = mock.Mock(
             side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
         )
-        md.get_href = mock.Mock(return_value="/path/to/new/item")
+        md._get_href = mock.Mock(return_value="/path/to/new/item")
 
-        md.register_stac_item(stac_item)
+        md._register_stac_item(stac_item)
 
-        # publish_stac should be called twice: once for item, once for updated collection
-        assert md.publish_stac.call_count == 2
+        # _publish_stac should be called twice: once for item, once for updated collection
+        assert md._publish_stac.call_count == 2
         # Check that the collection was updated with the new item link
-        collection_call = md.publish_stac.call_args_list[1]
+        collection_call = md._publish_stac.call_args_list[1]
         assert collection_call[0][0] == "Vintage Guitars"
         updated_collection = collection_call[0][1]
         item_links = [link for link in updated_collection["links"] if link.get("rel") == "item"]
@@ -1144,7 +1144,7 @@ class TestMetadata:
         dataset["data"].encoding["filters"] = ["some_filter"]
 
         md = manager_class()
-        md.remove_unwanted_fields(dataset)
+        md._remove_unwanted_fields(dataset)
 
         # Check spatial dims have chunks/preferred_chunks removed from attrs
         assert "chunks" not in dataset["latitude"].attrs

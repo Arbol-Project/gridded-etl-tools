@@ -282,13 +282,13 @@ class TestDatasetManager:
     @staticmethod
     def test_skip_post_parse_qc(manager_class):
         dm = manager_class(skip_post_parse_qc=True)
-        dm.get_prod_update_ds = unittest.mock.Mock()
+        dm._get_prod_update_ds = unittest.mock.Mock()
         dm.get_original_ds = unittest.mock.Mock()
         dm.input_files = unittest.mock.Mock()
         dm.get_random_coords = unittest.mock.Mock()
         dm.post_parse_quality_check()
 
-        dm.get_prod_update_ds.assert_not_called()
+        dm._get_prod_update_ds.assert_not_called()
         dm.input_files.assert_not_called()
         dm.get_original_ds.assert_not_called()
         dm.get_random_coords.assert_not_called()
