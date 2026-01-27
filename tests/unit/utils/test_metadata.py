@@ -973,6 +973,75 @@ class TestMetadata:
         md._get_href.assert_not_called()
 
     @staticmethod
+    def test_register_stac_item_no_previous_item(manager_class):
+        """Test register_stac_item when no previous STAC Item is found (KeyError/TimeoutError/FileNotFoundError)"""
+        stac_collection = {
+            "title": "War and Peace",
+            "links": [],
+        }
+        stac_item = {
+            "Look": "I'm",
+            "a": "stac item",
+            "links": [],
+            "assets": {"zmetadata": {"title": "Asset and Peace"}},
+        }
+
+        md = manager_class()
+        md.publish_stac = mock.Mock()
+        md.store = mock.Mock(spec=store.StoreInterface)
+        # First call returns collection, second call raises KeyError (no item found)
+        md.retrieve_stac = mock.Mock(
+            side_effect=[(stac_collection, "/path/to/stac/collection"), KeyError("No item found")]
+        )
+        md.get_href = mock.Mock(return_value="/path/to/new/item")
+
+        md.register_stac_item(stac_item)
+
+        # Should have called get_href to generate a new item href
+        md.get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        # publish_stac should be called twice: once for item, once for collection
+        assert md.publish_stac.call_count == 2
+
+    @staticmethod
+    def test_register_stac_item_no_item_in_collection(manager_class):
+        """Test register_stac_item when STAC Item exists but is not linked in collection"""
+        stac_collection = {
+            "title": "War and Peace",
+            "links": [{"rel": "other", "title": "Something Else"}],  # No matching item link
+        }
+        old_stac_item = {
+            "Look": "I'm",
+            "the old": "stac item",
+            "assets": {"zmetadata": {"title": "Different Asset"}},  # Different title
+        }
+        stac_item = {
+            "Look": "I'm",
+            "a": "stac item",
+            "links": [],
+            "assets": {"zmetadata": {"title": "Asset and Peace"}},
+        }
+
+        md = manager_class()
+        md.publish_stac = mock.Mock()
+        md.store = mock.Mock(spec=store.StoreInterface)
+        md.retrieve_stac = mock.Mock(
+            side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
+        )
+        md.get_href = mock.Mock(return_value="/path/to/new/item")
+
+        md.register_stac_item(stac_item)
+
+        # publish_stac should be called twice: once for item, once for updated collection
+        assert md.publish_stac.call_count == 2
+        # Check that the collection was updated with the new item link
+        collection_call = md.publish_stac.call_args_list[1]
+        assert collection_call[0][0] == "Vintage Guitars"
+        updated_collection = collection_call[0][1]
+        item_links = [link for link in updated_collection["links"] if link.get("rel") == "item"]
+        assert len(item_links) == 1
+        assert item_links[0]["title"] == "Asset and Peace"
+
+    @staticmethod
     def test_update_stac_collection(manager_class, fake_original_dataset):
         md = manager_class()
         md._publish_stac = mock.Mock()
@@ -1054,6 +1123,42 @@ class TestMetadata:
         md._remove_unwanted_fields.assert_called_once_with(renamed)
         md._set_initial_compression.assert_called_once_with(renamed)
         md._encode_ds.assert_called_once_with(renamed)
+
+    @staticmethod
+    def test_remove_unwanted_fields(manager_class, fake_original_dataset):
+        """Test that remove_unwanted_fields removes chunks, preferred_chunks, _FillValue, missing_value, and filters"""
+        dataset = fake_original_dataset
+
+        # Add unwanted attributes/encodings to spatial dims
+        dataset["latitude"].attrs["chunks"] = (4,)
+        dataset["latitude"].attrs["preferred_chunks"] = {"latitude": 4}
+        dataset["latitude"].encoding["_FillValue"] = -999
+        dataset["latitude"].encoding["missing_value"] = -999
+
+        dataset["longitude"].attrs["chunks"] = (4,)
+        dataset["longitude"].attrs["preferred_chunks"] = {"longitude": 4}
+        dataset["longitude"].encoding["_FillValue"] = -999
+        dataset["longitude"].encoding["missing_value"] = -999
+
+        # Add filters to data variable
+        dataset["data"].encoding["filters"] = ["some_filter"]
+
+        md = manager_class()
+        md.remove_unwanted_fields(dataset)
+
+        # Check spatial dims have chunks/preferred_chunks removed from attrs
+        assert "chunks" not in dataset["latitude"].attrs
+        assert "preferred_chunks" not in dataset["latitude"].attrs
+        assert "_FillValue" not in dataset["latitude"].encoding
+        assert "missing_value" not in dataset["latitude"].encoding
+
+        assert "chunks" not in dataset["longitude"].attrs
+        assert "preferred_chunks" not in dataset["longitude"].attrs
+        assert "_FillValue" not in dataset["longitude"].encoding
+        assert "missing_value" not in dataset["longitude"].encoding
+
+        # Check data variable has filters removed
+        assert "filters" not in dataset["data"].encoding
 
     @staticmethod
     def test_rename_data_variable(manager_class):

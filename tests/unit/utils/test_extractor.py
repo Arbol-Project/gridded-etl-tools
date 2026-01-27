@@ -149,6 +149,25 @@ class TestHTTPExtractor:
             assert extractor.retries == 5
             assert extractor.backoff_factor == 0.5
 
+    @staticmethod
+    def test_get_failure_exception(manager_class):
+        """Test that _get_failure_exception returns a RequestException with the correct message"""
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            exception = extractor._get_failure_exception(attempts=5, identifier="test_file.html")
+            assert isinstance(exception, requests.exceptions.RequestException)
+            assert "Too many (5) failed download attempts" in str(exception)
+            assert "test_file.html" in str(exception)
+
+    @staticmethod
+    def test_calculate_retry_delay(manager_class):
+        """Test that _calculate_retry_delay returns correct exponential backoff values"""
+        with HTTPExtractor(manager_class(), 4, 3, 2.0) as extractor:
+            # Test exponential backoff: backoff_factor * (2 ** (attempt - 1))
+            assert extractor._calculate_retry_delay(1) == 2.0  # 2 * (2 ** 0) = 2
+            assert extractor._calculate_retry_delay(2) == 4.0  # 2 * (2 ** 1) = 4
+            assert extractor._calculate_retry_delay(3) == 8.0  # 2 * (2 ** 2) = 8
+            assert extractor._calculate_retry_delay(4) == 16.0  # 2 * (2 ** 3) = 16
+
     # Test a request that gets the mocked responses. This will write a file to a temporary location using pytest's
     # `tmp_path` fixture.
     @staticmethod
@@ -515,6 +534,31 @@ class TestS3ExtractorDownload:
 
         assert result is True
         assert mock_filesystem.download.call_count == 2
+
+    @staticmethod
+    def test_s3_download_request_with_local_path(manager_class, monkeypatch, tmp_path):
+        """Test that S3ExtractorDownload.request works with local_path parameter instead of local_file_path"""
+        mock_s3fs_module = Mock()
+        mock_filesystem = Mock()
+        mock_s3fs_module.S3FileSystem.return_value = mock_filesystem
+
+        monkeypatch.setattr("s3fs.S3FileSystem", mock_s3fs_module.S3FileSystem)
+
+        extractor = S3ExtractorDownload(manager_class())
+
+        rfp = "s3://bucket/sand/castle/castle1.grib"
+        local_dir = tmp_path / "downloads"
+        local_dir.mkdir()
+
+        result = extractor.request(rfp, local_path=local_dir)
+
+        assert result is True
+        # Verify download was called with the resolved path
+        mock_filesystem.download.assert_called_once()
+        call_args = mock_filesystem.download.call_args
+        assert call_args[0][0] == rfp
+        # The local path should include the filename from the remote path
+        assert str(call_args[0][1]).endswith("castle1.grib")
 
 
 class TestS3ExtractorBase:

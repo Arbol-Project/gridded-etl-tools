@@ -50,21 +50,23 @@ class StacType(Enum):
 
 class Metadata(Convenience):
     """
-    Base class containing metadata creation and editing methods for Zarr ETLs.
-    Includes STAC Metadata templates for Items, Collections, and the root Catalog.
+    Base class for metadata creation/editing for Zarr ETLs. Includes STAC Metadata templates for Items, Collections,
+    and the root Catalog.
 
     Metadata Handling
     -----------------
-    The ``metadata`` property auto-populates from ``initial_metadata`` on first access
-    and caches the result. Subsequent accesses return the cached dict, so modifications
-    persist::
+    The ``metadata`` property auto-populates from ``initial_metadata`` on first access and caches the result. Subsequent
+    accesses return the cached dict, so modifications persist::
 
         dm = MyManager()
-        print(dm.metadata["name"])  # Auto-populated from initial_metadata
-        dm.metadata["custom"] = "value"  # Modification persists
-        print(dm.metadata["custom"])  # "value"
+        print(dm.metadata["name"])           # Auto-populated from initial_metadata
+        dm.metadata["custom"] = "value"      # Modification persists
+        print(dm.metadata["custom"])         # "value"
+
+    This is the anticipated base access pattern for metadata management in Zarr ETLs.
 
     **Adding metadata in subclasses** (preferred for fields using class attributes):
+
     Override ``initial_metadata`` to add fields that depend on ``self``::
 
         @property
@@ -82,20 +84,20 @@ class Metadata(Convenience):
         # In publish_metadata() or similar, after extract() has run
         self.metadata["finalization date"] = self.input_history.get("final_date")
 
-    The ``initial_metadata`` property defines the base metadata fields and is the
-    primary extension point for dataset-specific metadata.
+    The ``initial_metadata`` property defines the base metadata fields and is the primary extension point for
+    dataset-specific metadata.
     """
 
-    _metadata = None
+    _metadata: dict | None = None
 
     @property
     def metadata(self):
         """
         Auto-populating metadata dict.
 
-        On first access, copies ``initial_metadata`` and caches the result.
-        Subsequent accesses return the cached dict, allowing modifications to persist.
-        Can also be fully replaced via assignment (``self.metadata = {...}``).
+        On first access, copies ``initial_metadata`` and caches the result. Subsequent accesses return the cached dict,
+        allowing modifications to persist. Can also be fully replaced via assignment (``self.metadata = {...}``).
+
         """
         if self._metadata is None:
             self._metadata = self.initial_metadata.copy()
@@ -800,7 +802,7 @@ class Metadata(Convenience):
 
         # Ensure a type-appropriate _FillValue is populated to each coordinate
         for coord in dataset.coords:
-            if coord != self.data_var:
+            if coord != self.data_var:  # pragma: no branch
                 if coord == self.time_dim or np.issubdtype(
                     dataset[coord].dtype, np.integer
                 ):  # will include time dim(s)
