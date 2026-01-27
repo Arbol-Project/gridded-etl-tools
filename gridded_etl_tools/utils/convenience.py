@@ -293,7 +293,7 @@ class Convenience(Attributes):
             end = self.numpydate_to_py(dataset[self.time_dim][-1].values)
         return start, end
 
-    def _get_date_range_from_file(
+    def get_date_range_from_file(
         self, path: pathlib.Path, backend_kwargs: dict | None = None, **kwargs
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
@@ -372,7 +372,7 @@ class Convenience(Attributes):
             The start and end date of the newest local file
 
         """
-        return self._get_date_range_from_file(list(self.input_files())[-1], **kwargs)
+        return self.get_date_range_from_file(list(self.input_files())[-1], **kwargs)
 
     @property
     def next_date(self) -> datetime.datetime:

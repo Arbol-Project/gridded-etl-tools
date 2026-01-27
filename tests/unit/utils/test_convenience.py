@@ -267,13 +267,13 @@ class TestConvenience:
         )
 
     @staticmethod
-    def test_get_date_range_from_file(mocker, manager_class, fake_original_dataset):
+    def testget_date_range_from_file(mocker, manager_class, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.convenience.xr")
         xr.open_dataset.return_value = fake_original_dataset
 
         dm = manager_class()
         kwargs = {"engine": "Rolls Royce"}
-        assert dm._get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}, **kwargs) == (
+        assert dm.get_date_range_from_file("some/arbitrary/path", {"foo": "bar"}, **kwargs) == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
