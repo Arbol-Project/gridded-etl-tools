@@ -115,11 +115,11 @@ class Publish(Transform):
         if not current_zarr:
             raise RuntimeError("Attempting to write STAC metadata, but no zarr written yet")
 
-        if not hasattr(self, "metadata"):
-            # This will occur when user is only updating metadata and has not parsed
-            self.populate_metadata()
+        # Access self.metadata to ensure it's auto-populated from initial_metadata
+        # This is a no-op if metadata has already been accessed/populated
+        _ = self.metadata
         if not hasattr(self, "time_dims"):
-            # ditto above; in some cases metadata will be populated but not time_dims
+            # In some cases metadata will be populated but not time_dims
             self.set_key_dims()
 
         # This will do nothing if catalog already exists

@@ -220,12 +220,10 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_data_on_disk(manager_class):
         dm = manager_class()
-        dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
         dm.transform_data_on_disk()
 
-        dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_called_once_with()
         dm.create_zarr_json.assert_called_once_with()
 
@@ -274,12 +272,10 @@ class TestDatasetManager:
     @staticmethod
     def test_transform_data_on_disk_skip_prepare_input_files(manager_class):
         dm = manager_class(skip_prepare_input_files=True)
-        dm.populate_metadata = unittest.mock.Mock()
         dm.prepare_input_files = unittest.mock.Mock()
         dm.create_zarr_json = unittest.mock.Mock()
         dm.transform_data_on_disk()
 
-        dm.populate_metadata.assert_called_once_with()
         dm.prepare_input_files.assert_not_called()
         dm.create_zarr_json.assert_called_once_with()
 
@@ -367,3 +363,49 @@ class TestDatasetManager:
         # Test invalid time span
         with pytest.raises(ValueError):
             manager_class.from_time_span_string("invalid_span")
+
+    @staticmethod
+    def test_init_logging_with_freedesktop_os_release_pretty_name(mocker, manager_class):
+        """Test init_logging when freedesktop_os_release returns PRETTY_NAME"""
+        mocker.patch("gridded_etl_tools.dataset_manager.psutil.virtual_memory")
+        dataset_manager.psutil.virtual_memory.return_value.total = 64_000_000_000
+        mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
+        dataset_manager.multiprocessing.cpu_count.return_value = 100
+
+        mock_release = mocker.patch("platform.freedesktop_os_release")
+        mock_release.return_value = {"PRETTY_NAME": "Ubuntu 22.04.1 LTS"}
+
+        dm = manager_class()  # noqa: F841
+
+        # Verify the logging was called (via dm.info being called)
+        mock_release.assert_called_once()
+
+    @staticmethod
+    def test_init_logging_with_freedesktop_os_release_name_and_version(mocker, manager_class):
+        """Test init_logging when freedesktop_os_release returns NAME and VERSION but not PRETTY_NAME"""
+        mocker.patch("gridded_etl_tools.dataset_manager.psutil.virtual_memory")
+        dataset_manager.psutil.virtual_memory.return_value.total = 64_000_000_000
+        mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
+        dataset_manager.multiprocessing.cpu_count.return_value = 100
+
+        mock_release = mocker.patch("platform.freedesktop_os_release")
+        mock_release.return_value = {"NAME": "Ubuntu", "VERSION": "22.04"}
+
+        dm = manager_class()  # noqa: F841
+
+        mock_release.assert_called_once()
+
+    @staticmethod
+    def test_init_logging_with_freedesktop_os_release_empty(mocker, manager_class):
+        """Test init_logging when freedesktop_os_release returns empty dict"""
+        mocker.patch("gridded_etl_tools.dataset_manager.psutil.virtual_memory")
+        dataset_manager.psutil.virtual_memory.return_value.total = 64_000_000_000
+        mocker.patch("gridded_etl_tools.dataset_manager.multiprocessing.cpu_count")
+        dataset_manager.multiprocessing.cpu_count.return_value = 100
+
+        mock_release = mocker.patch("platform.freedesktop_os_release")
+        mock_release.return_value = {}
+
+        dm = manager_class()  # noqa: F841
+
+        mock_release.assert_called_once()

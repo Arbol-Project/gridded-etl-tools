@@ -1,6 +1,16 @@
 """
 Template classes for creating a new gridded climate data ETL.
 All filled fields are examples that can be replaced; all unfilled fields must be filled by the user.
+
+METADATA PATTERN:
+-----------------
+The base Metadata class provides a `initial_metadata` property that returns all common metadata fields
+from class attributes. Managers should:
+
+1. Define metadata as class attributes (preferred for static values)
+2. Override `initial_metadata` property only when dynamic values are needed
+
+See gridded_etl_tools/utils/metadata.py for the full list of metadata fields.
 """
 
 import datetime
@@ -8,11 +18,15 @@ import pathlib
 from abc import ABC
 
 from gridded_etl_tools.dataset_manager import DatasetManager
+from gridded_etl_tools.utils.time import TimeSpan
 
 
 class MyNewETL(DatasetManager, ABC):
     """
-    Base class for datasets from a provider. For example's sake assumes that such data are published in NetCDF format
+    Base class for datasets from a provider. For example's sake assumes that such data are published in NetCDF format.
+
+    Metadata attributes are defined as class attributes and automatically included in initial_metadata.
+    Override initial_metadata property only for truly dynamic values that depend on instance state.
     """
 
     def __init__(
@@ -28,111 +42,35 @@ class MyNewETL(DatasetManager, ABC):
         super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         self.standard_dims = ["latitude", "longitude", "time"]
 
-    @property
-    def static_metadata(self) -> dict:
-        """
-        dict containing static fields in the metadata
-        """
-        static_metadata = {
-            "coordinate reference system": "EPSG:4326",
-            "spatial resolution": self.spatial_resolution,
-            "spatial precision": 0.01,
-            "temporal resolution": str(self.temporal_resolution()),
-            "update cadence": "daily",
-            "provider url": "",
-            "data download url": "",
-            "publisher": "",
-            "title": "",
-            "provider description": "",
-            "dataset description": "",
-            "license": "",
-            "terms of service": "",
-            "name": self.name(),
-            "updated": str(datetime.datetime.now()),
-            "missing value": self.missing_value_indicator(),
-            "tags": self.tags,
-            "standard name": self.standard_name,
-            "long name": self.long_name,
-            "unit of measurement": self.unit_of_measurement,
-            "final lag in days": self.final_lag_in_days,
-            "preliminary lag in days": self.preliminary_lag_in_days,
-        }
+    # Dataset-level metadata attributes (override these in subclasses)
+    # These are automatically included in initial_metadata via the base Metadata class
+    coordinate_reference_system = "EPSG:4326"
+    spatial_precision = 0.01
+    update_cadence = "daily"
+    provider_url = ""  # Fill with provider URL
+    data_download_url = ""  # Fill with data download URL
+    publisher = ""  # Fill with publisher name
+    title = ""  # Fill with dataset title
+    provider_description = ""  # Fill with provider description
+    dataset_description = ""  # Fill with dataset description
+    license = ""  # Fill with license info
+    terms_of_service = ""  # Fill with terms of service
 
-        return static_metadata
-
-    @classmethod
-    def collection(cls) -> str:
-        """
-        Overall collection of data. Used for filling STAC Catalogue.
-        """
-        return "Dataset Collection"
-
-    @classmethod
-    def name(cls) -> str:
-        """The name of the dataset.
-
-        Used as a command-line trigger and to populate directory names, so whitespaces must be undesrcored or
-        hyphenated
-        """
-        return "dataset_name"
-
-    @classmethod
-    def temporal_resolution(cls) -> str:
-        """Incremental step size for temporal values in the dataset's time dimension"""
-        return cls.SPAN_DAILY
-
-    @property
-    def dataset_start_date(self) -> datetime.datetime:
-        """First date in dataset. Used to populate corresponding encoding and metadata."""
-        return datetime.datetime(1979, 1, 1, 0)
-
-    @classmethod
-    def missing_value_indicator(cls) -> str:
-        """
-        What value should be interpreted and masked as NA.
-
-        Failure to specify this correctly may result in values incorrectly entering calculations and/or coordinate
-        values being masked
-        """
-        return -9.96921e36  # replace
+    # Dataset identification
+    collection_name = "Dataset Collection"
+    dataset_name = "dataset_name"
+    time_resolution = TimeSpan.SPAN_DAILY
+    missing_value = -9.96921e36
+    dataset_start_date = datetime.datetime(1979, 1, 1, 0)
+    file_type = "NetCDF"
+    protocol = "file"
+    identical_dimensions = ["latitude", "longitude"]
+    concat_dimensions = ["time"]
+    final_lag_in_days = 2
 
     def relative_path(self) -> pathlib.Path:
         """Relative path in which to output raw files or a final zarr"""
-        return super().relative_path() / self.name()
-
-    @property
-    def file_type(cls) -> str:
-        """
-        File type of raw data. Used to trigger file format-appropriate functions and methods for Kerchunking and Xarray
-        operations.
-        """
-        return "NetCDF"
-
-    @classmethod
-    def remote_protocol(cls) -> str:
-        """
-        Remote protocol string for MultiZarrToZarr and Xarray to use when opening input files. 'File' for local, 's3'
-        for S3, etc. See fsspec docs for more details.
-        """
-        return "file"
-
-    @classmethod
-    def identical_dims(cls) -> str:
-        """
-        List of dimension(s) whose values are identical in all input datasets. This saves Kerchunk time by having it
-        read these dimensions only one time, from the first input file
-        """
-        return ["latitude", "longitude"]
-
-    @classmethod
-    def concat_dims(cls) -> str:
-        """
-        List of dimension(s) by which to concatenate input files' data variable(s) -- usually time, possibly with some
-        other relevant dimension
-        """
-        return ["time"]
-
-    final_lag_in_days = 2
+        return super().relative_path() / self.dataset_name
 
     def extract(
         self, rebuild: bool = False, date_range: list[datetime.datetime, datetime.datetime] = None, *args, **kwargs
@@ -273,12 +211,15 @@ class MyNewETL(DatasetManager, ABC):
 
 class MyNewETLPrecip(MyNewETL):
     """
-    Base class for precip sets
+    Base class for precip sets.
+    Note how class attributes are used instead of properties for static metadata values.
     """
 
-    @classmethod
-    def name(cls) -> str:
-        return f"{super().name()}_precip"
+    dataset_name = f"{MyNewETL.dataset_name}_precip"
+    tags = ["Precipitation"]
+    standard_name = "precipitation_amount"
+    long_name = "Precipitation"
+    unit_of_measurement = "mm"
 
     def relative_path(self) -> pathlib.Path:
         """
@@ -287,34 +228,17 @@ class MyNewETLPrecip(MyNewETL):
         """
         return super().relative_path() / "precip"
 
-    @property
-    def tags(self) -> list[str]:
-        """Tags for data to enable filtering"""
-        return ["Precipitation"]
-
-    @property
-    def standard_name(self) -> str:
-        """Short form name, as per the Climate and Forecasting Metadata Convention"""
-        return "precipitation_amount"
-
-    @property
-    def long_name(self) -> str:
-        """Long form name, as per the Climate and Forecasting Metadata Convention"""
-        return "Precipitation"
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return "mm"
-
 
 class MyNewETLTemp(MyNewETL, ABC):
     """
     Base class for gridded temperature data
     """
 
-    @classmethod
-    def name(cls) -> str:
-        return f"{super().name()}_temp"
+    dataset_name = f"{MyNewETL.dataset_name}_temp"
+    tags = ["Temperature"]
+    unit_of_measurement = "degC"
+    spatial_resolution = 0.5
+    final_lag_in_days = 2
 
     def relative_path(self) -> pathlib.Path:
         """
@@ -323,42 +247,16 @@ class MyNewETLTemp(MyNewETL, ABC):
         """
         return super().relative_path() / "temp"
 
-    @property
-    def tags(self) -> list[str]:
-        """Tags for data to enable filtering"""
-        return ["Temperature"]
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return "degC"
-
-    @property
-    def spatial_resolution(self) -> float:
-        return 0.5
-
-    final_lag_in_days = 2
-
 
 class MyNewETLTempMin(MyNewETLTemp):
     """
     Gridded minimum temperature data manager class
     """
 
-    @classmethod
-    def name(cls) -> str:
-        return f"{super().name()}_min"
+    dataset_name = f"{MyNewETLTemp.dataset_name}_min"
+    data_var = "tmin"
+    standard_name = "air_temperature"
+    long_name = "Daily Minimum Near-Surface Air Temperature"
 
     def relative_path(self) -> pathlib.Path:
         return super().relative_path() / "min"
-
-    data_var = "tmin"
-
-    @property
-    def standard_name(self) -> str:
-        """Short form name, as per the Climate and Forecasting Metadata Convention"""
-        return "air_temperature"
-
-    @property
-    def long_name(self) -> str:
-        """Long form name, as per the Climate and Forecasting Metadata Convention"""
-        return "Daily Minimum Near-Surface Air Temperature"

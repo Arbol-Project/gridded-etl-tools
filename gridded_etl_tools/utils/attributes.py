@@ -356,6 +356,78 @@ class Attributes(ABC):
     Flexible to accommodate the quirks of individual providers' publication practices.
     """
 
+    region: str | None = "global"
+    """
+    The region of the dataset.
+
+    Valid options include "global" and "regional".
+
+    Defaults to "global".
+
+    "global" indicates the dataset covers the entire globe.
+    "regional" indicates the dataset covers a specific region.
+    """
+
+    coordinate_reference_system: str | None = None
+    """
+    The coordinate reference system of the dataset, typically as an EPSG code (e.g., "EPSG:4326").
+    """
+
+    provider_url: str | None = None
+    """
+    URL for the data provider's website.
+    """
+
+    data_download_url: str | None = None
+    """
+    URL where the source data can be downloaded from.
+    """
+
+    publisher: str | None = None
+    """
+    Name of the organization that publishes the data.
+    """
+
+    title: str | None = None
+    """
+    Human-readable title for the dataset.
+    """
+
+    provider_description: str | None = None
+    """
+    Description of the data provider organization.
+    """
+
+    dataset_description: str | None = None
+    """
+    Description of the dataset itself, including its characteristics and use cases.
+    """
+
+    license: str | None = None
+    """
+    License under which the data is distributed (e.g., "CC BY 4.0", "Public Domain").
+    """
+
+    terms_of_service: str | None = None
+    """
+    Terms of service or usage restrictions for the data.
+    """
+
+    standard_name: str | None = None
+    """
+    CF convention standard name for the data variable.
+    """
+
+    long_name: str | None = None
+    """
+    Human-readable name for the data variable.
+    """
+
+    unit_of_measurement: str | None = None
+    """
+    Unit of measurement for the data variable (e.g., "K", "m", "mm").
+    """
+
 
 # Won't get called automatically, because Attributes isn't a subclass of itself
 Attributes.__init_subclass__()

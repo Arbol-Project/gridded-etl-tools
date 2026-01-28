@@ -198,6 +198,20 @@ class DummyManagerBase(dataset_manager.DatasetManager):
     encryption_key = None
     fill_value = ""
 
+    # Common metadata attributes for testing
+    coordinate_reference_system = "EPSG:4326"
+    spatial_precision = 0.00001
+    provider_url = "http://example.com/provider"
+    data_download_url = "http://example.com/download"
+    publisher = "Test Publisher"
+    title = "Test Dataset"
+    provider_description = "Test provider description"
+    dataset_description = "Test dataset description"
+    license = "Test License"
+    terms_of_service = "Test ToS"
+    standard_name = "test_var"
+    long_name = "Test Variable"
+
     def __init__(self, requested_dask_chunks=None, requested_zarr_chunks=None, set_key_dims=True, *args, **kwargs):
         if requested_dask_chunks is None:
             requested_dask_chunks = {}
@@ -205,7 +219,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         if requested_zarr_chunks is None:
             requested_zarr_chunks = {}
 
-        self._static_metadata = kwargs.pop("static_metadata", {})
+        self._extra_initial_metadata = kwargs.pop("initial_metadata", {})
         super().__init__(requested_dask_chunks, requested_zarr_chunks, *args, **kwargs)
         if set_key_dims:
             self.set_key_dims()
@@ -224,8 +238,10 @@ class DummyManagerBase(dataset_manager.DatasetManager):
         return datetime.datetime(1975, 7, 7, 0, 0, 0)
 
     @property
-    def static_metadata(self):
-        return self._static_metadata
+    def initial_metadata(self):
+        metadata = super().initial_metadata
+        metadata.update(self._extra_initial_metadata)
+        return metadata
 
 
 class DummyManager(DummyManagerBase):

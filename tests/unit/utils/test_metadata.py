@@ -51,7 +51,7 @@ class TestMetadata:
     def test_default_stac_collection(organized_manager_class):
         # TODO: Validate assumptions about already populated metadata
         dm = organized_manager_class(
-            static_metadata={
+            initial_metadata={
                 "coordinate reference system": "hyper euclidean",
                 "license": "to ill",
                 "provider description": "tall, awkward",
@@ -61,7 +61,7 @@ class TestMetadata:
                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
             }
         )
-        dm.populate_metadata()
+        _ = dm.metadata  # Access to trigger auto-population
         assert dm.default_stac_collection == {
             "id": "Vintage Guitars",
             "type": "Collection",
@@ -166,11 +166,107 @@ class TestMetadata:
         assert "compressors" not in dataset[dm.data_var].encoding
 
     @staticmethod
-    def test_populate_metadata(manager_class):
-        md = {"hi": "mom", "hello": "dad"}
-        dm = manager_class(static_metadata={"hi": "mom", "hello": "dad"})
-        dm.populate_metadata()
-        assert dm.metadata == md
+    def test_metadata_auto_population(manager_class):
+        """Test that self.metadata auto-populates from initial_metadata on first access"""
+        dm = manager_class(initial_metadata={"hi": "mom", "hello": "dad"})
+        # Accessing metadata should auto-populate from initial_metadata
+        # Extra metadata should be merged into base initial_metadata
+        assert dm.metadata["hi"] == "mom"
+        assert dm.metadata["hello"] == "dad"
+        # Base fields should still be present
+        assert "name" in dm.metadata
+        assert "updated" in dm.metadata
+
+    @staticmethod
+    def test_metadata_direct_assignment(manager_class):
+        """Test that dynamic fields can be added directly to self.metadata"""
+        dm = manager_class()
+        # Access metadata to trigger auto-population
+        assert "name" in dm.metadata
+        # Add a dynamic field
+        dm.metadata["custom_field"] = "custom_value"
+        assert dm.metadata["custom_field"] == "custom_value"
+        # Original fields should still be present
+        assert "name" in dm.metadata
+
+    @staticmethod
+    def test_metadata_full_assignment(manager_class):
+        """Test that self.metadata can be fully assigned"""
+        dm = manager_class()
+        dm.metadata = {"completely": "new"}
+        assert dm.metadata == {"completely": "new"}
+
+    @staticmethod
+    def test_metadata_cached_after_first_access(manager_class):
+        """Test that metadata is cached after first access (initial_metadata not called again)"""
+        dm = manager_class()
+        # First access populates from initial_metadata
+        first_access = dm.metadata
+        # Add a field
+        dm.metadata["added_field"] = "test"
+        # Second access should return the same cached dict with the added field
+        second_access = dm.metadata
+        assert second_access is first_access  # Same object
+        assert second_access["added_field"] == "test"
+
+    @staticmethod
+    def test_metadata_isolated_between_instances(manager_class):
+        """Test that each instance has its own metadata dict"""
+        dm1 = manager_class()
+        dm2 = manager_class()
+        dm1.metadata["instance1_field"] = "value1"
+        dm2.metadata["instance2_field"] = "value2"
+        assert "instance1_field" in dm1.metadata
+        assert "instance2_field" not in dm1.metadata
+        assert "instance2_field" in dm2.metadata
+        assert "instance1_field" not in dm2.metadata
+
+    @staticmethod
+    def test_initial_metadata_contains_base_fields(manager_class):
+        dm = manager_class()
+        metadata = dm.initial_metadata
+        # Check all base fields from Metadata.initial_metadata are present
+        expected_keys = [
+            "name",
+            "updated",
+            "missing value",
+            "tags",
+            "standard name",
+            "long name",
+            "unit of measurement",
+            "final lag in days",
+            "preliminary lag in days",
+            "expected_nan_frequency",
+            "coordinate reference system",
+            "spatial resolution",
+            "spatial precision",
+            "temporal resolution",
+            "update cadence",
+            "provider url",
+            "data download url",
+            "publisher",
+            "title",
+            "provider description",
+            "dataset description",
+            "license",
+            "terms of service",
+            "version",
+            "release status",
+            "region",
+        ]
+        for key in expected_keys:
+            assert key in metadata, f"Missing expected key: {key}"
+
+    @staticmethod
+    def test_initial_metadata_inheritance(manager_class):
+        """Test that initial_metadata properly inherits and extends base values"""
+        dm = manager_class(initial_metadata={"custom_field": "custom_value"})
+        metadata = dm.initial_metadata
+        # Custom field is added
+        assert metadata["custom_field"] == "custom_value"
+        # Base fields are still present
+        assert metadata["name"] == "DummyManager"
+        assert metadata["temporal resolution"] == "daily"
 
     @staticmethod
     def test_check_stac_exists(manager_class):
@@ -266,7 +362,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_collection(organized_manager_class, fake_original_dataset, mocker):
         dm = organized_manager_class(
-            static_metadata={
+            initial_metadata={
                 "coordinate reference system": "hyper euclidean",
                 "license": "to ill",
                 "provider description": "tall, awkward",
@@ -276,7 +372,7 @@ class TestMetadata:
                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
             }
         )
-        dm.populate_metadata()
+        _ = dm.metadata  # Access to trigger auto-population
         dm.publish_stac = mock.Mock()
         dm.retrieve_stac = mock.Mock(
             return_value=(
@@ -417,7 +513,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_collection_rebuild(organized_manager_class, fake_original_dataset):
         dm = organized_manager_class(
-            static_metadata={
+            initial_metadata={
                 "coordinate reference system": "hyper euclidean",
                 "license": "to ill",
                 "provider description": "tall, awkward",
@@ -427,7 +523,7 @@ class TestMetadata:
                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
             }
         )
-        dm.populate_metadata()
+        _ = dm.metadata  # Access to trigger auto-population
         dm.publish_stac = mock.Mock()
         dm.retrieve_stac = mock.Mock(
             return_value=(
@@ -565,7 +661,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_collection_root_catalog_already_in_links(organized_manager_class, fake_original_dataset):
         dm = organized_manager_class(
-            static_metadata={
+            initial_metadata={
                 "coordinate reference system": "hyper euclidean",
                 "license": "to ill",
                 "provider description": "tall, awkward",
@@ -575,7 +671,7 @@ class TestMetadata:
                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
             }
         )
-        dm.populate_metadata()
+        _ = dm.metadata  # Access to trigger auto-population
         dm.publish_stac = mock.Mock()
         dm.retrieve_stac = mock.Mock(
             return_value=(
@@ -681,7 +777,7 @@ class TestMetadata:
     @staticmethod
     def test_create_stac_collection_already_created(manager_class, fake_original_dataset, mocker):
         dm = manager_class(
-            static_metadata={
+            initial_metadata={
                 "coordinate reference system": "hyper euclidean",
                 "license": "to ill",
                 "provider description": "tall, awkward",
@@ -691,7 +787,7 @@ class TestMetadata:
                 "title": "Faccia di Broccoli: La Mia Vita nelle Miniere",
             }
         )
-        dm.populate_metadata()
+        _ = dm.metadata  # Access to trigger auto-population
         dm.publish_stac = mock.Mock()
         dm.retrieve_stac = mock.Mock()
         dm.update_stac_collection = mock.Mock()
@@ -876,6 +972,75 @@ class TestMetadata:
         md.get_href.assert_not_called()
 
     @staticmethod
+    def test_register_stac_item_no_previous_item(manager_class):
+        """Test register_stac_item when no previous STAC Item is found (KeyError/TimeoutError/FileNotFoundError)"""
+        stac_collection = {
+            "title": "War and Peace",
+            "links": [],
+        }
+        stac_item = {
+            "Look": "I'm",
+            "a": "stac item",
+            "links": [],
+            "assets": {"zmetadata": {"title": "Asset and Peace"}},
+        }
+
+        md = manager_class()
+        md.publish_stac = mock.Mock()
+        md.store = mock.Mock(spec=store.StoreInterface)
+        # First call returns collection, second call raises KeyError (no item found)
+        md.retrieve_stac = mock.Mock(
+            side_effect=[(stac_collection, "/path/to/stac/collection"), KeyError("No item found")]
+        )
+        md.get_href = mock.Mock(return_value="/path/to/new/item")
+
+        md.register_stac_item(stac_item)
+
+        # Should have called get_href to generate a new item href
+        md.get_href.assert_called_once_with("DummyManager-daily", metadata.StacType.ITEM)
+        # publish_stac should be called twice: once for item, once for collection
+        assert md.publish_stac.call_count == 2
+
+    @staticmethod
+    def test_register_stac_item_no_item_in_collection(manager_class):
+        """Test register_stac_item when STAC Item exists but is not linked in collection"""
+        stac_collection = {
+            "title": "War and Peace",
+            "links": [{"rel": "other", "title": "Something Else"}],  # No matching item link
+        }
+        old_stac_item = {
+            "Look": "I'm",
+            "the old": "stac item",
+            "assets": {"zmetadata": {"title": "Different Asset"}},  # Different title
+        }
+        stac_item = {
+            "Look": "I'm",
+            "a": "stac item",
+            "links": [],
+            "assets": {"zmetadata": {"title": "Asset and Peace"}},
+        }
+
+        md = manager_class()
+        md.publish_stac = mock.Mock()
+        md.store = mock.Mock(spec=store.StoreInterface)
+        md.retrieve_stac = mock.Mock(
+            side_effect=[(stac_collection, "/path/to/stac/collection"), (old_stac_item, "/path/to/stac/item")]
+        )
+        md.get_href = mock.Mock(return_value="/path/to/new/item")
+
+        md.register_stac_item(stac_item)
+
+        # publish_stac should be called twice: once for item, once for updated collection
+        assert md.publish_stac.call_count == 2
+        # Check that the collection was updated with the new item link
+        collection_call = md.publish_stac.call_args_list[1]
+        assert collection_call[0][0] == "Vintage Guitars"
+        updated_collection = collection_call[0][1]
+        item_links = [link for link in updated_collection["links"] if link.get("rel") == "item"]
+        assert len(item_links) == 1
+        assert item_links[0]["title"] == "Asset and Peace"
+
+    @staticmethod
     def test_update_stac_collection(manager_class, fake_original_dataset):
         md = manager_class()
         md.publish_stac = mock.Mock()
@@ -957,6 +1122,42 @@ class TestMetadata:
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.set_initial_compression.assert_called_once_with(renamed)
         md.encode_ds.assert_called_once_with(renamed)
+
+    @staticmethod
+    def test_remove_unwanted_fields(manager_class, fake_original_dataset):
+        """Test that remove_unwanted_fields removes chunks, preferred_chunks, _FillValue, missing_value, and filters"""
+        dataset = fake_original_dataset
+
+        # Add unwanted attributes/encodings to spatial dims
+        dataset["latitude"].attrs["chunks"] = (4,)
+        dataset["latitude"].attrs["preferred_chunks"] = {"latitude": 4}
+        dataset["latitude"].encoding["_FillValue"] = -999
+        dataset["latitude"].encoding["missing_value"] = -999
+
+        dataset["longitude"].attrs["chunks"] = (4,)
+        dataset["longitude"].attrs["preferred_chunks"] = {"longitude": 4}
+        dataset["longitude"].encoding["_FillValue"] = -999
+        dataset["longitude"].encoding["missing_value"] = -999
+
+        # Add filters to data variable
+        dataset["data"].encoding["filters"] = ["some_filter"]
+
+        md = manager_class()
+        md.remove_unwanted_fields(dataset)
+
+        # Check spatial dims have chunks/preferred_chunks removed from attrs
+        assert "chunks" not in dataset["latitude"].attrs
+        assert "preferred_chunks" not in dataset["latitude"].attrs
+        assert "_FillValue" not in dataset["latitude"].encoding
+        assert "missing_value" not in dataset["latitude"].encoding
+
+        assert "chunks" not in dataset["longitude"].attrs
+        assert "preferred_chunks" not in dataset["longitude"].attrs
+        assert "_FillValue" not in dataset["longitude"].encoding
+        assert "missing_value" not in dataset["longitude"].encoding
+
+        # Check data variable has filters removed
+        assert "filters" not in dataset["data"].encoding
 
     @staticmethod
     def test_rename_data_variable(manager_class):
@@ -1241,8 +1442,8 @@ class TestMetadata:
         dataset = fake_original_dataset
         dataset.attrs = {"foo": "bar"}
 
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
+        md = manager_class(initial_metadata={"bar": "baz"})
+        _ = md.metadata  # Access to trigger auto-population
         md.store = mock.Mock(spec=store.StoreInterface)
         mock_dataset = mock.Mock()
         mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
@@ -1250,16 +1451,20 @@ class TestMetadata:
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["created"] == "2000-01-01T0Z"
+        assert dataset.attrs["update_previous_end_date"] == "2021091600"
+        assert dataset.attrs["date range"] == ("2000010100", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
+        # Verify base initial_metadata fields are present
+        assert "name" in dataset.attrs
+        assert "temporal resolution" in dataset.attrs
 
     @staticmethod
     def test_merge_in_outside_metadata_new_creation_date(manager_class, fake_original_dataset, mocker):
@@ -1269,8 +1474,8 @@ class TestMetadata:
         dataset = fake_original_dataset
         dataset.attrs = {"foo": "bar"}
 
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
+        md = manager_class(initial_metadata={"bar": "baz"})
+        _ = md.metadata  # Access to trigger auto-population
         md.store = mock.Mock(spec=store.StoreInterface)
         mock_dataset = mock.Mock()
         mock_dataset.attrs = {"date range": ("2000010100", "2021091600")}
@@ -1280,16 +1485,18 @@ class TestMetadata:
         )
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2020-01-01T0Z",
-            "update_previous_end_date": "2021091600",
-            "date range": ("2000010100", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify existing creation date is preserved (not overwritten)
+        assert dataset.attrs["created"] == "2020-01-01T0Z"
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["update_previous_end_date"] == "2021091600"
+        assert dataset.attrs["date range"] == ("2000010100", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
 
     @staticmethod
     def test_merge_in_outside_metadata_no_previous_dataset(manager_class, fake_original_dataset, mocker):
@@ -1299,22 +1506,25 @@ class TestMetadata:
         dataset = fake_original_dataset
         dataset.attrs = {"foo": "bar"}
 
-        md = manager_class(static_metadata={"bar": "baz"})
-        md.populate_metadata()
+        md = manager_class(initial_metadata={"bar": "baz"})
+        _ = md.metadata  # Access to trigger auto-population
         md.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
         md.store.retrieve_metadata = mock.Mock(return_value=({"foo": "bar", "properties": {}}, "foo/bar"))
         md.merge_in_outside_metadata(dataset)
 
-        assert dataset.attrs == {
-            "foo": "bar",
-            "bar": "baz",
-            "created": "2000-01-01T0Z",
-            "update_previous_end_date": "",
-            "date range": ("2021091600", "2022013100"),
-            "update_date_range": ("2021091600", "2022013100"),
-            "bbox": (100.0, 10.0, 130.0, 40.0),
-            "update_is_append_only": True,
-        }
+        # Verify original attrs preserved
+        assert dataset.attrs["foo"] == "bar"
+        # Verify custom metadata merged
+        assert dataset.attrs["bar"] == "baz"
+        # Verify new creation date when no previous dataset
+        assert dataset.attrs["created"] == "2000-01-01T0Z"
+        # Verify no previous end date when no existing store
+        assert dataset.attrs["update_previous_end_date"] == ""
+        # Verify merge_in_outside_metadata specific fields
+        assert dataset.attrs["date range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["update_date_range"] == ("2021091600", "2022013100")
+        assert dataset.attrs["bbox"] == (100.0, 10.0, 130.0, 40.0)
+        assert dataset.attrs["update_is_append_only"] is True
 
     @staticmethod
     @pytest.fixture
@@ -1332,7 +1542,7 @@ class TestMetadata:
         Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
         causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
         """
-        md = manager_class(static_metadata={"bar": "baz"})
+        md = manager_class(initial_metadata={"bar": "baz"})
         md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
         md.encode_ds(fake_original_dataset_float_coords)
 
@@ -1373,7 +1583,7 @@ class TestMetadata:
         Xarray sometimes "helpfully" inserts objects into the encoding of the dataset on write,
         causing downstream issues. Check we've successfully encoded and kept out problematic encoding.
         """
-        md = manager_class(static_metadata={"bar": "baz"})
+        md = manager_class(initial_metadata={"bar": "baz"})
         md.requested_zarr_chunks = {"latitude": 4, "longitude": 4, "time": 138}
         md.encode_ds(fake_original_dataset)
 

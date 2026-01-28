@@ -53,7 +53,7 @@ The following methods _may_ need to be (lightly) customized per dataset
 * `mzz_opts`
 * `preprocess_kerchunk`
 * `postprocess_zarr`
-* `populate_metadata`
+* `initial_metadata` (property)
 * `set_zarr_metadata`
 * `update_zarr` (or its modular component methods `update_setup` and `update_operations`)
 
@@ -312,9 +312,13 @@ Metadata specific to the dataset is processed within its manager and appended to
 
 Metadata creation and updates should adopt the following logic to avoid unanticipated points of failure with the population of metadata:
 
-* To the extent possible, metadata common to all subclasses of a datasets -- spatial extent, provider description, etc. -- should be declared in a `static_metadata` property at the top of manager. 
-* Metadata which varies by subclass -- spatial resolution, unit of measurement, etc. -- should be declared as properties of that subclass and then populated w/in `static_metadata` by calls of those properties.
-* Dynamically generated metadata -- e.g. the data range or finalization date -- should be populated in `populate_metadata` (if dependent on ETL operations) or `set_zarr_metadata` (if dependent on the dataset) under `parse`. An example of the former might be the latest update time for a dataset, which is found during retrieval; an example of the latter might be to remove properties encoded in each file by the provider.
+* To the extent possible, metadata common to all subclasses of a datasets -- spatial extent, provider description, etc. -- should be declared in the `initial_metadata` property at the top of manager.
+* Metadata which varies by subclass -- spatial resolution, unit of measurement, etc. -- should be declared as class attributes or properties of that subclass and referenced in `initial_metadata`.
+* The `self.metadata` attribute auto-populates from `initial_metadata` on first access. You can add dynamic metadata fields directly to `self.metadata` wherever needed in your ETL (e.g., in `publish_metadata()` or `set_zarr_metadata()`). For example:
+  ```python
+  # In publish_metadata() or wherever input_history is available
+  self.metadata["finalization date"] = self.input_history.get("final_date")
+  ```
 * Metadata should never be edited within `extract` or its helper methods. If reference to previous metadata or dataset properties is needed, read in the existing STAC metadata via `load_stac_metadata`.
 * The `encoding` of a zarr dataset or one of its dimensions or data variables should be as empty as possible. Only chunk size information and fields required by the [Climate and Forecasting Metadata Conventions](https://cfconventions.org/) should be stored under the data variable's encoding.
 
