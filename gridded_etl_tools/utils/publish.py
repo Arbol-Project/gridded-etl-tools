@@ -773,15 +773,19 @@ class Publish(Transform):
 
     def post_parse_quality_check(self, checks: int = 100, threshold: float = 10e-5):
         """
-        Master function to check values written after a parse for discrepancies with the source data
+        Master function to check values written after a parse for discrepancies with the source data.
+
+        The number of files checked will be constrained to at most the number of source files to prevent opening many
+        large datasets. If there are 10 or less files, each file will check 10 values. If there are 10 or greater files,
+        each file will be checked once.
 
         Parameters
         ----------
         checks
             The number of values to check. Defaults to 100.
         threshold
-            The tolerance for diversions between original and parsed values.
-            Absolute differences between them beyond this limit will raise a ValueError
+            The tolerance for diversions between original and parsed values. Absolute differences between them beyond
+            this limit will raise a ValueError
         """
         if self.skip_post_parse_qc:
             self.info("Skipping post-parse quality check as directed")
@@ -795,21 +799,43 @@ class Publish(Transform):
             prod_ds = self.get_prod_update_ds()
             possible_files = self.filter_search_space(prod_ds)
 
-            # Run the data check N times
+            # Run the data check N times. Constrain to at most the number of source files. If the number of source files
+            # is 10 or greater, constrain the number of checks per file.
             i = 0
+            checks_per_file = 10
+            if checks > len(possible_files):
+                checks = len(possible_files)
+            if len(possible_files) >= 10:
+                checks_per_file = 1
             while i < checks:
                 # Open and reformat the original dataset such that it's comparable with the prod dataset
-                orig_ds = self.raw_file_to_dataset(random.choice(possible_files))
+                sample_file = random.choice(possible_files)
+                orig_ds = self.raw_file_to_dataset(sample_file)
 
-                # Run the checks
-                self.check_written_value(orig_ds, prod_ds, threshold)
-                i += 1
+                # Make sure only dates available in the update are checked. A source file may contain data already
+                # parsed in a past update.
+                orig_ds = orig_ds.where(orig_ds[self.time_dim].isin(prod_ds[self.time_dim]), drop=True)
 
-                # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking for,
-                # go ahead and bail.
-                elapsed = time.perf_counter() - start_checking
-                if elapsed > TWENTY_MINUTES:
-                    self.info(f"Breaking from checking loop after {datetime.timedelta(seconds=elapsed)}")
+                # There should always be more than one time step available because the source files have been filtered,
+                # so log a warning if no times are found.
+                if len(orig_ds[self.time_dim]) > 0:
+
+                    # Run the checks
+                    self.check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
+                    i += 1
+
+                    # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking
+                    # for, go ahead and bail.
+                    elapsed = time.perf_counter() - start_checking
+                    if elapsed > TWENTY_MINUTES:
+                        self.info(f"Breaking from checking loop after {datetime.timedelta(seconds=elapsed)}")
+                        break
+
+                else:
+                    self.warn(
+                        "No times in randomly selected source file coincide with the update time range: "
+                        f"{sample_file}"
+                    )
                     break
 
             elapsed = time.perf_counter() - start_checking
@@ -874,8 +900,7 @@ class Publish(Transform):
 
     def time_range_in_file(self, file_path: pathlib.Path) -> tuple[datetime.datetime, datetime.datetime]:
         """
-        Convert a file to an xarray.Dataset and return the start and end of the list of timestamps contained in the time
-        dimension.
+        Open a file as an xarray.Dataset and return the first and last timestamps in the time dimension.
 
         Parameters
         ----------
@@ -938,10 +963,11 @@ class Publish(Transform):
         orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
         threshold: float = 10e-5,
+        checks: int = 10,
     ):
         """
-        Check random values in the original files against the written values
-        in the updated dataset at the same location
+        Check random values in the original files against the written values in the updated dataset at the same
+        location. Set the value of the checks parameter to specify how many random coordinates will be checked.
 
         Parameters
         ----------
@@ -952,64 +978,71 @@ class Publish(Transform):
         orig_file_path
             A pathlib.Path to the randomly selected original file
         threshold
-            The tolerance for diversions between original and parsed values.
-            Absolute differences between them beyond this limit will raise a ValueError
+            The tolerance for diversions between original and parsed values. Absolute differences between them beyond
+            this limit will raise a ValueError
+        checks
+            Number of random coordinates to check
 
         Returns
         -------
         bool
-            A boolean indicating that a check was successful (True) or the selected file doesn't correspond
-            to the update time range (False). Failed checks will raise a ValueError instead.
+            A boolean indicating that a check was successful (True) or the selected file doesn't correspond to the
+            update time range (False). Failed checks will raise a ValueError instead.
 
         Raises
         ------
         ValueError
             Indicates a potentially problematic mismatch between source data values and values written to production
         """
-        selection_coords = self.get_random_coords(orig_ds)
+        failed = False
+        for check in range(checks):
+            selection_coords = self.get_random_coords(orig_ds)
 
-        # # Rework selection coordinates as needed, accounting for the absence of a time dim in some input files
-        # selection_coords = {key: check_coords[key] for key in orig_ds.dims}
+            # Open desired data values.
+            orig_val = orig_ds[self.data_var].sel(**selection_coords).values
+            prod_val = (
+                prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=self.check_tolerance).values
+            )
 
-        # Open desired data values.
-        orig_val = orig_ds[self.data_var].sel(**selection_coords).values
-        prod_val = (
-            prod_ds[self.data_var].sel(**selection_coords, method="nearest", tolerance=self.check_tolerance).values
-        )
+            # Compare values from the original dataset to the prod dataset. Raise an error if the values differ more
+            # than the permitted threshold, or if only one value is either Infinite or NaN.
+            self.info(f"{orig_val}, {prod_val}")
+            if _is_infish(orig_val):
+                if _is_infish(prod_val):
+                    # Both are infinity, great
+                    continue
+                # one is infinity, raise error
+                failed = True
+                break
 
-        # Compare values from the original dataset to the prod dataset.
-        # Raise an error if the values differ more than the permitted threshold,
-        # or if only one value is either Infinite or NaN
-        self.info(f"{orig_val}, {prod_val}")
-        if _is_infish(orig_val):
-            if _is_infish(prod_val):
-                # Both are infinity, great
-                return
+            elif _is_infish(prod_val):
+                # one is infinity, raise error
+                failed = True
+                break
 
-            # else, one is infinity, raise error
+            elif np.isnan(orig_val) and np.isnan(prod_val):
+                # Both are nan, great
+                continue
 
-        elif _is_infish(prod_val):
-            # one is infinity, raise error
-            pass
+            elif orig_val == self.missing_value and np.isnan(prod_val):
+                # Recognized NaN values were written to prod as NaNs, muy bien
+                continue
 
-        elif np.isnan(orig_val) and np.isnan(prod_val):
-            # Both are nan, great
-            return
+            # There may be one nan, or they may both be actual numbers
+            elif abs(orig_val - prod_val) <= threshold:
+                # They are both actual numbers and they are close enough to the same value to match
+                continue
 
-        elif orig_val == self.missing_value and np.isnan(prod_val):
-            # Recognized NaN values were written to prod as NaNs, muy bien
-            return
+            # The values are not equal
+            else:
+                failed = True
+                break
 
-        # There may be one nan, or they may both be actual numbers
-        elif abs(orig_val - prod_val) <= threshold:
-            # They are both actual numbers and they are close enough to the same value to match
-            return
-
-        raise ValueError(
-            "Mismatch in written values: "
-            f"orig_val {orig_val} and prod_val {prod_val}."
-            f"\nQuery parameters: {selection_coords}"
-        )
+        if failed:
+            raise ValueError(
+                f"Mismatch in written values: orig_val {orig_val} and prod_val {prod_val}."
+                f"\nQuery parameters: {selection_coords}"
+            )
 
     def raw_file_to_dataset(self, file_path: pathlib.Path) -> xr.Dataset:
         """
