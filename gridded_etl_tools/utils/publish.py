@@ -34,7 +34,7 @@ class Publish(Transform):
 
     # PARSING
 
-    def parse(self, publish_dataset: xr.Dataset, **kwargs):
+    def parse(self, publish_dataset: xr.Dataset):
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
@@ -285,7 +285,7 @@ class Publish(Transform):
 
     # INITIAL
 
-    def write_initial_zarr(self, publish_dataset: xr.Dataset, **kwargs):
+    def write_initial_zarr(self, publish_dataset: xr.Dataset):
         """
         Writes the first iteration of zarr for the dataset to the store specified at initialization.
 
@@ -306,7 +306,7 @@ class Publish(Transform):
 
     # UPDATES
 
-    def update_zarr(self, publish_dataset: xr.Dataset, **kwargs):
+    def update_zarr(self, publish_dataset: xr.Dataset):
         """
         Update discrete regions of an N-D dataset saved to disk as a Zarr. Trigger insert and/or append
         operations based on the presence of valid records for either. If updates span multiple date ranges,
