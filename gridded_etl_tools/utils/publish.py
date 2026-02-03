@@ -70,42 +70,59 @@ class Publish(Transform):
             with Client(cluster):
                 self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
                 try:
-                    # Attempt to find an existing Zarr, using the appropriate method for the store. If there is
-                    # existing data and there is no rebuild requested, start an update. If there is no existing data,
-                    # start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
-                    # has been set, write a new Zarr, overwriting any existing data.
-                    # If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
-                    # parsing and issue a warning.
-                    if self.store.has_existing and not self.rebuild_requested:
-
-                        # If zarr.json is present, the format is considered 3. Otherwise, it is considered format 2.
-                        if self.store.has_v3_metadata:
-                            if not self.output_zarr3:
-                                raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
-                        elif self.output_zarr3:
-                            raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
-
-                        self.info(f"Updating existing data at {self.store}")
-                        self.update_zarr(publish_dataset)
-                    elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
-                        if not self.store.has_existing:
-                            self.info(f"No existing data found. Creating new Zarr at {self.store}.")
-                        else:
-                            self.info(f"Data at {self.store} will be replaced.")
-                        self.info(f"Now writing to {self.store}")
-                        self.write_initial_zarr(publish_dataset)
-                    else:
-                        raise RuntimeError(
-                            "There is already a zarr at the specified path and a rebuild is requested, "
-                            "but overwrites are not allowed."
-                        )
-                    # manually closing the cluter within the Client block prevents observed serialization problems
+                    self.publish_data(publish_dataset)
+                    # manually closing the cluster within the Client block prevents observed serialization problems
                     # for reasons not entirely understood
                     cluster.close()
                 except KeyboardInterrupt:
                     self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
 
         self.info("Parse run successful")
+
+    def publish_data(self, publish_dataset: xr.Dataset):
+        """
+        Attempts to find an existing Zarr, using the appropriate method for the store. If there is
+        existing data and there is no rebuild requested, start an update. If there is no existing data,
+        start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
+        has been set, write a new Zarr, overwriting any existing data.
+        If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
+        parsing and issue a warning.
+
+        Parameters
+        ----------
+        publish_dataset : xr.Dataset
+            A dataset containing all records to publish, either as an initial dataset or an update to an existing one
+        **kwargs
+            Keyword arguments to forward to the appropriate method
+
+        Raises
+        ------
+        RuntimeError
+            If the data cannot be published to the store
+        """
+        if self.store.has_existing and not self.rebuild_requested:
+
+            # If zarr.json is present, the format is considered 3. Otherwise, it is considered format 2.
+            if self.store.has_v3_metadata:
+                if not self.output_zarr3:
+                    raise RuntimeError("Existing data is Zarr v3, but output_zarr3 is not set.")
+            elif self.output_zarr3:
+                raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
+
+            self.info(f"Updating existing data at {self.store}")
+            self.update_zarr(publish_dataset)
+        elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
+            if not self.store.has_existing:
+                self.info(f"No existing data found. Creating new Zarr at {self.store}.")
+            else:
+                self.info(f"Data at {self.store} will be replaced.")
+            self.info(f"Now writing to {self.store}")
+            self.write_initial_zarr(publish_dataset)
+        else:
+            raise RuntimeError(
+                "There is already a zarr at the specified path and a rebuild is requested, "
+                "but overwrites are not allowed."
+            )
 
     def publish_metadata(self):
         """
