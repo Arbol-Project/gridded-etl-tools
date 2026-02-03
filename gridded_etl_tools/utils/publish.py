@@ -70,14 +70,8 @@ class Publish(Transform):
             with Client(cluster):
                 self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
                 try:
-                    # Attempt to find an existing Zarr, using the appropriate method for the store. If there is
-                    # existing data and there is no rebuild requested, start an update. If there is no existing data,
-                    # start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
-                    # has been set, write a new Zarr, overwriting any existing data.
-                    # If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
-                    # parsing and issue a warning.
-                    self._publish_data(publish_dataset, **kwargs)
-                    # manually closing the cluter within the Client block prevents observed serialization problems
+                    self.publish_data(publish_dataset)
+                    # manually closing the cluster within the Client block prevents observed serialization problems
                     # for reasons not entirely understood
                     cluster.close()
                 except KeyboardInterrupt:
@@ -85,9 +79,14 @@ class Publish(Transform):
 
         self.info("Parse run successful")
 
-    def _publish_data(self, publish_dataset: xr.Dataset, **kwargs):
+    def publish_data(self, publish_dataset: xr.Dataset):
         """
-        Publish the data to the store by either updating an existing Zarr or writing a new one.
+        Attempts to find an existing Zarr, using the appropriate method for the store. If there is
+        existing data and there is no rebuild requested, start an update. If there is no existing data,
+        start an initial parse. If rebuild is requested and there is no existing data or allow overwrite
+        has been set, write a new Zarr, overwriting any existing data.
+        If rebuild is requested and there is existing data, but allow overwrite is not set, do not start
+        parsing and issue a warning.
 
         Parameters
         ----------
@@ -111,14 +110,14 @@ class Publish(Transform):
                 raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
 
             self.info(f"Updating existing data at {self.store}")
-            self.update_zarr(publish_dataset, **kwargs)
+            self.update_zarr(publish_dataset)
         elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
             if not self.store.has_existing:
                 self.info(f"No existing data found. Creating new Zarr at {self.store}.")
             else:
                 self.info(f"Data at {self.store} will be replaced.")
             self.info(f"Now writing to {self.store}")
-            self.write_initial_zarr(publish_dataset, **kwargs)
+            self.write_initial_zarr(publish_dataset)
         else:
             raise RuntimeError(
                 "There is already a zarr at the specified path and a rebuild is requested, "
