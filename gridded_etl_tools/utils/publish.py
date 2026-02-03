@@ -34,7 +34,7 @@ class Publish(Transform):
 
     # PARSING
 
-    def parse(self, publish_dataset: xr.Dataset):
+    def parse(self, publish_dataset: xr.Dataset, **kwargs):
         """
         Write the publishable dataset prepared during `transform` to the store specified by `Attributes.store`.
 
@@ -86,14 +86,14 @@ class Publish(Transform):
                             raise RuntimeError("Existing data is not Zarr v3, but output_zarr3 is set.")
 
                         self.info(f"Updating existing data at {self.store}")
-                        self.update_zarr(publish_dataset)
+                        self.update_zarr(publish_dataset, **kwargs)
                     elif not self.store.has_existing or (self.rebuild_requested and self.allow_overwrite):
                         if not self.store.has_existing:
                             self.info(f"No existing data found. Creating new Zarr at {self.store}.")
                         else:
                             self.info(f"Data at {self.store} will be replaced.")
                         self.info(f"Now writing to {self.store}")
-                        self.write_initial_zarr(publish_dataset)
+                        self.write_initial_zarr(publish_dataset, **kwargs)
                     else:
                         raise RuntimeError(
                             "There is already a zarr at the specified path and a rebuild is requested, "
@@ -268,7 +268,7 @@ class Publish(Transform):
 
     # INITIAL
 
-    def write_initial_zarr(self, publish_dataset: xr.Dataset):
+    def write_initial_zarr(self, publish_dataset: xr.Dataset, **kwargs):
         """
         Writes the first iteration of zarr for the dataset to the store specified at initialization.
 
@@ -289,7 +289,7 @@ class Publish(Transform):
 
     # UPDATES
 
-    def update_zarr(self, publish_dataset: xr.Dataset):
+    def update_zarr(self, publish_dataset: xr.Dataset, **kwargs):
         """
         Update discrete regions of an N-D dataset saved to disk as a Zarr. Trigger insert and/or append
         operations based on the presence of valid records for either. If updates span multiple date ranges,
