@@ -1191,7 +1191,7 @@ class TestPublish:
             assert threshold == 10e-5
             assert checks == 1
 
-        dm._check_written_value = check_written_value
+        dm.check_written_value = check_written_value
 
         dm.post_parse_quality_check()
 
@@ -1215,7 +1215,7 @@ class TestPublish:
         dm._raw_file_to_dataset = mock.Mock()
         dm._get_prod_update_ds = mock.Mock()
         dm._filter_search_space = mock.Mock()
-        dm._check_written_value = mock.Mock()
+        dm.check_written_value = mock.Mock()
 
         dm.post_parse_quality_check()
 
@@ -1223,7 +1223,7 @@ class TestPublish:
         dm._get_prod_update_ds.assert_not_called()
         dm._filter_search_space.assert_not_called()
         dm._raw_file_to_dataset.assert_not_called()
-        dm._check_written_value.assert_not_called()
+        dm.check_written_value.assert_not_called()
 
     @staticmethod
     def test_post_parse_quality_check_timeout(manager_class, fake_original_dataset, mocker):
@@ -1247,7 +1247,7 @@ class TestPublish:
             assert threshold == 10e-5
             assert checks == 1
 
-        dm._check_written_value = check_written_value
+        dm.check_written_value = check_written_value
 
         dm.post_parse_quality_check()
 
@@ -1282,7 +1282,7 @@ class TestPublish:
             assert threshold == 10e-5
             assert checks == 10
 
-        dm._check_written_value = check_written_value
+        dm.check_written_value = check_written_value
 
         dm.post_parse_quality_check()
 
@@ -1324,14 +1324,14 @@ class TestPublish:
         assert dataset["time"].values[-1] == np.datetime64("2022-01-01T00:00:00.000000000")
 
     @staticmethod
-    def test_check_written_value(manager_class, fake_original_dataset):
+    def testcheck_written_value(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy()
 
-        dm._check_written_value(fake_original_dataset, prod_ds)
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
-    def test_check_written_value_value_is_out_of_bounds(manager_class, fake_original_dataset):
+    def testcheck_written_value_value_is_out_of_bounds(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1340,19 +1340,19 @@ class TestPublish:
 
         prod_ds.data[coord_indices] += 10e-4
         with pytest.raises(ValueError):
-            dm._check_written_value(fake_original_dataset, prod_ds)
+            dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
-    def test_check_written_value_override_threshold(manager_class, fake_original_dataset):
+    def testcheck_written_value_override_threshold(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
 
         prod_ds.data[coord_indices] += 10e-4
-        dm._check_written_value(fake_original_dataset, prod_ds, threshold=10e-3)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=10e-3)
 
     @staticmethod
-    def test_check_written_value_value_one_infinity(manager_class, fake_original_dataset):
+    def testcheck_written_value_value_one_infinity(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1361,12 +1361,12 @@ class TestPublish:
 
         prod_ds.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
         fake_original_dataset.data[coord_indices] = np.inf
         with pytest.raises(ValueError):
-            dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_two_nans(manager_class, fake_original_dataset):
@@ -1376,10 +1376,10 @@ class TestPublish:
 
         fake_original_dataset.data[coord_indices] = np.nan
         prod_ds.data[coord_indices] = np.nan
-        dm._check_written_value(fake_original_dataset, prod_ds)
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
-    def test_check_written_value_value_one_missing_value_one_nan(manager_class, fake_original_dataset):
+    def testcheck_written_value_value_one_missing_value_one_nan(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1388,7 +1388,7 @@ class TestPublish:
 
         prod_ds.data[coord_indices] = np.nan
         fake_original_dataset.data[coord_indices] = dm.missing_value  # 42
-        dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_check_two_infinities_ish(manager_class, fake_original_dataset):
@@ -1400,10 +1400,10 @@ class TestPublish:
 
         fake_original_dataset.data[coord_indices] = 5e100
         prod_ds.data[coord_indices] = np.inf
-        dm._check_written_value(fake_original_dataset, prod_ds)
+        dm.check_written_value(fake_original_dataset, prod_ds)
 
     @staticmethod
-    def test_check_written_value_value_one_nan(manager_class, fake_original_dataset):
+    def testcheck_written_value_value_one_nan(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1412,15 +1412,15 @@ class TestPublish:
 
         prod_ds.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
         prod_ds.data[coord_indices] = fake_original_dataset.data[coord_indices]
         fake_original_dataset.data[coord_indices] = np.nan
         with pytest.raises(ValueError):
-            dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+            dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
-    def test_check_written_value_value_two_nans(manager_class, fake_original_dataset):
+    def testcheck_written_value_value_two_nans(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1429,10 +1429,10 @@ class TestPublish:
 
         prod_ds.data[coord_indices] = np.nan
         fake_original_dataset.data[coord_indices] = np.nan
-        dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
-    def test_check_written_value_multiple_checks(manager_class, fake_original_dataset):
+    def testcheck_written_value_multiple_checks(manager_class, fake_original_dataset):
         dm = manager_class()
         prod_ds = fake_original_dataset.copy(deep=True)
         coord_indices = (42, 2, 3)
@@ -1441,7 +1441,7 @@ class TestPublish:
 
         prod_ds.data[coord_indices] = np.nan
         fake_original_dataset.data[coord_indices] = np.nan
-        dm._check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
+        dm.check_written_value(fake_original_dataset, prod_ds, threshold=np.inf)
 
     @staticmethod
     def test_filter_search_space(manager_class, hindcast_dataset):

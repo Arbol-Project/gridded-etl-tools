@@ -840,7 +840,7 @@ class Publish(Transform):
                 if len(orig_ds[self.time_dim]) > 0:
 
                     # Run the checks
-                    self._check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
+                    self.check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
                     i += 1
 
                     # While improbable, if it takes longer than 20 minutes to get the number of checks we're looking
@@ -977,7 +977,7 @@ class Publish(Transform):
         time_select = {self.time_dim: update_date_range}
         return prod_ds.sel(**time_select)
 
-    def _check_written_value(
+    def check_written_value(
         self,
         orig_ds: xr.Dataset,
         prod_ds: xr.Dataset,
@@ -987,6 +987,8 @@ class Publish(Transform):
         """
         Check random values in the original files against the written values in the updated dataset at the same
         location. Set the value of the checks parameter to specify how many random coordinates will be checked.
+        
+        NOTE method is public because we anticipate it may be overwritten by child classes
 
         Parameters
         ----------
