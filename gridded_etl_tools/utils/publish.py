@@ -987,7 +987,7 @@ class Publish(Transform):
         """
         Check random values in the original files against the written values in the updated dataset at the same
         location. Set the value of the checks parameter to specify how many random coordinates will be checked.
-        
+
         NOTE method is public because we anticipate it may be overwritten by child classes
 
         Parameters
