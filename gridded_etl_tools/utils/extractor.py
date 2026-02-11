@@ -779,7 +779,6 @@ class FTPExtractor(Extractor):
         """
         log.info(f"Opening a connection to {self.host}")
         self.ftp = ftplib.FTP(self.host, timeout=self.timeout)
-        self.ftp.set_pasv(False)
         self.ftp.login()
         return self
 
