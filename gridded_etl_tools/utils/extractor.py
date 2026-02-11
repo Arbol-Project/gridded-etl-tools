@@ -876,10 +876,11 @@ class FTPExtractor(Extractor):
         with open(local_file_path, "wb") as fp:
             try:
                 # need separate FTP for each download to take advantage of concurrency
-                with ftplib.FTP(self.host, timeout=self.timeout) as download_ftp:
-                    download_ftp.login()
-                    download_ftp.cwd(str(self.cwd))
-                    download_ftp.retrbinary(f"RETR {remote_file_path}", fp.write)
+                # with ftplib.FTP(self.host, timeout=self.timeout) as download_ftp:
+                #     download_ftp.login()
+                #     download_ftp.cwd(str(self.cwd))
+                #     download_ftp.retrbinary(f"RETR {remote_file_path}", fp.write)
+                self.ftp.retrbinary(f"RETR {remote_file_path}", fp.write)
             except ftplib.error_perm:
                 raise RuntimeError(f"Error retrieving {remote_file_path} from {self.host} in {self.cwd}")
 
