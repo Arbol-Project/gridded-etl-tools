@@ -579,8 +579,8 @@ class TestFTPExtractor:
         ftp_client.close = Mock()
         host = "what a great host"
 
-        with FTPExtractor(dm, host):
-            pass
+        with FTPExtractor(dm, host, timeout=123456789) as client:
+            assert client.timeout == 123456789
 
         assert ftp_client.contexts == 0
         ftp_client.login.assert_called_once()

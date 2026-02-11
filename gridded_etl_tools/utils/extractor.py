@@ -743,7 +743,7 @@ class FTPExtractor(Extractor):
     ftp: ftplib.FTP
     host: str
 
-    def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1):
+    def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1, timeout: int = 120):
         """
         Set the host parameter when initializing an FTPExtractor object
 
@@ -756,9 +756,12 @@ class FTPExtractor(Extractor):
         concurrency_limit
             Number of simultaneous requests. If greater than 1, multiple connections will be opened because an FTP
             connection only supports synchronous requests.
+        timeout
+            Number of seconds to wait for a connection to succeed before raising a timeout error
         """
         super().__init__(dm, concurrency_limit=concurrency_limit)
         self.host = host
+        self.timeout = timeout
 
     def __enter__(self) -> FTPExtractor:
         """
@@ -775,7 +778,7 @@ class FTPExtractor(Extractor):
             this object
         """
         log.info(f"Opening a connection to {self.host}")
-        self.ftp = ftplib.FTP(self.host)
+        self.ftp = ftplib.FTP(self.host, timeout=self.timeout)
         self.ftp.login()
         return self
 
@@ -873,7 +876,7 @@ class FTPExtractor(Extractor):
         with open(local_file_path, "wb") as fp:
             try:
                 # need separate FTP for each download to take advantage of concurrency
-                with ftplib.FTP(self.host) as download_ftp:
+                with ftplib.FTP(self.host, timeout=self.timeout) as download_ftp:
                     download_ftp.login()
                     download_ftp.cwd(str(self.cwd))
                     download_ftp.retrbinary(f"RETR {remote_file_path}", fp.write)

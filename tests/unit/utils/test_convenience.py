@@ -11,7 +11,7 @@ from gridded_etl_tools.utils import store
 
 
 class DummyFtpClient:
-    def __init__(self):
+    def __init__(self, timeout=120):
         self.contexts = 0
         self.login = Mock()
         self.cwd = Mock()
@@ -21,9 +21,11 @@ class DummyFtpClient:
             "two.dat": {"timestamp": "20100512024200", "contents": b"Hi Mom!"},
             "three.dat": {"timestamp": "20201225000000", "contents": b"Hello Dad!"},
         }
+        self.timeout = timeout
 
-    def __call__(self, host):
+    def __call__(self, host, timeout=120):
         self.host = host
+        self.timeout = timeout
         return self
 
     def __enter__(self):
