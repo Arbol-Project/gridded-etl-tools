@@ -743,7 +743,7 @@ class FTPExtractor(Extractor):
     ftp: ftplib.FTP
     host: str
 
-    def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1, timeout: int = 120):
+    def __init__(self, dm: dataset_manager.DatasetManager, host: str, concurrency_limit: int = 1, timeout: int = 600):
         """
         Set the host parameter when initializing an FTPExtractor object
 
