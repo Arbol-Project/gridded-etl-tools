@@ -854,16 +854,16 @@ class Metadata(Convenience):
             dataset.attrs["update_previous_end_date"] = previous_end
             dataset.attrs["date range"] = (
                 previous_start,
-                self.date_range_to_string(self.get_date_range_from_dataset(dataset))[1],
+                self._date_range_to_string(self.get_date_range_from_dataset(dataset))[1],
             )
         else:
             dataset.attrs["update_previous_end_date"] = ""
-            dataset.attrs["date range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
+            dataset.attrs["date range"] = self._date_range_to_string(self.get_date_range_from_dataset(dataset))
 
         # Write the update date range by taking the date range of the xr.Dataset submitted to this function. This
         # assumes this function is called and the metadata is written before the original xr.Dataset is combined with
         # the insert xr.Dataset.
-        dataset.attrs["update_date_range"] = self.date_range_to_string(self.get_date_range_from_dataset(dataset))
+        dataset.attrs["update_date_range"] = self._date_range_to_string(self.get_date_range_from_dataset(dataset))
 
         # Include the bounding box in the Zarr metadata
         dataset.attrs["bbox"] = self.bbox_coords(dataset)
@@ -926,7 +926,7 @@ class Metadata(Convenience):
         update_key : dict
             A key:value pair to insert into or update in the array encoding
         """
-        self.__modify_array_encoding(target_array, update_key=update_key, remove_key=None)
+        self._modify_array_encoding(target_array, update_key=update_key, remove_key=None)
 
     def _remove_array_encoding(
         self,
@@ -943,9 +943,9 @@ class Metadata(Convenience):
         remove_key : str
             The key to remove from the array encoding
         """
-        self.__modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
+        self._modify_array_encoding(target_array, update_key=None, remove_key=remove_key)
 
-    def __modify_array_encoding(
+    def _modify_array_encoding(
         self,
         target_array: str,
         update_key: dict | None = None,

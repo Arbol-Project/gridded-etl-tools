@@ -1488,7 +1488,7 @@ class TestPublish:
         # Check if files with more than one time step can be handled in the case of only one input file
 
         dm.input_files = mock.Mock(return_value=["One_file_per_update.mp3"])
-        dm.strings_to_date_range = mock.Mock(
+        dm._strings_to_date_range = mock.Mock(
             return_value=(datetime.datetime(2025, 3, 10), datetime.datetime(2025, 3, 14))
         )
         dm._time_range_in_file = mock.Mock(

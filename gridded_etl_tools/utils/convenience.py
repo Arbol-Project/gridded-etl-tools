@@ -1,12 +1,8 @@
 import pathlib
 import datetime
-import io
-import json
 import random
 from typing import Any, Iterator
 
-from dateutil.parser import parse as parse_date
-import deprecation
 import natsort
 import numpy as np
 import pandas as pd
@@ -114,34 +110,6 @@ class Convenience(Attributes):
             if not entry.name.startswith(".") and not entry.name.endswith(".idx") and entry.is_file():
                 yield pathlib.Path(root / entry.name)
 
-    def _get_folder_path_from_date(self, date: datetime.datetime, omit_root: bool = False) -> str:
-        """
-        Return a folder path inside `self.output_root` with the folder name based on `self.temporal_resolution()`
-        and the passed `datetime`. If `omit_root` is set, remove `self.output_root` from the path.
-
-        Parameters
-        ----------
-        date : datetime.datetime
-            datetime.datetime object representing the date to be appended to the folder name
-        omit_root : bool, optional
-            If False, prepent `self.output_root` to the beginning of the path, otherwise leave it off. Defaults to
-            False
-
-        Returns
-        -------
-        str
-            Directory path derived from the date provided
-
-        """
-        if self.time_resolution == self.SPAN_HOURLY:
-            date_format = self.DATE_HOURLY_FORMAT_FOLDER
-        else:
-            date_format = self.DATE_FORMAT_FOLDER
-        path = pathlib.Path(self.relative_path()) / date.strftime(date_format)
-        if not omit_root:
-            path = pathlib.Path(self.output_root) / path
-        return path
-
     def output_path(self, omit_root: bool = False) -> pathlib.Path:
         """
         Return the path to a directory where parsed climate data will be written, automatically determining the end
@@ -194,43 +162,6 @@ class Convenience(Attributes):
                 raise ValueError(f"Existing date range not found in {dataset} attributes")
         else:
             raise ValueError(f"No existing dataset found to get date range from at {self.store}")
-
-    @deprecation.deprecated("use dateutil.parser.parse")
-    def convert_date_range(self, date_range: list) -> tuple[datetime.datetime, datetime.datetime]:
-        """
-        Convert a JSON text/isoformat date range into a python datetime object range
-
-        Parameters
-        ----------
-        date_range : list
-            A list of length two containing isoformatted start and end date strings
-
-        Returns
-        -------
-        tuple[datetime.datetime, datetime.datetime]
-            A tuple of (datetime.datetime, datetime.datetime) representing a date range's start and end
-
-        """
-        start, end = [parse_date(date) for date in date_range]
-        return start, end
-
-    @deprecation.deprecated("use dateutil.parser.parse")
-    def iso_to_datetime(self, isodate: str) -> datetime.datetime:
-        """
-        Get a datetime object from an ISO formatted date string
-
-        Parameters
-        ----------
-        isodate : str
-            An Isoformatted string representing a date
-
-        Returns
-        -------
-        datetime.datetime
-            The converted date
-
-        """
-        return parse_date(isodate)
 
     def numpydate_to_py(self, numpy_date: np.datetime64, **kwargs) -> datetime.datetime:
         """
@@ -320,7 +251,7 @@ class Convenience(Attributes):
         dataset = xr.open_dataset(path, backend_kwargs=backend_kwargs, **kwargs)
         return self.get_date_range_from_dataset(dataset)
 
-    def date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
+    def _date_range_to_string(self, date_range: tuple) -> tuple[str, str]:
         """
         Convert a tuple of datetime objects to a tuple of parseable strings. Necessary for Xarray metadata parsing.
 
@@ -340,7 +271,7 @@ class Convenience(Attributes):
             datetime.datetime.strftime(date_range[1], "%Y%m%d%H"),
         )
 
-    def strings_to_date_range(
+    def _strings_to_date_range(
         self, date_range: tuple, parse_string: str = "%Y%m%d%H"
     ) -> tuple[datetime.datetime, datetime.datetime]:
         """
@@ -454,22 +385,6 @@ class Convenience(Attributes):
             round(float(dataset.latitude.values.max()), self.bbox_rounding_value),
         )
 
-    def _json_to_bytes(self, obj: dict) -> bytes:
-        """
-        Convert a JSON object to a file type object (bytes). Primarily used for passing STAC metadata over HTTP
-
-        Parameters
-        ----------
-        obj : dict
-            The object (JSON) to be converted
-
-        Returns
-        -------
-        bytes
-            The json encoded as a file type object
-        """
-        return io.BytesIO(json.dumps(obj).encode("utf-8"))
-
     def check_if_new_data(self, compare_date: datetime.datetime) -> bool:
         """
         Check if the downloaded data contains any new records relative to the existing dataset.
@@ -541,17 +456,3 @@ class Convenience(Attributes):
         for dim in dataset.dims:
             coords_dict.update({dim: random.choice(dataset[dim].values)})
         return coords_dict
-
-    @property
-    @deprecation.deprecated("Use the constant DatasetManager.EXTREME_VALUES_BY_UNIT")
-    def extreme_values_by_unit(self):
-        """
-        Define minimum and maximum permissible values for common units
-
-        Returns
-        -------
-        dict
-            A dict of {str : (float, float)} representing the unit name
-            and corresponding lower/upper value limits
-        """
-        return self.EXTREME_VALUES_BY_UNIT  # pragma NO COVER, this is a constant

@@ -283,11 +283,9 @@ class TestMetadata:
     @staticmethod
     def test_publish_stac(manager_class):
         dm = manager_class()
-        dm.json_to_bytes = mock.Mock()
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dm._publish_stac("The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG)
-        dm.json_to_bytes.assert_not_called()
         dm.store.push_metadata.assert_called_once_with(
             "The Jungle Book", {"hi": "mom!"}, metadata.StacType.CATALOG.value
         )

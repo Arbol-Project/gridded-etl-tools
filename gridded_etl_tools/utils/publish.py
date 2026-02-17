@@ -884,7 +884,7 @@ class Publish(Transform):
             A list of valid input files in pathlib.Path format
         """
         possible_files = list(self.input_files())
-        start_date, end_date = self.strings_to_date_range(prod_ds.attrs["update_date_range"])
+        start_date, end_date = self._strings_to_date_range(prod_ds.attrs["update_date_range"])
         n = len(possible_files)
 
         # Find leftmost file >= start_date. Use the latest timestamp contained in the file, so the file is checked for
