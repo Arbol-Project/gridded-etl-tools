@@ -110,6 +110,8 @@ government_website = "https://bizarre-foods.reference/farmland/yield.html"
 
 government_website_broken = "https://bizarre-foods.reference/broken/link"
 
+government_website_missing = "https://bizarre-foods.reference/missing/page"
+
 crops = b"""<a class="example" href="purple-coffee" id="Link1">Purple coffee<</a>,
     <a class="example" href="sour-avocadoes" id="Link2"><Sour avocadoes</a>,
     <a class="example" href="happy/juice.data" id="Link2"><Happy Juice</a>,
@@ -288,6 +290,25 @@ class TestHTTPExtractor:
             assert extractor.request("https://good.data", tmp_path / pathlib.Path("stonks.jpeg"))
             for result in results:
                 assert result.call_count == 1
+
+    @staticmethod
+    @responses.activate
+    def test_ignorable_status_codes(manager_class, tmp_path):
+        """Test that responses with ignorable status codes return False without retrying"""
+        responses.get(government_website_missing, status=404)
+        with HTTPExtractor(manager_class(), 4, 3, 0.1, ignorable_status_codes=[404]) as extractor:
+            result = extractor.request(government_website_missing, tmp_path / "missing.html")
+            assert result is False
+            assert not (tmp_path / "missing.html").exists()
+
+    @staticmethod
+    @responses.activate
+    def test_non_ignorable_status_codes_still_fail(manager_class, tmp_path):
+        """Test that non-ignorable error status codes still raise as expected"""
+        responses.get(government_website_missing, status=404)
+        with HTTPExtractor(manager_class(), 4, 3, 0.1) as extractor:
+            with pytest.raises(requests.exceptions.RequestException):
+                extractor.request(government_website_missing, tmp_path / "missing.html")
 
 
 class TestS3ExtractorKerchunk:

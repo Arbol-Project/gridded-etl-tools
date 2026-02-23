@@ -346,6 +346,9 @@ class RetryingExtractor(Extractor):
         raise self._get_failure_exception(counter - 1, identifier)
 
 
+DEFAULT_RETRY_STATUS_CODES = [500, 502, 503, 504]
+
+
 class HTTPExtractor(RetryingExtractor):
     """
     Request data from given URLs over HTTP from within a context manager. The context manager creates a session, from
@@ -366,8 +369,19 @@ class HTTPExtractor(RetryingExtractor):
 
     session: requests.Session
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, ignorable_status_codes: typing.Sequence[int] = (), **kwargs):
+        """
+        Parameters
+        ----------
+        *args, **kwargs
+            Passed through to RetryingExtractor
+        ignorable_status_codes
+            HTTP status codes that should not be retried or trigger failure.
+            When a response with one of these codes is received, the request
+            returns False instead of raising an exception.
+        """
         super().__init__(*args, **kwargs)
+        self.ignorable_status_codes: tuple[int, ...] = tuple(ignorable_status_codes)
         # RetryError is raised by urllib3.Retry when HTTP status code retries are exhausted.
         # Don't retry these - they already went through their own retry logic.
         self.unsupported_extraction_errors = tuple(self.unsupported_extraction_errors) + (
@@ -383,8 +397,9 @@ class HTTPExtractor(RetryingExtractor):
         HTTPConnection
             this object
         """
+        status_forcelist = [code for code in DEFAULT_RETRY_STATUS_CODES if code not in self.ignorable_status_codes]
         retry_strategy = Retry(
-            total=self.retries, status_forcelist=[500, 502, 503, 504], backoff_factor=self.backoff_factor
+            total=self.retries, status_forcelist=status_forcelist, backoff_factor=self.backoff_factor
         )
         self.session = requests.Session()
         self.session.mount(prefix="https://", adapter=HTTPAdapter(max_retries=retry_strategy))
@@ -476,6 +491,9 @@ class HTTPExtractor(RetryingExtractor):
             True if successful
         """
         response = self.session.get(remote_file_path)
+        if response.status_code in self.ignorable_status_codes:
+            log.info(f"Received ignorable status code {response.status_code} for {remote_file_path}, skipping")
+            return False
         response.raise_for_status()
         with open(local_file_path, "wb") as outfile:
             outfile.write(response.content)

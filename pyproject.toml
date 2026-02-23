@@ -45,7 +45,7 @@ dependencies = [
     "natsort",
     "nest-asyncio",
     "netcdf4",
-    "numpy",
+    "numpy<2.4", # missing data vars when above 2.4, investigate
     "p_tqdm",
     "pandas",
     "psutil",
