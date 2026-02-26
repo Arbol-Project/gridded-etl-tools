@@ -1195,8 +1195,10 @@ def test_nan_frequency(
     random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
     nan_count = np.isnan(random_values).sum()
 
-    # Calculate the confidence interval
-    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
+    # Calculate the confidence interval. For one-sided tests, double alpha so the lower bound
+    # alone corresponds to the full significance level (a two-sided CI puts alpha/2 in each tail).
+    ci_alpha = alpha * 2 if one_sided else alpha
+    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=ci_alpha, method="binom_test")
 
     # Check if the expected frequency falls within the confidence interval
     if one_sided:
