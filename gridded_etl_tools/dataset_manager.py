@@ -94,6 +94,7 @@ class DatasetManager(Logging, Publish, ABC):
         use_local_zarr_jsons: bool = False,
         skip_prepare_input_files: bool = False,
         skip_pre_parse_nan_check: bool = False,
+        nan_check_one_sided: bool = False,
         skip_post_parse_qc: bool = False,
         skip_post_parse_api_check: bool = False,
         encryption_key: str | None = None,
@@ -152,6 +153,10 @@ class DatasetManager(Logging, Publish, ABC):
         skip_post_parse_qc: bool, optional
             Skip the `post_parse_quality_check` method. Applicable to datasets
             that transform source data before parsing, making source data checks irrelevant.
+        nan_check_one_sided: bool, optional
+            Use a one-sided binomial test for NaN frequency checks. When True, only flags when
+            the observed NaN frequency is significantly *higher* than expected, ignoring cases
+            where NaN frequency is lower than expected (which is typically benign).
         skip_post_parse_api_check: bool, optional
             Skip API checks run by the orchestration stack.
             Applicable to datasets that are not set up for API access.
@@ -190,6 +195,7 @@ class DatasetManager(Logging, Publish, ABC):
         self.use_local_zarr_jsons = use_local_zarr_jsons
         self.skip_prepare_input_files = skip_prepare_input_files
         self.skip_pre_parse_nan_check = skip_pre_parse_nan_check
+        self.nan_check_one_sided = nan_check_one_sided
         self.skip_post_parse_qc = skip_post_parse_qc
         self.skip_post_parse_api_check = skip_post_parse_api_check
 

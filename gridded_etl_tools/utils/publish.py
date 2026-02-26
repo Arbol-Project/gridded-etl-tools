@@ -692,6 +692,7 @@ class Publish(Transform):
             test_nan_frequency(
                 data_array=selected_array,
                 expected_nan_frequency=self.pre_chunk_dataset.attrs["expected_nan_frequency"],
+                one_sided=self.nan_check_one_sided,
             )
 
     def update_quality_check(
@@ -1147,6 +1148,7 @@ def test_nan_frequency(
     expected_nan_frequency: float,
     sample_size: int = 5000,
     alpha: float = 0.00001,
+    one_sided: bool = False,
 ):
     """
     Test whether the frequency of NaNs in an Xarray DataArray matches the expected distribution
@@ -1165,6 +1167,11 @@ def test_nan_frequency(
         of the update dataset
     alpha : float
         The significance level for the hypothesis test (default is 0.001).
+    one_sided : bool
+        If True, only reject when the observed NaN frequency is significantly *higher*
+        than expected (i.e., expected_nan_frequency falls below the lower bound of the
+        confidence interval). Lower-than-expected NaN frequencies are considered benign
+        and will not trigger an error.
 
     Returns
     -------
@@ -1188,12 +1195,20 @@ def test_nan_frequency(
     random_values = np.random.default_rng().choice(flat_array, sample_size, replace=False)
     nan_count = np.isnan(random_values).sum()
 
-    # Calculate the confidence interval
-    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=alpha, method="binom_test")
+    # Calculate the confidence interval. For one-sided tests, double alpha so the lower bound
+    # alone corresponds to the full significance level (a two-sided CI puts alpha/2 in each tail).
+    ci_alpha = alpha * 2 if one_sided else alpha
+    lower_bound, upper_bound = proportion_confint(nan_count, sample_size, alpha=ci_alpha, method="binom_test")
 
     # Check if the expected frequency falls within the confidence interval
-    if not (lower_bound <= expected_nan_frequency <= upper_bound):
-        raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
+    if one_sided:
+        # Only reject when observed NaN frequency is significantly higher than expected
+        # (expected_nan_frequency falls below the lower bound of the CI)
+        if expected_nan_frequency < lower_bound:
+            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
+    else:
+        if not (lower_bound <= expected_nan_frequency <= upper_bound):
+            raise NanFrequencyMismatchError(nan_count / sample_size, expected_nan_frequency, lower_bound, upper_bound)
 
 
 def shuffled_coords(dataset: xr.Dataset) -> Generator[dict[str, Any], None, None]:
