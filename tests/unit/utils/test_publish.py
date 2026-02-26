@@ -981,6 +981,62 @@ class TestPublish:
             dm.pre_parse_quality_check(fake_large_dataset)
 
     @staticmethod
+    def test_preparse_quality_check_nan_binomial_one_sided_low_nans(mocker, manager_class, fake_large_dataset):
+        """One-sided test should NOT flag when observed NaN frequency is lower than expected"""
+        dm = manager_class()
+        dm.nan_check_one_sided = True
+        dm.check_random_values = mock.Mock()
+        dm.encode_ds(fake_large_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
+        dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
+        data_shape = np.shape(fake_large_dataset.data)
+
+        # 0% NaNs with expected 20% — two-sided would reject, but one-sided should pass
+        partial_nan_array = generate_partial_nan_array(data_shape, 0)
+        fake_large_dataset.data[:] = partial_nan_array
+        dm.pre_chunk_dataset = fake_large_dataset
+        dm.pre_parse_quality_check(fake_large_dataset)
+
+    @staticmethod
+    def test_preparse_quality_check_nan_binomial_one_sided_high_nans(mocker, manager_class, fake_large_dataset):
+        """One-sided test should flag when observed NaN frequency is higher than expected"""
+        dm = manager_class()
+        dm.nan_check_one_sided = True
+        dm.check_random_values = mock.Mock()
+        dm.encode_ds(fake_large_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
+        dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
+
+        # 100% NaNs with expected 20% — one-sided should still reject
+        fake_large_dataset.data[:] = np.nan
+        dm.pre_chunk_dataset = fake_large_dataset
+        with pytest.raises(NanFrequencyMismatchError):
+            dm.pre_parse_quality_check(fake_large_dataset)
+
+    @staticmethod
+    def test_preparse_quality_check_nan_binomial_one_sided_expected_nans(mocker, manager_class, fake_large_dataset):
+        """One-sided test should pass when observed NaN frequency matches expected"""
+        dm = manager_class()
+        dm.nan_check_one_sided = True
+        dm.check_random_values = mock.Mock()
+        dm.encode_ds(fake_large_dataset)
+        dm.store = mock.Mock(spec=store.Local, has_existing=True)
+
+        fake_large_dataset.attrs["expected_nan_frequency"] = 0.2
+        dm.store.dataset = mock.Mock(return_value=fake_large_dataset)
+        data_shape = np.shape(fake_large_dataset.data)
+
+        # ~20% NaNs with expected 20% — should pass
+        partial_nan_array = generate_partial_nan_array(data_shape, 0.2)
+        fake_large_dataset.data[:] = partial_nan_array
+        dm.pre_chunk_dataset = fake_large_dataset
+        dm.pre_parse_quality_check(fake_large_dataset)
+
+    @staticmethod
     def test_preparse_quality_check_nan_binomial_small_array(mocker, manager_class, fake_original_dataset):
         dm = manager_class()
         dm.check_random_values = mock.Mock()

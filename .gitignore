@@ -50,3 +50,6 @@ logs/
 
 # Mac stuff
 *.DS_STORE*
+
+# AI
+CLAUDE.MD
