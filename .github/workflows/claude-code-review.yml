@@ -12,18 +12,19 @@ on:
 
 jobs:
   claude-review:
-    # Run on PR events OR when "claude: force review" comment is added to a ready-for-review PR
-    # The latter allows for manual triggering of a review when re-reviews are desired
+    # Run on non-fork PR events OR when a repo member comments "claude: force review"
     if: |
-      (github.event_name == 'pull_request' && 
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
         (
           (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
           github.event.action == 'ready_for_review'
         )
       ) ||
-      (github.event_name == 'issue_comment' && 
+      (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
-        contains(github.event.comment.body || '', 'claude: force review')
+        contains(github.event.comment.body || '', 'claude: force review') &&
+        contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association)
       )
     
     # Optional: Filter by PR author
