@@ -90,7 +90,7 @@ def setup_and_teardown_per_test(
     mocker.patch("gridded_etl_tools.dataset_manager.DatasetManager.key", patched_key)
     mocker.patch("examples.managers.chirps.CHIRPS.collection", return_value="CHIRPS_test")
     mocker.patch(
-        "gridded_etl_tools.dataset_manager.DatasetManager.zarr_json_path",
+        "gridded_etl_tools.dataset_manager.DatasetManager._zarr_json_path",
         patched_zarr_json_path,
     )
     mocker.patch(
@@ -148,7 +148,7 @@ def test_initial_dry_run(mocker, manager_class, test_chunks, initial_input_path)
     dm.transform_data_on_disk()
     publish_dataset = dm.transform_dataset_in_memory()
     dm.parse(publish_dataset)
-    dm.zarr_json_path().unlink(missing_ok=True)
+    dm._zarr_json_path().unlink(missing_ok=True)
     # Check that a path wasn't created because the dataset wasn't parsed
     assert not dm.store.has_existing
 
@@ -174,7 +174,7 @@ def test_initial(manager_class, initial_input_path, root):
     """
     # Get the CHIRPS manager with rebuild set
     dm = run_etl(manager_class, input_path=initial_input_path, use_local_zarr_jsons=False, store="local")
-    dm.zarr_json_path().unlink(missing_ok=True)
+    dm._zarr_json_path().unlink(missing_ok=True)
     generated_dataset = dm.store.dataset()
 
     # Las Vegas

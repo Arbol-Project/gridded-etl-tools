@@ -1,5 +1,4 @@
 import datetime
-import json
 import pathlib
 import ftplib
 from unittest.mock import Mock
@@ -94,7 +93,7 @@ class TestConvenience:
     def test_zarr_json_path(manager_class):
         dm = manager_class()
         dm._root_directory = pathlib.Path("/the/root")
-        assert dm.zarr_json_path() == pathlib.Path("/the/root/datasets/merged_zarr_jsons/DummyManager_zarr.json")
+        assert dm._zarr_json_path() == pathlib.Path("/the/root/datasets/merged_zarr_jsons/DummyManager_zarr.json")
 
     @staticmethod
     def test_key(manager_class):
@@ -141,28 +140,6 @@ class TestConvenience:
         assert sorted(list(dm.input_files())) == sorted([pathlib.Path(path) for path in expected])
 
     @staticmethod
-    def test_get_folder_path_from_date(manager_class):
-        dm = manager_class()
-        dm._root_directory = pathlib.Path("/theroot")
-        date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/20100512")
-
-    @staticmethod
-    def test_get_folder_path_from_date_omit_root(manager_class):
-        dm = manager_class()
-        dm._root_directory = pathlib.Path("/theroot")
-        date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date, omit_root=True) == pathlib.Path("20100512")
-
-    @staticmethod
-    def test_get_folder_path_from_date_hourly(manager_class):
-        dm = manager_class()
-        dm._root_directory = pathlib.Path("/theroot")
-        dm.time_resolution = dm.SPAN_HOURLY
-        date = datetime.datetime(2010, 5, 12, 2, 42)
-        assert dm.get_folder_path_from_date(date) == pathlib.Path("/theroot/climate/2010051202")
-
-    @staticmethod
     def test_output_path(manager_class):
         dm = manager_class()
         dm._root_directory = pathlib.Path("/theroot")
@@ -198,32 +175,6 @@ class TestConvenience:
         dm.store = Mock(has_existing=False, spec=store.Local)
         with pytest.raises(ValueError):
             assert dm.get_metadata_date_range()
-
-    @staticmethod
-    def test_convert_date_range(manager_class):
-        dm = manager_class()
-        with pytest.deprecated_call():
-            range = dm.convert_date_range(["2000/1/1", "2020/12/31"])
-        assert range == (
-            datetime.datetime(2000, 1, 1, 0, 0),
-            datetime.datetime(2020, 12, 31, 0, 0),
-        )
-
-    @staticmethod
-    def test_convert_date_range_iso(manager_class):
-        dm = manager_class()
-        with pytest.deprecated_call():
-            range = dm.convert_date_range(["2000-01-01", "2020-12-31"])
-        assert range == (
-            datetime.datetime(2000, 1, 1, 0, 0),
-            datetime.datetime(2020, 12, 31, 0, 0),
-        )
-
-    @staticmethod
-    def test_iso_to_datetime(manager_class):
-        dm = manager_class()
-        with pytest.deprecated_call():
-            assert dm.iso_to_datetime("2000-01-01") == datetime.datetime(2000, 1, 1, 0, 0)
 
     @staticmethod
     def test_numpydate_to_py(manager_class):
@@ -267,7 +218,7 @@ class TestConvenience:
         )
 
     @staticmethod
-    def test_get_date_range_from_file(mocker, manager_class, fake_original_dataset):
+    def testget_date_range_from_file(mocker, manager_class, fake_original_dataset):
         xr = mocker.patch("gridded_etl_tools.utils.convenience.xr")
         xr.open_dataset.return_value = fake_original_dataset
 
@@ -281,19 +232,19 @@ class TestConvenience:
         xr.open_dataset.assert_called_once_with("some/arbitrary/path", backend_kwargs={"foo": "bar"}, **kwargs)
 
     @staticmethod
-    def test_date_range_to_string(manager_class):
+    def test__date_range_to_string(manager_class):
         date_range = (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
         dm = manager_class()
-        assert dm.date_range_to_string(date_range) == ("2021091600", "2022013100")
+        assert dm._date_range_to_string(date_range) == ("2021091600", "2022013100")
 
     @staticmethod
-    def test_strings_to_date_range(manager_class):
+    def test__strings_to_date_range(manager_class):
         string_dates = ("2021091600", "2022013100")
         dm = manager_class()
-        assert dm.strings_to_date_range(string_dates) == (
+        assert dm._strings_to_date_range(string_dates) == (
             datetime.datetime(2021, 9, 16, 0, 0),
             datetime.datetime(2022, 1, 31, 0, 0),
         )
@@ -374,14 +325,6 @@ class TestConvenience:
         assert dm.bbox_coords(fake_original_dataset) == (100.0, 10.0, 130.0, 40.0)
 
     @staticmethod
-    def test_json_to_bytes(manager_class):
-        dm = manager_class()
-        encoded = dm.json_to_bytes({"foo": "bar"})
-        encoded.seek(0)  # rewind
-        decoded = json.load(encoded)
-        assert decoded == {"foo": "bar"}
-
-    @staticmethod
     def test_check_if_new_data(manager_class):
         dm = manager_class()
         dm.get_newest_file_date_range = Mock(return_value=["foo", datetime.datetime(1066, 10, 14, 0, 0, 0)])
@@ -434,8 +377,3 @@ class TestConvenience:
         assert coords["time"] in fake_original_dataset["time"]
         assert coords["longitude"] in fake_original_dataset["longitude"]
         assert coords["latitude"] in fake_original_dataset["latitude"]
-
-    @staticmethod
-    def test_extreme_values_by_unit(manager_class):
-        dm = manager_class()
-        assert dm.EXTREME_VALUES_BY_UNIT == manager_class.EXTREME_VALUES_BY_UNIT

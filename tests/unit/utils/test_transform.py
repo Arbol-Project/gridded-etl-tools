@@ -30,7 +30,7 @@ def input_files(tmp_path, mocker):
     def kerchunkify(self, path):
         return json.load(open(path))
 
-    mocker.patch("gridded_etl_tools.utils.transform.Transform.kerchunkify", kerchunkify)
+    mocker.patch("gridded_etl_tools.utils.transform.Transform._kerchunkify", kerchunkify)
     mocker.patch("gridded_etl_tools.utils.transform.Transform.input_files", mock.Mock(return_value=files))
 
     return files
@@ -177,7 +177,7 @@ class TestTransform:
         # Mock zarr_json_path and its parent directory
         mock_path = mock.Mock()
         mock_path.parent.mkdir = mock.Mock()
-        md.zarr_json_path = mock.Mock(return_value=mock_path)
+        md._zarr_json_path = mock.Mock(return_value=mock_path)
 
         with pytest.raises(FileNotFoundError) as exc_info:
             md.create_zarr_json()
@@ -191,87 +191,87 @@ class TestTransform:
     @staticmethod
     def test_kerchunkify_local(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock()
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock()
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         assert md.use_local_zarr_jsons is False
 
-        assert md.kerchunkify("/home/body/over/here.json") is md.local_kerchunk.return_value
-        md.local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
-        md.remote_kerchunk.assert_not_called()
-        md.zarr_json_in_memory_to_file.assert_not_called()
+        assert md._kerchunkify("/home/body/over/here.json") is md._local_kerchunk.return_value
+        md._local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
+        md._remote_kerchunk.assert_not_called()
+        md._zarr_json_in_memory_to_file.assert_not_called()
 
     @staticmethod
     def test_kerchunkify_remote(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock()
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock()
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         assert md.use_local_zarr_jsons is False
 
-        assert md.kerchunkify("s3://remote/over/here.json", 42) is md.remote_kerchunk.return_value
-        md.local_kerchunk.assert_not_called()
-        md.remote_kerchunk.assert_called_once_with("s3://remote/over/here.json", 42)
-        md.zarr_json_in_memory_to_file.assert_not_called()
+        assert md._kerchunkify("s3://remote/over/here.json", 42) is md._remote_kerchunk.return_value
+        md._local_kerchunk.assert_not_called()
+        md._remote_kerchunk.assert_called_once_with("s3://remote/over/here.json", 42)
+        md._zarr_json_in_memory_to_file.assert_not_called()
 
     @staticmethod
     def test_kerchunkify_local_use_local_zarr_jsons(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock()
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock()
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         md.use_local_zarr_jsons = True
         md.protocol = "file"
 
-        assert md.kerchunkify("/home/body/over/here.json") is md.local_kerchunk.return_value
-        md.local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
-        md.remote_kerchunk.assert_not_called()
-        md.zarr_json_in_memory_to_file.assert_called_once_with(
-            md.local_kerchunk.return_value, "/home/body/over/here.json"
+        assert md._kerchunkify("/home/body/over/here.json") is md._local_kerchunk.return_value
+        md._local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
+        md._remote_kerchunk.assert_not_called()
+        md._zarr_json_in_memory_to_file.assert_called_once_with(
+            md._local_kerchunk.return_value, "/home/body/over/here.json"
         )
 
     @staticmethod
     def test_kerchunkify_remote_use_local_zarr_jsons(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock()
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock()
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         md.use_local_zarr_jsons = True
         md.protocol = "s3"
 
         assert (
-            md.kerchunkify("s3://remote/over/here.json", local_file_path="/local/here.json")
-            is md.remote_kerchunk.return_value
+            md._kerchunkify("s3://remote/over/here.json", local_file_path="/local/here.json")
+            is md._remote_kerchunk.return_value
         )
-        md.local_kerchunk.assert_not_called()
-        md.remote_kerchunk.assert_called_once_with("s3://remote/over/here.json", 0)
-        md.zarr_json_in_memory_to_file.assert_called_once_with(md.remote_kerchunk.return_value, "/local/here.json")
+        md._local_kerchunk.assert_not_called()
+        md._remote_kerchunk.assert_called_once_with("s3://remote/over/here.json", 0)
+        md._zarr_json_in_memory_to_file.assert_called_once_with(md._remote_kerchunk.return_value, "/local/here.json")
 
     @staticmethod
     def test_kerchunkify_remote_use_local_zarr_jsons_missing_local_file_path(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock()
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock()
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         md.use_local_zarr_jsons = True
         md.protocol = "s3"
 
         with pytest.raises(ValueError):
-            md.kerchunkify("s3://remote/over/here.json")
+            md._kerchunkify("s3://remote/over/here.json")
 
     @staticmethod
     def test_kerchunkify_local_use_local_zarr_jsons_kerchunk_returns_list(manager_class):
         md = manager_class()
-        md.local_kerchunk = mock.Mock(return_value=["abacus", "bertrand", "chloroform"])
-        md.remote_kerchunk = mock.Mock()
-        md.zarr_json_in_memory_to_file = mock.Mock()
+        md._local_kerchunk = mock.Mock(return_value=["abacus", "bertrand", "chloroform"])
+        md._remote_kerchunk = mock.Mock()
+        md._zarr_json_in_memory_to_file = mock.Mock()
         md.use_local_zarr_jsons = True
         md.protocol = "file"
 
-        assert md.kerchunkify("/home/body/over/here.json") is md.local_kerchunk.return_value
-        md.local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
-        md.remote_kerchunk.assert_not_called()
-        md.zarr_json_in_memory_to_file.assert_has_calls(
+        assert md._kerchunkify("/home/body/over/here.json") is md._local_kerchunk.return_value
+        md._local_kerchunk.assert_called_once_with("/home/body/over/here.json", 0)
+        md._remote_kerchunk.assert_not_called()
+        md._zarr_json_in_memory_to_file.assert_has_calls(
             [
                 mock.call("abacus", "/home/body/over/here.json"),
                 mock.call("bertrand", "/home/body/over/here.json"),
@@ -290,7 +290,7 @@ class TestTransform:
 
         md = manager_class()
         md.file_type = "NetCDF"
-        assert md.local_kerchunk("/read/from/here") is scanned_zarr_json
+        assert md._local_kerchunk("/read/from/here") is scanned_zarr_json
 
         fsspec.filesystem.assert_called_once_with("file")
         SingleHdf5ToZarr.assert_called_once_with(h5f=infile, url="/read/from/here", inline_threshold=5000)
@@ -305,7 +305,7 @@ class TestTransform:
         md = manager_class()
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"  # TODO: Validate data manager attributes to make sure grib_filter exists
-        assert md.local_kerchunk("/read/from/here") is scanned_zarr_json
+        assert md._local_kerchunk("/read/from/here") is scanned_zarr_json
 
         scan_grib.assert_called_once_with(url="/read/from/here", filter="iamafilter", inline_threshold=20)
 
@@ -313,7 +313,7 @@ class TestTransform:
     def test_local_kerchunk_invalid_file_type(manager_class):
         md = manager_class()
         with pytest.raises(ValueError):
-            md.local_kerchunk("/read/from/here")
+            md._local_kerchunk("/read/from/here")
 
     @staticmethod
     def test_local_kerchunk_netcdf_os_error(manager_class, mocker):
@@ -327,7 +327,7 @@ class TestTransform:
         md = manager_class()
         md.file_type = "NetCDF"
         with pytest.raises(ValueError):
-            md.local_kerchunk("/read/from/here")
+            md._local_kerchunk("/read/from/here")
 
     @staticmethod
     def test_remote_kerchunk_netcdf(manager_class, mocker):
@@ -342,7 +342,7 @@ class TestTransform:
         md.zarr_jsons = []  # TODO: See note about code smell in remote_kerchunk method
         md.file_type = "NetCDF"
 
-        assert md.remote_kerchunk("over/here") is scanned_zarr_json
+        assert md._remote_kerchunk("over/here") is scanned_zarr_json
         assert md.zarr_jsons == [{"hi": "mom!"}]
 
         s3fs.S3FileSystem.assert_called_once_with()
@@ -362,7 +362,7 @@ class TestTransform:
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"  # TODO: Validate data manager attributes to make sure grib_filter exists
 
-        assert md.remote_kerchunk("over/here") is scanned_zarr_json
+        assert md._remote_kerchunk("over/here") is scanned_zarr_json
         assert md.zarr_jsons == [{"hi": "mom!"}]
 
         scan_grib.assert_called_once_with(
@@ -383,7 +383,7 @@ class TestTransform:
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"  # TODO: Validate data manager attributes to make sure grib_filter exists
 
-        assert md.remote_kerchunk("over/here", scan_indices=42) is scanned_zarr_json
+        assert md._remote_kerchunk("over/here", scan_indices=42) is scanned_zarr_json
         assert md.zarr_jsons == [{"hi": "mom!"}]
 
         scan_grib.assert_called_once_with(
@@ -399,7 +399,7 @@ class TestTransform:
         md.file_type = "Some other weird format"
 
         with pytest.raises(ValueError):
-            md.remote_kerchunk("over/here")
+            md._remote_kerchunk("over/here")
 
     @staticmethod
     def test_remote_kerchunk_grib_remote_scan_returns_list(manager_class, mocker):
@@ -412,7 +412,7 @@ class TestTransform:
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"  # TODO: Validate data manager attributes to make sure grib_filter exists
 
-        assert md.remote_kerchunk("over/here") is scanned_zarr_json
+        assert md._remote_kerchunk("over/here") is scanned_zarr_json
         assert md.zarr_jsons == [{"hi": "mom!"}]
 
         scan_grib.assert_called_once_with(
@@ -434,7 +434,7 @@ class TestTransform:
         md.grib_filter = "iamafilter"  # TODO: Validate data manager attributes to make sure grib_filter exists
 
         with pytest.raises(ValueError):
-            md.remote_kerchunk("over/here")
+            md._remote_kerchunk("over/here")
 
         scan_grib.assert_called_once_with(
             url="over/here",
@@ -448,7 +448,7 @@ class TestTransform:
         dm = manager_class()
         local_file_path = tmpdir / "output_zarr_json.json"
         json_data = {"hi": "mom!"}
-        dm.zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
+        dm._zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
         with open(local_file_path) as f:
             assert json.load(f) == json_data
 
@@ -464,9 +464,9 @@ class TestTransform:
             return tmpdir / "this_other_zarr.json"
 
         dm = manager_class()
-        dm.file_path_from_zarr_json_attrs = file_path_from_zarr_json_attrs
+        dm._file_path_from_zarr_json_attrs = file_path_from_zarr_json_attrs
 
-        dm.zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
+        dm._zarr_json_in_memory_to_file(json_data, local_file_path=local_file_path)
         assert not os.path.exists(local_file_path)
         with open(tmpdir / "this_other_zarr.json") as f:
             assert json.load(f) == json_data
@@ -577,7 +577,7 @@ class TestTransform:
 
         N = 250
         dm = manager_class()
-        dm.archive_original_files = mock.Mock()
+        dm._archive_original_files = mock.Mock()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
         assert "CDO_FILE_SUFFIX" not in os.environ
@@ -624,7 +624,7 @@ class TestTransform:
 
         N = 250
         dm = manager_class()
-        dm.archive_original_files = mock.Mock()
+        dm._archive_original_files = mock.Mock()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
         assert "CDO_FILE_SUFFIX" not in os.environ
@@ -670,7 +670,7 @@ class TestTransform:
 
         N = 250
         dm = manager_class()
-        dm.archive_original_files = mock.Mock()
+        dm._archive_original_files = mock.Mock()
         input_files = [pathlib.Path(f"fido_{n:03d}.dog") for n in range(N)]
 
         dm.parallel_subprocess_files(input_files, ["convertpet", "--cat"], ".cat", keep_originals=True)
@@ -681,7 +681,7 @@ class TestTransform:
         ]
         assert subprocesses == expected
         assert removed_files == []
-        dm.archive_original_files.assert_called_once_with(input_files)
+        dm._archive_original_files.assert_called_once_with(input_files)
 
     @staticmethod
     def test_parallel_subprocess_files_invert_file_order(mocker, manager_class):
@@ -815,7 +815,7 @@ class TestTransform:
                 f.write("hi mom!")
 
         dm = manager_class()
-        dm.archive_original_files(orig_files)
+        dm._archive_original_files(orig_files)
 
         assert all([not file.exists() for file in orig_files])
 
@@ -840,7 +840,7 @@ class TestTransform:
         dataset2 = dataset1.transpose.return_value
         dataset3 = dm.set_zarr_metadata.return_value
 
-        assert dm.initial_ds_transform() is dataset3
+        assert dm._initial_ds_transform() is dataset3
 
         dm.load_dataset_from_disk.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
@@ -862,7 +862,7 @@ class TestTransform:
         dataset1.dims = {"time": 10, "latitude": 180}
         dm.standard_dims = ["time", "latitude", "longitude"]
 
-        dm.initial_ds_transform()
+        dm._initial_ds_transform()
 
         # transpose should only be called with dims that exist in the dataset
         dataset1.transpose.assert_called_once_with("time", "latitude")
@@ -878,7 +878,7 @@ class TestTransform:
 
         dataset1 = dm.load_dataset_from_disk.return_value
 
-        assert dm.update_ds_transform() is dataset1
+        assert dm._update_ds_transform() is dataset1
 
         dm.load_dataset_from_disk.assert_called_once_with()
         dm.set_key_dims.assert_called_once_with()
@@ -899,10 +899,10 @@ class TestTransform:
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+        dm._zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset() is dataset
-        dm.zarr_json_path.assert_called_once_with()
+        dm._zarr_json_path.assert_called_once_with()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
             engine="zarr",
@@ -927,10 +927,10 @@ class TestTransform:
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+        dm._zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset(extra_storage_options={"chocolate": "bar"}) is dataset
-        dm.zarr_json_path.assert_called_once_with()
+        dm._zarr_json_path.assert_called_once_with()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
             engine="zarr",
@@ -955,10 +955,10 @@ class TestTransform:
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=True)
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+        dm._zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset() is dataset
-        dm.zarr_json_path.assert_called_once_with()
+        dm._zarr_json_path.assert_called_once_with()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
             engine="zarr",
@@ -983,10 +983,10 @@ class TestTransform:
         dataset = xr.open_dataset.return_value
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
-        dm.zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
+        dm._zarr_json_path = mock.Mock(return_value=pathlib.Path("/path/to/zarr.json"))
 
         assert dm.zarr_json_to_dataset("/path/to/different.json", decode_times=False, other_stuff=True) is dataset
-        dm.zarr_json_path.assert_not_called()
+        dm._zarr_json_path.assert_not_called()
         xr.open_dataset.assert_called_once_with(
             filename_or_obj="reference://",
             engine="zarr",

@@ -53,7 +53,7 @@ class Transform(Metadata, Convenience):
         Parameters
         ----------
         force_overwrite : bool, optional
-            Switch to use (or not) an existing MultiZarr JSON at `DatasetManager.zarr_json_path()`.
+            Switch to use (or not) an existing MultiZarr JSON at `DatasetManager._zarr_json_path()`.
             Defaults to ovewriting any existing JSON under the assumption new data has been found.
         file_filters
             A list of strings used to further filter down input files for kerchunkifying.
@@ -61,11 +61,11 @@ class Transform(Metadata, Convenience):
             Defaults to None.
         outfile_path
             A custom string path for the final, merged Zarr JSON.
-            Defaults to None, in which case Zarr JSONs are output to self.zarr_json_path.
+            Defaults to None, in which case Zarr JSONs are output to self._zarr_json_path.
         """
-        self.zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
+        self._zarr_json_path().parent.mkdir(mode=0o755, exist_ok=True)
         # Generate a multizarr if it doesn't exist. If one exists, overwrite it unless directed otherwise.
-        if not self.zarr_json_path().exists() or force_overwrite:
+        if not self._zarr_json_path().exists() or force_overwrite:
             start_kerchunking = time.time()
             # Prepapre a list of zarr_jsons and feed that to MultiZarrtoZarr
             if not hasattr(self, "zarr_jsons"):
@@ -87,7 +87,7 @@ class Transform(Metadata, Convenience):
                     f"Generating Zarr JSON for {len(input_files_list)} files with {multiprocessing.cpu_count()} "
                     "processors"
                 )
-                self.zarr_jsons = list(map(self.kerchunkify, tqdm(input_files_list)))
+                self.zarr_jsons = list(map(self._kerchunkify, tqdm(input_files_list)))
                 mzz = MultiZarrToZarr(path=input_files_list, indicts=self.zarr_jsons, **self.mzz_opts())
             # if remotely extracting JSONs from S3, self.zarr_jsons should already be prepared during the `extract`
             # step
@@ -109,14 +109,14 @@ class Transform(Metadata, Convenience):
             # Translate the MultiZarr to a master JSON and save that out locally. Will fail if the input JSONs are
             # misspecified.
             if not outfile_path:
-                outfile_path = self.zarr_json_path()
+                outfile_path = self._zarr_json_path()
 
             mzz.translate(filename=outfile_path)
             self.info(f"Kerchunking to Zarr JSON --- {round((time.time() - start_kerchunking) / 60, 2)} minutes")
         else:
             self.info("Existing Zarr found, using that")
 
-    def kerchunkify(
+    def _kerchunkify(
         self,
         file_path: str,
         scan_indices: int = 0,
@@ -160,9 +160,9 @@ class Transform(Metadata, Convenience):
             Return a ValueError if no local_file_path is specified
         """
         if file_path.lower().startswith("s3://"):
-            scanned_zarr_json = self.remote_kerchunk(file_path, scan_indices)
+            scanned_zarr_json = self._remote_kerchunk(file_path, scan_indices)
         else:
-            scanned_zarr_json = self.local_kerchunk(file_path, scan_indices)
+            scanned_zarr_json = self._local_kerchunk(file_path, scan_indices)
 
         # output individual JSONs for re-reading locally. This guards against crashes for long Extracts and speeds up
         # dev. work.
@@ -177,13 +177,13 @@ class Transform(Metadata, Convenience):
 
             if isinstance(scanned_zarr_json, list):  # presumes lists are not nested more than one level deep
                 for zarr_json in scanned_zarr_json:
-                    self.zarr_json_in_memory_to_file(zarr_json, local_file_path)
+                    self._zarr_json_in_memory_to_file(zarr_json, local_file_path)
             else:
-                self.zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
+                self._zarr_json_in_memory_to_file(scanned_zarr_json, local_file_path)
 
         return scanned_zarr_json
 
-    def local_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
+    def _local_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
         """
         Use Kerchunk to scan a file on the local file system
 
@@ -223,7 +223,7 @@ class Transform(Metadata, Convenience):
             raise ValueError(f"Error found with {file_path}, likely due to incomplete file. Full error message is {e}")
         return scanned_zarr_json
 
-    def remote_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
+    def _remote_kerchunk(self, file_path: str, scan_indices: int | tuple[int] = 0) -> dict:
         """
         Use Kerchunk to scan a file on a remote S3 file system
 
@@ -278,7 +278,7 @@ class Transform(Metadata, Convenience):
 
         return scanned_zarr_json
 
-    def zarr_json_in_memory_to_file(self, scanned_zarr_json: dict, local_file_path: pathlib.Path):
+    def _zarr_json_in_memory_to_file(self, scanned_zarr_json: dict, local_file_path: pathlib.Path):
         """
         Export a Kerchunked Zarr JSON to file.
         If necessary, create a file name for that JSON in situ based on its attributes.
@@ -290,14 +290,14 @@ class Transform(Metadata, Convenience):
         local_file_path
             The existing local file path specified by the user
         """
-        local_file_path = self.file_path_from_zarr_json_attrs(
+        local_file_path = self._file_path_from_zarr_json_attrs(
             scanned_zarr_json=scanned_zarr_json, local_file_path=local_file_path
         )
         with open(local_file_path, "w") as file:
             json.dump(scanned_zarr_json, file, sort_keys=False, indent=4)
             self.info(f"Wrote local JSON to {local_file_path}")
 
-    def file_path_from_zarr_json_attrs(self, scanned_zarr_json: dict, local_file_path: pathlib.Path) -> pathlib.Path:
+    def _file_path_from_zarr_json_attrs(self, scanned_zarr_json: dict, local_file_path: pathlib.Path) -> pathlib.Path:
         """
         Create a local file path based on attributes of the input Zarr JSON.
         Necessary for some datasets that package many forecasts into one single extract, preventing
@@ -455,7 +455,7 @@ class Transform(Metadata, Convenience):
         self.info(f"{(len(input_files))} conversions finished, cleaning up original files")
         # Get rid of original files that were converted
         if keep_originals:
-            self.archive_original_files(input_files)
+            self._archive_original_files(input_files)
         self.info("Cleanup finished")
 
     def convert_to_lowest_common_time_denom(self, raw_files: list, keep_originals: bool = False):
@@ -518,7 +518,7 @@ class Transform(Metadata, Convenience):
             input_files=raw_files, command_text=command_text, replacement_suffix=".nc4", keep_originals=keep_originals
         )
 
-    def archive_original_files(self, files: list):
+    def _archive_original_files(self, files: list):
         """
         Move each original file to a "<dataset_name>_originals" folder for reference
 
@@ -546,7 +546,7 @@ class Transform(Metadata, Convenience):
         self, zarr_json_path: str | None = None, decode_times: bool = True, extra_storage_options: dict = {}, **kwargs
     ) -> xr.Dataset:
         """
-        Open the virtual zarr at `self.zarr_json_path()` and return as a xr.Dataset object after applying any desired
+        Open the virtual zarr at `self._zarr_json_path()` and return as a xr.Dataset object after applying any desired
         post-processing steps.
 
         Parameters
@@ -579,10 +579,10 @@ class Transform(Metadata, Convenience):
         Returns
         -------
         xr.Dataset
-            Object representing the dataset described by the Zarr JSON file at `self.zarr_json_path()`
+            Object representing the dataset described by the Zarr JSON file at `self._zarr_json_path()`
         """
         if not zarr_json_path:
-            zarr_json_path = str(self.zarr_json_path())
+            zarr_json_path = str(self._zarr_json_path())
 
         input_kwargs = {
             "filename_or_obj": "reference://",
@@ -649,7 +649,7 @@ class Transform(Metadata, Convenience):
         """
         return dataset
 
-    def initial_ds_transform(self) -> xr.Dataset:
+    def _initial_ds_transform(self) -> xr.Dataset:
         """
         In-memory transform steps relevant to an initial dataset publish
 
@@ -679,7 +679,7 @@ class Transform(Metadata, Convenience):
         self.info(f"Initial dataset\n{dataset}")
         return dataset
 
-    def update_ds_transform(self) -> xr.Dataset:
+    def _update_ds_transform(self) -> xr.Dataset:
         """
         In-memory transform steps relevant to an update operation
 
