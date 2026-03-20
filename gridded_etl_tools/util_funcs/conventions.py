@@ -11,8 +11,11 @@ References:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import xarray as xr
 from pyproj import CRS
 from pyproj.exceptions import CRSError
@@ -37,7 +40,7 @@ _SPATIAL_CONVENTION = {
 }
 
 
-def _crs_to_proj_attrs(crs: CRS) -> dict:
+def _crs_to_proj_attrs(crs: CRS) -> dict[str, str | dict[str, Any]]:
     """Extract proj: attributes from a pyproj CRS object.
 
     Returns a dict with any combination of ``proj:code``, ``proj:wkt2``,
@@ -60,7 +63,7 @@ def _crs_to_proj_attrs(crs: CRS) -> dict:
     return result
 
 
-def _parse_crs(crs_input: str, factory, label: str) -> dict:
+def _parse_crs(crs_input: str, factory: Callable[[str], CRS], label: str) -> dict[str, str | dict[str, Any]]:
     """Parse a CRS input using the given pyproj factory and return proj: attrs.
 
     Parameters
@@ -123,8 +126,13 @@ def build_proj_attrs_from_wkt(wkt: str) -> dict:
     return _parse_crs(wkt, CRS.from_wkt, "WKT")
 
 
-def _is_regular_grid(coords: np.ndarray, tolerance: float = 0.01) -> bool:
+def _is_regular_grid(coords: npt.NDArray[np.floating], tolerance: float = 0.01) -> bool:
     """Check whether coordinate spacing is uniform within a relative tolerance.
+
+    The default 1% tolerance accommodates floating-point representation noise
+    in geographic coordinates (e.g. 0.25° steps stored as float64 can accumulate
+    ~1e-14 rounding errors) while still rejecting genuinely irregular grids like
+    Gaussian grids where spacing varies by 10%+ across latitudes.
 
     Parameters
     ----------
