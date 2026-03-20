@@ -708,17 +708,30 @@ class Metadata(Convenience):
 
         Uses ``self.coordinate_reference_system`` for the CRS code and
         ``self.spatial_dims`` for spatial dimension names. Non-EPSG CRS values
-        (e.g. "Reduced Gaussian Grid") are gracefully skipped.
+        (e.g. "Reduced Gaussian Grid") are gracefully skipped for the code path,
+        but a WKT fallback from ``dataset.attrs["crs"]["crs_wkt"]`` is attempted
+        for projected datasets that store CRS info via ``assign_crs_to_dataset()``.
 
         Parameters
         ----------
         dataset : xr.Dataset
             The dataset being published
         """
+        # Extract WKT fallback from dataset attrs if available (set by assign_crs_to_dataset
+        # for projected datasets like HRRR/RTMA)
+        crs_wkt = None
+        try:
+            crs_dict = dataset.attrs.get("crs")
+            if isinstance(crs_dict, dict):
+                crs_wkt = crs_dict.get("crs_wkt")
+        except (TypeError, AttributeError):
+            pass
+
         conv_attrs = build_convention_attrs(
             crs_code=self.coordinate_reference_system,
             dataset=dataset,
             spatial_dims=self.spatial_dims,
+            crs_wkt=crs_wkt,
         )
         if conv_attrs:
             dataset.attrs.update(conv_attrs)

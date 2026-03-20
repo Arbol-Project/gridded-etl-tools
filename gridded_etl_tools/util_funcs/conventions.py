@@ -36,28 +36,13 @@ _SPATIAL_CONVENTION = {
 }
 
 
-def build_proj_attrs(crs_code: str) -> dict:
-    """Build proj: convention attributes from an EPSG code string.
+def _crs_to_proj_attrs(crs: CRS) -> dict:
+    """Extract proj: attributes from a pyproj CRS object.
 
-    Uses pyproj to derive all three CRS representations required by the
-    geo-proj convention: ``proj:code``, ``proj:wkt2``, and ``proj:projjson``.
-
-    Parameters
-    ----------
-    crs_code : str
-        An authority:code CRS identifier parseable by pyproj, e.g. ``"EPSG:4326"``.
-
-    Returns
-    -------
-    dict
-        Dict of ``proj:*`` keys. Empty if the CRS cannot be parsed.
+    Returns a dict with any combination of ``proj:code``, ``proj:wkt2``,
+    and ``proj:projjson``. At least one is required by the geo-proj spec.
     """
     result: dict = {}
-    try:
-        crs = CRS.from_user_input(crs_code)
-    except Exception:
-        logger.warning("Could not parse CRS '%s' with pyproj, skipping proj: convention", crs_code)
-        return result
 
     authority = crs.to_authority()
     if authority:
@@ -72,6 +57,55 @@ def build_proj_attrs(crs_code: str) -> dict:
         result["proj:projjson"] = projjson
 
     return result
+
+
+def build_proj_attrs(crs_code: str) -> dict:
+    """Build proj: convention attributes from an authority:code CRS string.
+
+    Parameters
+    ----------
+    crs_code : str
+        An authority:code CRS identifier parseable by pyproj, e.g. ``"EPSG:4326"``.
+
+    Returns
+    -------
+    dict
+        Dict of ``proj:*`` keys. Empty if the CRS cannot be parsed.
+    """
+    try:
+        crs = CRS.from_user_input(crs_code)
+    except Exception:
+        logger.warning("Could not parse CRS '%s' with pyproj, skipping proj: convention", crs_code)
+        return {}
+
+    return _crs_to_proj_attrs(crs)
+
+
+def build_proj_attrs_from_wkt(wkt: str) -> dict:
+    """Build proj: convention attributes from a WKT string.
+
+    Fallback for datasets that store CRS as a WKT string (e.g. in
+    ``dataset.attrs["crs"]["crs_wkt"]``) but don't have a standard
+    EPSG code. The resulting attrs may lack ``proj:code`` but will
+    include ``proj:wkt2`` and ``proj:projjson``.
+
+    Parameters
+    ----------
+    wkt : str
+        A WKT CRS string parseable by pyproj.
+
+    Returns
+    -------
+    dict
+        Dict of ``proj:*`` keys. Empty if the WKT cannot be parsed.
+    """
+    try:
+        crs = CRS.from_wkt(wkt)
+    except Exception:
+        logger.warning("Could not parse CRS WKT with pyproj, skipping proj: convention")
+        return {}
+
+    return _crs_to_proj_attrs(crs)
 
 
 def _is_regular_grid(coords: np.ndarray, tolerance: float = 0.01) -> bool:
@@ -206,6 +240,7 @@ def build_convention_attrs(
     crs_code: str | None,
     dataset: xr.Dataset,
     spatial_dims: list[str],
+    crs_wkt: str | None = None,
 ) -> dict:
     """Build GeoZarr convention attributes for the root group.
 
@@ -216,11 +251,16 @@ def build_convention_attrs(
     ----------
     crs_code : str or None
         Authority:code CRS identifier (e.g. ``"EPSG:4326"``). If None or not
-        parseable by pyproj, proj: convention is skipped entirely.
+        parseable by pyproj, falls back to *crs_wkt*.
     dataset : xr.Dataset
         The dataset to extract spatial coordinate information from.
     spatial_dims : list[str]
         Names of the spatial dimensions, ordered [y_dim, x_dim].
+    crs_wkt : str or None
+        Fallback WKT CRS string, e.g. from ``dataset.attrs["crs"]["crs_wkt"]``.
+        Used when *crs_code* is absent or not parseable by pyproj. Useful for
+        projected datasets (e.g. Lambert Conformal Conic) that store CRS as WKT
+        but don't have a standard EPSG code.
 
     Returns
     -------
@@ -231,11 +271,16 @@ def build_convention_attrs(
     attrs: dict = {}
 
     # --- proj: convention ---
+    # Try authority:code first, fall back to WKT string
+    proj_attrs: dict = {}
     if crs_code is not None:
         proj_attrs = build_proj_attrs(crs_code)
-        if proj_attrs:
-            conventions.append(_PROJ_CONVENTION)
-            attrs.update(proj_attrs)
+    if not proj_attrs and crs_wkt is not None:
+        proj_attrs = build_proj_attrs_from_wkt(crs_wkt)
+
+    if proj_attrs:
+        conventions.append(_PROJ_CONVENTION)
+        attrs.update(proj_attrs)
 
     # --- spatial: convention ---
     spatial_attrs = build_spatial_attrs(dataset, spatial_dims)

@@ -7,6 +7,7 @@ import xarray as xr
 from gridded_etl_tools.util_funcs.conventions import (
     build_convention_attrs,
     build_proj_attrs,
+    build_proj_attrs_from_wkt,
     build_spatial_attrs,
     _is_regular_grid,
     _compute_affine_transform,
@@ -86,6 +87,53 @@ class TestBuildProjAttrs:
 
     def test_lambert_conformal_conic_string_returns_empty(self):
         attrs = build_proj_attrs("Lambert Conformal Conic")
+        assert attrs == {}
+
+
+# --- build_proj_attrs_from_wkt ---
+
+# Realistic LCC WKT from HRRR-like dataset (custom sphere, no EPSG)
+LCC_WKT = (
+    'PROJCRS["undefined",BASEGEOGCRS["undefined",DATUM["undefined",'
+    'ELLIPSOID["undefined",6371229,0,LENGTHUNIT["metre",1,ID["EPSG",9001]]]],'
+    'PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8901]]],'
+    'CONVERSION["unknown",METHOD["Lambert Conic Conformal (2SP)",ID["EPSG",9802]],'
+    'PARAMETER["Latitude of 1st standard parallel",38.5,'
+    'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8823]],'
+    'PARAMETER["Latitude of 2nd standard parallel",38.5,'
+    'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8824]],'
+    'PARAMETER["Latitude of false origin",38.5,'
+    'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8821]],'
+    'PARAMETER["Longitude of false origin",262.5,'
+    'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8822]],'
+    'PARAMETER["Easting at false origin",0,LENGTHUNIT["metre",1],ID["EPSG",8826]],'
+    'PARAMETER["Northing at false origin",0,LENGTHUNIT["metre",1],ID["EPSG",8827]]],'
+    'CS[Cartesian,2],AXIS["(E)",east,ORDER[1],LENGTHUNIT["metre",1,ID["EPSG",9001]]],'
+    'AXIS["(N)",north,ORDER[2],LENGTHUNIT["metre",1,ID["EPSG",9001]]]]'
+)
+
+
+class TestBuildProjAttrsFromWkt:
+    def test_lcc_wkt_produces_wkt2_and_projjson(self):
+        attrs = build_proj_attrs_from_wkt(LCC_WKT)
+        # Custom sphere has no EPSG code
+        assert "proj:code" not in attrs
+        # But WKT2 and PROJJSON should be populated
+        assert "proj:wkt2" in attrs
+        assert "proj:projjson" in attrs
+        assert "Lambert" in attrs["proj:wkt2"]
+
+    def test_epsg_wkt_includes_code(self):
+        from pyproj import CRS
+
+        wkt = CRS.from_epsg(4326).to_wkt()
+        attrs = build_proj_attrs_from_wkt(wkt)
+        assert attrs["proj:code"] == "EPSG:4326"
+        assert "proj:wkt2" in attrs
+        assert "proj:projjson" in attrs
+
+    def test_invalid_wkt_returns_empty(self):
+        attrs = build_proj_attrs_from_wkt("not a valid WKT string")
         assert attrs == {}
 
 
@@ -233,3 +281,48 @@ class TestBuildConventionAttrs:
     def test_no_crs_no_dims_returns_empty(self, regular_latlon_dataset):
         attrs = build_convention_attrs(None, regular_latlon_dataset, ["y", "x"])
         assert attrs == {}
+
+    def test_wkt_fallback_when_code_unparseable(self, projected_dataset):
+        """Non-EPSG crs_code falls through to WKT fallback (e.g. HRRR/RTMA)."""
+        attrs = build_convention_attrs(
+            "Lambert Conformal Conic",
+            projected_dataset,
+            ["y_projection", "x_projection"],
+            crs_wkt=LCC_WKT,
+        )
+        # proj: convention populated via WKT fallback
+        convention_names = [c["name"] for c in attrs["zarr_conventions"]]
+        assert "proj:" in convention_names
+        # No EPSG code for custom sphere, but WKT2 and PROJJSON present
+        assert "proj:code" not in attrs
+        assert "proj:wkt2" in attrs
+        assert "proj:projjson" in attrs
+        # spatial: also present
+        assert "spatial:" in convention_names
+
+    def test_wkt_fallback_when_code_is_none(self, projected_dataset):
+        """None crs_code falls through to WKT fallback."""
+        attrs = build_convention_attrs(
+            None,
+            projected_dataset,
+            ["y_projection", "x_projection"],
+            crs_wkt=LCC_WKT,
+        )
+        convention_names = [c["name"] for c in attrs["zarr_conventions"]]
+        assert "proj:" in convention_names
+        assert "proj:wkt2" in attrs
+
+    def test_code_takes_precedence_over_wkt(self, regular_latlon_dataset):
+        """When crs_code is valid, WKT fallback is not used."""
+        from pyproj import CRS
+
+        other_wkt = CRS.from_epsg(4269).to_wkt()  # NAD83
+        attrs = build_convention_attrs(
+            "EPSG:4326",
+            regular_latlon_dataset,
+            ["latitude", "longitude"],
+            crs_wkt=other_wkt,
+        )
+        # Should use EPSG:4326, not NAD83 from WKT
+        assert attrs["proj:code"] == "EPSG:4326"
+        assert "WGS 84" in attrs["proj:wkt2"]
