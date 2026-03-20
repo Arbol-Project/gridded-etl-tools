@@ -11,6 +11,7 @@ import xarray as xr
 
 from .encryption import EncryptionFilter
 from .convenience import Convenience
+from ..util_funcs.conventions import build_convention_attrs
 
 from requests.exceptions import Timeout as TimeoutError
 
@@ -696,8 +697,31 @@ class Metadata(Convenience):
         self.encode_ds(dataset)
         # Merge in relevant static / STAC metadata and create additional attributes
         self.merge_in_outside_metadata(dataset)
+        # Apply GeoZarr convention attributes (proj: and spatial:)
+        self.apply_geo_conventions(dataset)
 
         return dataset
+
+    def apply_geo_conventions(self, dataset: xr.Dataset):
+        """
+        Apply GeoZarr proj: and spatial: convention attributes to the dataset.
+
+        Uses ``self.coordinate_reference_system`` for the CRS code and
+        ``self.spatial_dims`` for spatial dimension names. Non-EPSG CRS values
+        (e.g. "Reduced Gaussian Grid") are gracefully skipped.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The dataset being published
+        """
+        conv_attrs = build_convention_attrs(
+            crs_code=self.coordinate_reference_system,
+            dataset=dataset,
+            spatial_dims=self.spatial_dims,
+        )
+        if conv_attrs:
+            dataset.attrs.update(conv_attrs)
 
     def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
         """
