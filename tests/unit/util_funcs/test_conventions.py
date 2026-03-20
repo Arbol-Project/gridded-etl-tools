@@ -167,7 +167,7 @@ class TestComputeAffineTransform:
     def test_basic_latlon(self):
         y = np.array([90.0, 89.75, 89.5])
         x = np.array([-180.0, -179.75, -179.5])
-        transform = _compute_affine_transform(y, x)
+        transform = _compute_affine_transform(y, x, res_y=-0.25, res_x=0.25)
         assert len(transform) == 6
         assert transform[0] == pytest.approx(0.25)  # scale_x
         assert transform[1] == 0.0  # shear
@@ -184,7 +184,7 @@ class TestComputeBbox:
     def test_global_bbox(self):
         y = np.arange(-90, 90.25, 0.25)
         x = np.arange(-180, 180, 0.25)
-        bbox = _compute_bbox(y, x)
+        bbox = _compute_bbox(y, x, res_y=0.25, res_x=0.25)
         # Half pixel = 0.125
         assert bbox[0] == pytest.approx(-180.125)  # xmin
         assert bbox[1] == pytest.approx(-90.125)  # ymin
