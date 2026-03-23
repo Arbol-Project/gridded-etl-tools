@@ -156,9 +156,7 @@ def _is_regular_grid(coords: npt.NDArray[np.floating], tolerance: float = 0.01) 
     return max_dev <= abs(median) * tolerance
 
 
-def _compute_affine_transform(
-    y_coords: np.ndarray, x_coords: np.ndarray, res_y: float, res_x: float
-) -> list[float]:
+def _compute_affine_transform(y_coords: np.ndarray, x_coords: np.ndarray, res_y: float, res_x: float) -> list[float]:
     """Compute a 6-element affine transform from coordinate arrays.
 
     The transform follows the spatial: convention format::
@@ -168,9 +166,7 @@ def _compute_affine_transform(
     return [res_x, 0.0, float(x_coords[0]), 0.0, res_y, float(y_coords[0])]
 
 
-def _compute_bbox(
-    y_coords: np.ndarray, x_coords: np.ndarray, res_y: float, res_x: float
-) -> list[float]:
+def _compute_bbox(y_coords: np.ndarray, x_coords: np.ndarray, res_y: float, res_x: float) -> list[float]:
     """Compute bounding box [xmin, ymin, xmax, ymax] for pixel-registered data.
 
     Extends by half a pixel beyond the outermost coordinate centres.
