@@ -1,5 +1,7 @@
 """Tests for gridded_etl_tools.util_funcs.conventions."""
 
+import json
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -63,7 +65,7 @@ class TestBuildProjAttrs:
         assert "proj:wkt2" in attrs
         assert "proj:projjson" in attrs
         assert "WGS 84" in attrs["proj:wkt2"]
-        assert attrs["proj:projjson"]["name"] == "WGS 84"
+        assert json.loads(attrs["proj:projjson"])["name"] == "WGS 84"
 
     def test_epsg_4269_nad83(self):
         attrs = build_proj_attrs("EPSG:4269")

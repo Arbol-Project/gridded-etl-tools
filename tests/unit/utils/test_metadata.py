@@ -1114,6 +1114,7 @@ class TestMetadata:
         md.encode_ds = mock.Mock()
         md.set_initial_compression = mock.Mock()
         md.merge_in_outside_metadata = mock.Mock()
+        md.apply_geo_conventions = mock.Mock()
 
         dataset.attrs = {}
         assert md.set_zarr_metadata(dataset) is renamed
@@ -1122,6 +1123,7 @@ class TestMetadata:
         md.remove_unwanted_fields.assert_called_once_with(renamed)
         md.set_initial_compression.assert_called_once_with(renamed)
         md.encode_ds.assert_called_once_with(renamed)
+        md.apply_geo_conventions.assert_called_once_with(renamed)
 
     @staticmethod
     def test_remove_unwanted_fields(manager_class, fake_original_dataset):

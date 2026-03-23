@@ -10,6 +10,7 @@ References:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -24,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Convention registration metadata (UUID + schema URLs)
 _PROJ_CONVENTION = {
-    "schema_url": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
-    "spec_url": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+    "schema_url": "https://raw.githubusercontent.com/zarr-conventions/geo-proj/refs/tags/v1/schema.json",
+    "spec_url": "https://github.com/zarr-conventions/geo-proj/blob/v1/README.md",
     "uuid": "f17cb550-5864-4468-aeb7-f3180cfb622f",
     "name": "proj:",
     "description": "Coordinate reference system information for geospatial data",
@@ -58,7 +59,9 @@ def _crs_to_proj_attrs(crs: CRS) -> dict[str, str | dict[str, Any]]:
 
     projjson = crs.to_json_dict()
     if projjson:
-        result["proj:projjson"] = projjson
+        # Serialize as JSON string to ensure clean round-trip through Zarr attrs,
+        # which may not preserve nested dicts depending on Zarr version/codec.
+        result["proj:projjson"] = json.dumps(projjson)
 
     return result
 
@@ -207,8 +210,6 @@ def build_spatial_attrs(dataset: xr.Dataset, spatial_dims: list[str]) -> dict:
         return {}
 
     y_dim, x_dim = spatial_dims
-    if not isinstance(dataset, xr.Dataset):
-        return {}
     if y_dim not in dataset.coords or x_dim not in dataset.coords:
         logger.warning("Spatial dims %s not found in dataset coords, skipping spatial: convention", spatial_dims)
         return {}

@@ -720,12 +720,9 @@ class Metadata(Convenience):
         # Extract WKT fallback from dataset attrs if available (set by assign_crs_to_dataset
         # for projected datasets like HRRR/RTMA)
         crs_wkt = None
-        try:
-            crs_dict = dataset.attrs.get("crs")
-            if isinstance(crs_dict, dict):
-                crs_wkt = crs_dict.get("crs_wkt")
-        except (TypeError, AttributeError):
-            pass
+        crs_dict = dataset.attrs.get("crs")
+        if isinstance(crs_dict, dict):
+            crs_wkt = crs_dict.get("crs_wkt")
 
         conv_attrs = build_convention_attrs(
             crs_code=self.coordinate_reference_system,
