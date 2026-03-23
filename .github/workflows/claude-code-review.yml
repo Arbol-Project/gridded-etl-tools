@@ -4,18 +4,16 @@ on:
   pull_request:
     branches: [ main ]
     types: [ opened, ready_for_review ]
-    # Optional: Only run on specific file changes
     paths-ignore:
-      - '**/*.md'  # Skip documentation-only changes
+      - '**/*.md'
   issue_comment:
-    types: [ created ]  # Only on new comments
+    types: [ created ]
 
 jobs:
   claude-review:
-    # Run on non-fork PR events OR when a repo member comments "claude: force review"
+    # Run on PR events OR when "claude: force review" comment is added to a ready-for-review PR
     if: |
       (github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
         (
           (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
           github.event.action == 'ready_for_review'
@@ -23,25 +21,17 @@ jobs:
       ) ||
       (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
-        contains(github.event.comment.body || '', 'claude: force review') &&
-        contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association)
+        contains(github.event.comment.body || '', 'claude: force review')
       )
-    
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-    
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
 
-    # Limit to one Claude review at a time for a given PR
-    concurrency:  
+    concurrency:
       group: claude-review-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: true
 
@@ -51,54 +41,40 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # This role is maintained via clickops in the Arbol prod data account
+          role-to-assume: arn:aws:iam::629730964333:role/claude-pr-review
+          aws-region: us-east-1
+
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          
-          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
-        #   model: "claude-opus-4-20250514"
-          
-          # Direct prompt for automated review (no @claude mention needed)
-          direct_prompt: |
+          use_bedrock: true
+          claude_args: |
+            --model us.anthropic.claude-opus-4-6-v1
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
             Please review this pull request and provide feedback on:
             - Code quality and best practices
             - Appropriate balance between code complexity and readability, especially with regard to functional and object-oriented design
-            - Potential bugs or issues
+            - Potential bugs or regressions
             - Performance considerations
             - Security concerns
             - Test coverage
 
-            Code in this repository heavily leverages and references an upstream library
-            of foundational tools at https://github.com/Arbol-Project/gridded-etl-tools.
-            Please review the code in the context of the upstream library.
+            IMPORTANT — Downstream impact:
+            This is a library consumed by downstream ETL implementations. Almost every
+            line of code is exercised by downstream consumers, so even small changes can
+            introduce non-intuitive regressions. Pay close attention to whether changes
+            could subtly alter behavior that existing consumers depend on.
 
-            For further context, ETL managers created in this repository will be run and orchestrated
-            using Prefect. The code for that resides at https://github.com/Arbol-Project/prefect-etl-orchestration.
-            You do not need to concern yourself with orchestration when reviewing code in this repository
-            but this context should help you conceptually understand how the managers are implemented.
-
+            Use `gh pr comment` for top-level feedback.
+            Use `mcp__github_inline_comment__create_inline_comment` to highlight specific code issues.
             Be constructive, helpful, and concise in your feedback.
-          
-          # Optional: Customize review based on file types
-          # direct_prompt: |
-          #   Review this PR focusing on:
-          #   - For TypeScript files: Type safety and proper interface usage
-          #   - For API endpoints: Security, input validation, and error handling
-          #   - For React components: Performance, accessibility, and best practices
-          #   - For tests: Coverage, edge cases, and test quality
-          
-          # Optional: Different prompts for different authors
-          # direct_prompt: |
-          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' && 
-          #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
-          #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
-          
-          # Optional: Add specific tools for running tests or linting
-          # allowed_tools: "Bash(npm run test),Bash(npm run lint),Bash(npm run typecheck)"
-          
-          # Optional: Skip review for certain conditions
-          # if: |
-          #   !contains(github.event.pull_request.title, '[skip-review]') &&
-          #   !contains(github.event.pull_request.title, '[WIP]')
