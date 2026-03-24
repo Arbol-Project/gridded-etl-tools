@@ -50,6 +50,7 @@ dependencies = [
     "pandas",
     "psutil",
     "pycryptodome",
+    "pyproj",
     "python-dateutil",
     "requests",
     "s3fs>=2025.5.1",
@@ -66,7 +67,6 @@ Homepage = "https://arbol.io/"
 [project.optional-dependencies]
 testing = [
     "h5py",
-    "pyproj",
     "pytest",
     "pytest-cov",
     "pytest-mock",
