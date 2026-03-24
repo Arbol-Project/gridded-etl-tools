@@ -707,18 +707,29 @@ class Metadata(Convenience):
         Apply GeoZarr proj: and spatial: convention attributes to the dataset.
 
         Uses ``self.coordinate_reference_system`` for the CRS code and
-        ``self.spatial_dims`` for spatial dimension names. Non-EPSG CRS values
-        (e.g. "Reduced Gaussian Grid") are gracefully skipped for the code path,
-        but a WKT fallback from ``dataset.attrs["crs"]["crs_wkt"]`` is attempted
-        for projected datasets that store CRS info via ``assign_crs_to_dataset()``.
+        ``self.spatial_dims`` for spatial dimension names.
+
+        ``coordinate_reference_system`` should be a pyproj-parseable string: an EPSG code
+        (e.g. ``"EPSG:4326"``), a proj4 string (e.g.
+        ``"+proj=longlat +R=6371229 +no_defs +type=crs"``), or a WKT string. Avoid
+        human-readable labels like ``"Gaussian Grid"`` or ``"Lambert Conformal Conic"`` —
+        these describe a grid type or projection method, not a complete CRS definition,
+        and will cause pyproj to skip the proj: convention entirely.
+
+        A WKT fallback from ``dataset.attrs["crs"]["crs_wkt"]`` (set by
+        ``assign_crs_to_dataset()`` for projected datasets) is retained for backwards
+        compatibility but should not be relied upon for new datasets. Once all managers
+        provide pyproj-parseable ``coordinate_reference_system`` values, this fallback
+        can be removed.
 
         Parameters
         ----------
         dataset : xr.Dataset
             The dataset being published
         """
-        # Extract WKT fallback from dataset attrs if available (set by assign_crs_to_dataset
-        # for projected datasets like HRRR/RTMA)
+        # WKT fallback from dataset attrs (set by assign_crs_to_dataset for projected
+        # datasets like HRRR/RTMA). Retained for backwards compatibility; prefer setting
+        # a pyproj-parseable coordinate_reference_system on the manager class instead.
         crs_wkt = None
         crs_dict = dataset.attrs.get("crs")
         if isinstance(crs_dict, dict):
