@@ -370,7 +370,12 @@ class Attributes(ABC):
 
     coordinate_reference_system: str | None = None
     """
-    The coordinate reference system of the dataset, typically as an EPSG code (e.g., "EPSG:4326").
+    The coordinate reference system of the dataset as a pyproj-parseable string:
+    * an EPSG code (e.g. ``"EPSG:4326"``),
+    * a proj4 string (e.g. "+proj=longlat +R=6371229 +no_defs +type=crs"``),
+    * or a WKT string
+
+    Preferentially an EPSG code (e.g., "EPSG:4326").
     """
 
     provider_url: str | None = None

@@ -714,7 +714,8 @@ class Metadata(Convenience):
         ``"+proj=longlat +R=6371229 +no_defs +type=crs"``), or a WKT string. Avoid
         human-readable labels like ``"Gaussian Grid"`` or ``"Lambert Conformal Conic"`` —
         these describe a grid type or projection method, not a complete CRS definition,
-        and will cause pyproj to skip the proj: convention entirely.
+        and will cause pyproj to fail the primary CRS parse and fall back to WKT. If
+        both fail it will skip the proj: convention entirely.
 
         A WKT fallback from ``dataset.attrs["crs"]["crs_wkt"]`` (set by
         ``assign_crs_to_dataset()`` for projected datasets) is retained for backwards
