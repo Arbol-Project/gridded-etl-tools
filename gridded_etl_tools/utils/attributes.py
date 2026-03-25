@@ -174,9 +174,10 @@ class Attributes(ABC):
     The data type of the data variable
     """
 
-    spatial_resolution: float | None = None
+    spatial_resolution: float | typing.Literal["irregular"]
     """
-    The spatial resolution of a dataset in decimal degrees
+    The spatial resolution of a dataset in decimal degrees or a clear statement
+    the grid resolution is irregular (e.g. a Reduced Gaussian Grid)
     """
 
     spatial_precision: float | None = None
