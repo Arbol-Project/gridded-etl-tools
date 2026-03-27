@@ -140,6 +140,12 @@ class TestDatasetManager:
             manager_class(output_zarr3=True)
 
     @staticmethod
+    def test_constructor_zarr3_allows_zarr_v3(manager_class, mocker):
+        mocker.patch.dict("sys.modules", {"zarr": mocker.MagicMock(__version__="3.0.0")})
+        # Should not raise
+        manager_class(output_zarr3=True)
+
+    @staticmethod
     def test_constructor_bad_store(manager_class):
         with pytest.raises(ValueError):
             manager_class(store="walmart")
