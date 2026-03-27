@@ -120,10 +120,11 @@ class TestS3:
         dm = object()
         bucket = "drops"
 
-        store = store_module.S3(dm, bucket, "fbi.access")
+        store = store_module.S3(dm, bucket, "side", "fbi.access")
 
         assert store.dm is dm
         assert store.bucket == bucket
+        assert store.profile == "side"
         assert store.endpoint_url == "fbi.access"
 
     @staticmethod
@@ -158,13 +159,33 @@ class TestS3:
     @staticmethod
     def test_fs_refresh_profile(mocker):
         mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
-        store = store_module.S3(mock.Mock(), "bucket", "fbi.access")
+        store = store_module.S3(mock.Mock(), "bucket", None, "fbi.access")
         store._fs = object()
         fs = mock_s3fs.S3FileSystem.return_value
 
         assert store.fs(refresh=True, profile="slim") is fs
 
         mock_s3fs.S3FileSystem.assert_called_once_with(profile="slim", endpoint_url="fbi.access")
+
+    @staticmethod
+    def test_fs_profile(mocker):
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket", "low")
+        store._fs = object()
+
+        store.fs(refresh=True, profile="high")
+
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile="high", endpoint_url=None)
+
+    @staticmethod
+    def test_fs_profile_init(mocker):
+        mock_s3fs = mocker.patch("gridded_etl_tools.utils.store.s3fs")
+        store = store_module.S3(mock.Mock(), "bucket", "low")
+        store._fs = object()
+
+        store.fs(refresh=True)
+
+        mock_s3fs.S3FileSystem.assert_called_once_with(profile="low", endpoint_url=None)
 
     @staticmethod
     def test_path():
@@ -325,12 +346,48 @@ class TestS3:
         boto.create_bucket(Bucket="FBI_Classified")
 
         # Connect to the mock bucket
-        store = store_module.S3(mock.Mock(), "FBI_Classified", mock_aws_server)
+        store = store_module.S3(mock.Mock(), "FBI_Classified", None, mock_aws_server)
         assert store.versioning_enabled is False
 
         # Enable versioning on the bucket
         boto.put_bucket_versioning(Bucket="FBI_Classified", VersioningConfiguration={"Status": "Enabled"})
         assert store.versioning_enabled is True
+
+    @staticmethod
+    def test_dataset_calls_open_zarr_with_profile_storage_options(mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.store.xr")
+        store = store_module.S3(
+            mock.Mock(custom_output_path="s3://bucket/data.zarr"),
+            "bucket",
+            profile="slim",
+        )
+        # Make Zarr appear to exist
+        store.fs = mock.Mock()
+        store.fs.return_value.exists.return_value = True
+
+        ds = store.dataset(arbitrary="keyword")
+        assert ds is xr.open_zarr.return_value
+
+        xr.open_zarr.assert_called_once_with(
+            store=store.path,
+            storage_options={"profile": "slim"},
+            decode_timedelta=True,
+            arbitrary="keyword",
+        )
+
+    @staticmethod
+    def test_dataset_s3_not_existing_does_not_call_xarray(mocker):
+        xr = mocker.patch("gridded_etl_tools.utils.store.xr")
+        store = store_module.S3(
+            mock.Mock(custom_output_path="s3://bucket/data.zarr"),
+            "bucket",
+            profile="slim",
+        )
+        store.fs = mock.Mock()
+        store.fs.return_value.exists.return_value = False
+
+        assert store.dataset() is None
+        xr.open_zarr.assert_not_called()
 
 
 class TestLocal:
