@@ -134,6 +134,18 @@ class TestDatasetManager:
         gridded_etl_tools.utils.store.Local.has_v3_metadata = restore_has_v3_metadata
 
     @staticmethod
+    def test_constructor_zarr3_requires_zarr_v3(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.dataset_manager.zarr.__version__", "2.18.0")
+        with pytest.raises(RuntimeError, match="output_zarr3=True requires zarr >= 3.0"):
+            manager_class(output_zarr3=True)
+
+    @staticmethod
+    def test_constructor_zarr3_allows_zarr_v3(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.dataset_manager.zarr.__version__", "3.0.0")
+        # Should not raise
+        manager_class(output_zarr3=True)
+
+    @staticmethod
     def test_constructor_bad_store(manager_class):
         with pytest.raises(ValueError):
             manager_class(store="walmart")
