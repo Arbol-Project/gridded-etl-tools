@@ -15,6 +15,8 @@ import platform
 import pathlib
 
 import psutil
+import zarr
+from packaging.version import Version
 
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
@@ -269,9 +271,7 @@ class DatasetManager(Logging, Publish, ABC):
         self.output_zarr3 = output_zarr3
 
         if self.output_zarr3:
-            import zarr
-
-            if int(zarr.__version__.split(".")[0]) < 3:
+            if Version(zarr.__version__) < Version("3.0"):
                 raise RuntimeError(
                     f"output_zarr3=True requires zarr >= 3.0, but zarr {zarr.__version__} is installed. "
                     "Older versions silently ignore zarr_format=3 and produce Zarr v2 output."

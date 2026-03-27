@@ -135,13 +135,13 @@ class TestDatasetManager:
 
     @staticmethod
     def test_constructor_zarr3_requires_zarr_v3(manager_class, mocker):
-        mocker.patch.dict("sys.modules", {"zarr": mocker.MagicMock(__version__="2.18.0")})
+        mocker.patch("gridded_etl_tools.dataset_manager.zarr.__version__", "2.18.0")
         with pytest.raises(RuntimeError, match="output_zarr3=True requires zarr >= 3.0"):
             manager_class(output_zarr3=True)
 
     @staticmethod
     def test_constructor_zarr3_allows_zarr_v3(manager_class, mocker):
-        mocker.patch.dict("sys.modules", {"zarr": mocker.MagicMock(__version__="3.0.0")})
+        mocker.patch("gridded_etl_tools.dataset_manager.zarr.__version__", "3.0.0")
         # Should not raise
         manager_class(output_zarr3=True)
 
