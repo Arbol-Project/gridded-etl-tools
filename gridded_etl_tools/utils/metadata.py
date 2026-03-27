@@ -843,7 +843,7 @@ class Metadata(Convenience):
             # reformat the dataset_start_date datetime to a CF compliant string if it exists....
             dataset[self.time_dim].encoding.update(
                 {
-                    "units": f"days since {self.dataset_start_date.isoformat().replace('T00:00:00', ' 0:0:0 0')}",
+                    "units": f"days since {self.dataset_start_date.strftime('%Y-%m-%d %H:%M:%S')}",
                 }
             )
 

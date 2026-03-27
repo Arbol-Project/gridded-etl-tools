@@ -1218,7 +1218,7 @@ class TestMetadata:
             "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
-            "units": "days since 1975-07-07 0:0:0 0",
+            "units": "days since 1975-07-07 00:00:00",
             "chunks": (1, 1, 1),
             "preferred_chunks": {"latitude": 1, "longitude": 1, "time": 1},
         }
@@ -1260,7 +1260,7 @@ class TestMetadata:
             "_FillValue": -9223372036854775808,
             "long_name": "time",
             "calendar": "gregorian",
-            "units": "days since 1975-07-07 0:0:0 0",
+            "units": "days since 1975-07-07 00:00:00",
             "chunks": None,
             "preferred_chunks": None,
         }
@@ -1304,7 +1304,7 @@ class TestMetadata:
             "long_name": "initial time of forecast",
             "standard_name": "forecast_reference_time",
             "calendar": "proleptic_gregorian",
-            "units": "days since 1975-07-07 0:0:0 0",
+            "units": "days since 1975-07-07 00:00:00",
             "chunks": None,
             "preferred_chunks": None,
         }
@@ -1354,7 +1354,7 @@ class TestMetadata:
             "long_name": "initial time of forecast",
             "standard_name": "hindcast_reference_time",
             "calendar": "proleptic_gregorian",
-            "units": "days since 1975-07-07 0:0:0 0",
+            "units": "days since 1975-07-07 00:00:00",
             "chunks": None,
             "preferred_chunks": None,
         }
