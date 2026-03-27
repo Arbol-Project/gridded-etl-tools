@@ -268,6 +268,15 @@ class DatasetManager(Logging, Publish, ABC):
         self.use_compression = use_compression
         self.output_zarr3 = output_zarr3
 
+        if self.output_zarr3:
+            import zarr
+
+            if int(zarr.__version__.split(".")[0]) < 3:
+                raise RuntimeError(
+                    f"output_zarr3=True requires zarr >= 3.0, but zarr {zarr.__version__} is installed. "
+                    "Older versions silently ignore zarr_format=3 and produce Zarr v2 output."
+                )
+
         # Check output Zarr format versus existing format before moving on with this object
         if self.store.has_existing and not self.rebuild_requested:
             if self.store.has_v3_metadata:
