@@ -87,7 +87,6 @@ class CHIRPS(DatasetManager):
 
     organization = "My Organization"
     dataset_name = "chirps"
-    coordinate_reference_system = "EPSG:4326"
 
     def relative_path(self) -> str:
         return super().relative_path() / "chirps"

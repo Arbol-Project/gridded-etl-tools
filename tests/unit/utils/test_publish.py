@@ -341,7 +341,6 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dataset = mock.Mock()
-        dataset.attrs = {}
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
@@ -350,8 +349,7 @@ class TestPublish:
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
 
-        # Metadata v2 function must be called. The restore call includes all of dataset.attrs
-        # (which by the finally block contains the pre-write flags) with update_in_progress overridden to False.
+        # Metadata v2 function must be called
         dm.store.write_metadata_only_v2.assert_has_calls(
             [
                 mock.call(
@@ -361,13 +359,7 @@ class TestPublish:
                         "initial_parse": False,
                     }
                 ),
-                mock.call(
-                    update_attrs={
-                        "update_in_progress": False,
-                        "update_is_append_only": "is it?",
-                        "initial_parse": False,
-                    }
-                ),
+                mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
 
@@ -396,13 +388,7 @@ class TestPublish:
                         "initial_parse": False,
                     }
                 ),
-                mock.call(
-                    update_attrs={
-                        "update_in_progress": False,
-                        "update_is_append_only": "is it?",
-                        "initial_parse": False,
-                    }
-                ),
+                mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
 
@@ -426,16 +412,13 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
 
         dataset = mock.Mock()
-        dataset.attrs = {}
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
         # Zarr format is explicitly set to 2.0
         dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only_v2.assert_has_calls(
-            [mock.call(update_attrs={"update_in_progress": False, "initial_parse": True})]
-        )
+        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs={"update_in_progress": False})])
 
     @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
