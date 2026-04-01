@@ -165,8 +165,7 @@ def test_initial_write_failure(manager_class, initial_input_path):
     with patch("xarray.Dataset.to_zarr", side_effect=RuntimeError("Nuclear meltdown")):
         with pytest.raises(ZarrOutputError):
             dm.parse(publish_dataset)
-        call_attrs = dm.store.write_metadata_only_v2.call_args.kwargs["update_attrs"]
-        assert call_attrs["update_in_progress"] is False
+        dm.store.write_metadata_only_v2.assert_called_once_with(update_attrs={"update_in_progress": False})
 
 
 def test_initial(manager_class, initial_input_path, root):

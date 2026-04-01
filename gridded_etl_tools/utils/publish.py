@@ -241,12 +241,9 @@ class Publish(Transform):
 
             # Reset the update in progress flag, whether the write was successful or not.
             finally:
-                # Treat the dataset's attrs as the source of truth: write them all back to the
-                # on-disk Zarr so that any attrs set by the tooling (convention attrs, new metadata
-                # fields, etc.) are always persisted, including during region= / append_dim= writes
-                # where xarray skips root-level attrs. Override update_in_progress explicitly.
+                # Indicate in metadata that update is not in progress.
                 self.info("Writing metadata after writing data to indicate write is finished.")
-                restored_attrs = {**dataset.attrs, "update_in_progress": False}
+                restored_attrs = {"update_in_progress": False}
 
                 # Use Zarr format to determine metadata format.
                 if zarr_format == 3:
