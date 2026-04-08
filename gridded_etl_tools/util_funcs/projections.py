@@ -40,7 +40,7 @@ def assign_crs_to_dataset(dataset: xr.Dataset, cf_dict: dict[str, Any]) -> xr.Da
     dataset_without_metpy = dataset_with_x_y.drop_vars("metpy_crs")
     dataset_without_metpy.attrs["crs"] = crs_attrs
 
-    return dataset_without_metpy.rename({"x": "x_projection", "y": "y_projection"})
+    return dataset_without_metpy.rename({"x": "easting", "y": "northing"})
 
 
 def drop_coord_encoding(dataset: xr.Dataset, coords: list[str]):
