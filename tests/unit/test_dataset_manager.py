@@ -104,7 +104,8 @@ class TestDatasetManager:
             manager_class(dask_num_threads=4)
 
     @staticmethod
-    def test_constructor_s3_store(manager_class):
+    def test_constructor_s3_store(mocker, manager_class):
+        mocker.patch.object(store.S3, "has_existing", new_callable=unittest.mock.PropertyMock, return_value=False)
         dm = manager_class(store="s3", s3_bucket_name="mop_water")
         assert isinstance(dm.store, dataset_manager.S3)
         assert dm.store.bucket == "mop_water"
