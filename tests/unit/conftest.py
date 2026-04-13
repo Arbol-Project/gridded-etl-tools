@@ -200,6 +200,7 @@ class DummyManagerBase(dataset_manager.DatasetManager):
 
     # Common metadata attributes for testing
     coordinate_reference_system = "EPSG:4326"
+    spatial_resolution = 0.25
     spatial_precision = 0.00001
     provider_url = "http://example.com/provider"
     data_download_url = "http://example.com/download"
