@@ -168,6 +168,9 @@ def test_initial_write_failure(manager_class, initial_input_path):
         call_attrs = dm.store.write_metadata_only_v2.call_args.kwargs["update_attrs"]
         assert "update_in_progress" in call_attrs
         assert call_attrs["update_in_progress"] is False
+        # On failure, ONLY update_in_progress should be written — no date ranges, bbox, or convention attrs.
+        # Verifies regression fix: failed writes must not corrupt on-disk metadata.
+        assert list(call_attrs.keys()) == ["update_in_progress"]
 
 
 def test_initial(manager_class, initial_input_path, root):
@@ -202,6 +205,15 @@ def test_initial(manager_class, initial_input_path, root):
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2024, 12, 12)).values
     )
     assert output_value == original_value
+
+    # Verify GeoZarr convention attrs are persisted after initial write (proj:, spatial:, zarr_conventions).
+    # These are set by apply_geo_conventions and must be written back explicitly since xarray doesn't
+    # persist root-level attrs during region= / append_dim= writes.
+    attrs = generated_dataset.attrs
+    assert "proj:code" in attrs, "proj:code attr missing after initial write"
+    assert "spatial:dimensions" in attrs, "spatial:dimensions attr missing after initial write"
+    assert "zarr_conventions" in attrs, "zarr_conventions attr missing after initial write"
+    assert attrs["update_in_progress"] is False
 
 
 def test_prepare_input_files(manager_class, mocker, appended_input_path):
@@ -248,6 +260,15 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
         original_dataset[orig_data_var].sel(latitude=lat, longitude=lon, time=datetime.datetime(2025, 1, 25)).values
     )
     assert output_value == original_value
+
+    # Verify GeoZarr convention attrs survive an append write (append_dim= path).
+    # This is the core scenario fixed by this PR: xarray silently skips root-level attrs on
+    # region= / append_dim= writes, so we must re-write them explicitly via write_metadata_only_v2.
+    attrs = generated_dataset.attrs
+    assert "proj:code" in attrs, "proj:code attr lost after append write"
+    assert "spatial:dimensions" in attrs, "spatial:dimensions attr lost after append write"
+    assert "zarr_conventions" in attrs, "zarr_conventions attr lost after append write"
+    assert attrs["update_in_progress"] is False
 
 
 def test_misaligned_zarr_dask_chunks_regression(
