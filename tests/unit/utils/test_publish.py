@@ -392,9 +392,7 @@ class TestPublish:
         # so that a failed write never corrupts on-disk metadata (e.g. date ranges).
         dm.store.write_metadata_only.assert_has_calls(
             [
-                mock.call(
-                    update_attrs={"update_in_progress": False}
-                ),
+                mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
 
