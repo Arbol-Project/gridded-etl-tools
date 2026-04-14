@@ -166,6 +166,7 @@ def test_initial_write_failure(manager_class, initial_input_path):
         with pytest.raises(ZarrOutputError):
             dm.parse(publish_dataset)
         call_attrs = dm.store.write_metadata_only_v2.call_args.kwargs["update_attrs"]
+        assert "update_in_progress" in call_attrs
         assert call_attrs["update_in_progress"] is False
 
 

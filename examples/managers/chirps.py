@@ -87,6 +87,9 @@ class CHIRPS(DatasetManager):
 
     organization = "My Organization"
     dataset_name = "chirps"
+    # Used by apply_geo_conventions to generate proj: convention attrs (e.g. proj:code).
+    # Note: initial_metadata also contains "coordinate reference system": "EPSG:4326" as a plain
+    # metadata field; this class attribute serves a distinct purpose for the GeoZarr conventions pipeline.
     coordinate_reference_system = "EPSG:4326"
 
     def relative_path(self) -> str:

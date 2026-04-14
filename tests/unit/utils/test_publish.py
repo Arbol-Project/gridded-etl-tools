@@ -381,27 +381,19 @@ class TestPublish:
         with pytest.raises(ValueError):
             dm.to_zarr(dataset, zarr_format=3)
 
-        # Test what happens when an unknown exception happens during writing
+        # Test what happens when an unknown exception happens during writing.
+        # dm.output_zarr3 is still True from the check above, so write_metadata_only (v3) is used.
         dataset.reset_mock()
+        dm.store.write_metadata_only.reset_mock()
         dataset.to_zarr.side_effect = RuntimeError("Nuclear meltdown")
         with pytest.raises(ZarrOutputError):
             dm.to_zarr(dataset)
-        # Metadata must be reset even when an error happens during writing
-        dm.store.write_metadata_only_v2.assert_has_calls(
+        # On failure, only the in-progress flag is cleared — other attrs are not written to disk
+        # so that a failed write never corrupts on-disk metadata (e.g. date ranges).
+        dm.store.write_metadata_only.assert_has_calls(
             [
                 mock.call(
-                    update_attrs={
-                        "update_in_progress": True,
-                        "update_is_append_only": "is it?",
-                        "initial_parse": False,
-                    }
-                ),
-                mock.call(
-                    update_attrs={
-                        "update_in_progress": False,
-                        "update_is_append_only": "is it?",
-                        "initial_parse": False,
-                    }
+                    update_attrs={"update_in_progress": False}
                 ),
             ]
         )
