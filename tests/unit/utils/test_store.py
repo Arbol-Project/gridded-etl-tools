@@ -12,7 +12,6 @@ import pytest
 
 from gridded_etl_tools.utils import store as store_module
 
-
 NUMPY_ATTRS = {
     "int_val": np.int64(42),
     "float_val": np.float32(3.14),
