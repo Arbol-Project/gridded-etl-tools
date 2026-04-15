@@ -3,12 +3,32 @@ import json
 import os
 import pathlib
 from unittest import mock
+
+import numpy as np
 from moto.server import ThreadedMotoServer
 import boto3  # type: ignore[import-untyped]
 
 import pytest
 
 from gridded_etl_tools.utils import store as store_module
+
+
+NUMPY_ATTRS = {
+    "int_val": np.int64(42),
+    "float_val": np.float32(3.14),
+    "bool_val": np.bool_(True),
+    "array_val": np.array([1, 2, 3]),
+    "dt_val": datetime.datetime(2024, 1, 1),
+}
+
+
+def assert_numpy_attrs_coerced(saved: dict):
+    """Assert that NUMPY_ATTRS were serialized to native Python types."""
+    assert saved["int_val"] == 42 and isinstance(saved["int_val"], int)
+    assert abs(saved["float_val"] - 3.14) < 0.01 and isinstance(saved["float_val"], float)
+    assert saved["bool_val"] is True and isinstance(saved["bool_val"], bool)
+    assert saved["array_val"] == [1, 2, 3]
+    assert saved["dt_val"] == "2024-01-01T00:00:00"
 
 
 @pytest.fixture(scope="module")
@@ -505,6 +525,46 @@ class TestLocal:
 
         with open(resolved_path_to_zarr / "zarr.json") as f:
             assert json.load(f) == {"attributes": {"meta": "data", "new": "value"}}
+
+    @staticmethod
+    def test_write_metadata_only_numpy_types(tmpdir):
+        """numpy scalars, bools, arrays, and datetimes in attrs must be coerced to JSON-native types."""
+        key = "Jeremy-daily"
+        zarr_path = tmpdir / f"{key}.zarr"
+        os.mkdir(zarr_path)
+        with open(zarr_path / "zarr.json", "w") as f:
+            json.dump({"attributes": {}}, f)
+
+        store = store_module.Local(mock.Mock(custom_output_path=pathlib.Path(tmpdir), key=lambda: key))
+        store.write_metadata_only(NUMPY_ATTRS)
+
+        with open(zarr_path / "zarr.json") as f:
+            assert_numpy_attrs_coerced(json.load(f)["attributes"])
+
+    @staticmethod
+    def test_write_metadata_only_v2(tmpdir):
+        """write_metadata_only_v2 updates both .zattrs and .zmetadata, coercing numpy types."""
+        key = "Jeremy-daily"
+        zarr_path = tmpdir / f"{key}.zarr"
+        os.mkdir(zarr_path)
+        initial = {"existing": "attr"}
+        with open(zarr_path / ".zattrs", "w") as f:
+            json.dump(initial, f)
+        with open(zarr_path / ".zmetadata", "w") as f:
+            json.dump({"metadata": {".zattrs": initial}}, f)
+
+        store = store_module.Local(mock.Mock(custom_output_path=pathlib.Path(tmpdir), key=lambda: key))
+        store.write_metadata_only_v2({"update_in_progress": False, **NUMPY_ATTRS})
+
+        with open(zarr_path / ".zattrs") as f:
+            zattrs = json.load(f)
+        with open(zarr_path / ".zmetadata") as f:
+            zmeta = json.load(f)["metadata"][".zattrs"]
+
+        for result in (zattrs, zmeta):
+            assert result["existing"] == "attr"
+            assert result["update_in_progress"] is False
+            assert_numpy_attrs_coerced(result)
 
     @staticmethod
     def test_versioning_enabled():
