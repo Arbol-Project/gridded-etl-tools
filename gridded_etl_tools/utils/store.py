@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 
+import numpy as np
 import shutil
 import s3fs  # type: ignore[import-untyped]
 import xarray as xr
@@ -20,6 +21,29 @@ import boto3  # type: ignore[import-untyped]
 
 from abc import abstractmethod, ABC
 from typing import Any
+
+
+class _ZarrAttrsEncoder(json.JSONEncoder):
+    """
+    JSON encoder for Zarr attribute dicts.
+
+    Performs the same coercions xarray applies when writing attrs via to_zarr(), so that
+    write_metadata_only / write_metadata_only_v2 accept the same range of types without
+    raising on numpy scalars, numpy bools, or datetime objects.
+    """
+
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class StoreInterface(ABC):
@@ -198,7 +222,7 @@ class StoreInterface(ABC):
 
             # Write back to Zarr
             with fs.open(f"{self.path}/{z_path}", "w") as z_contents:
-                json.dump(current_attributes, z_contents)
+                json.dump(current_attributes, z_contents, cls=_ZarrAttrsEncoder)
 
     def write_metadata_only(self, update_attrs: dict[str, Any]):
         """
@@ -220,7 +244,7 @@ class StoreInterface(ABC):
 
         # Write back to Zarr
         with fs.open(f"{self.path}/zarr.json", "w") as z_contents:
-            json.dump(current_attributes, z_contents)
+            json.dump(current_attributes, z_contents, cls=_ZarrAttrsEncoder)
 
     @property
     def has_v3_metadata(self) -> bool:

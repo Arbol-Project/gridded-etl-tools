@@ -235,15 +235,24 @@ class Publish(Transform):
                         kwargs["storage_options"]["endpoint_url"] = self.store.endpoint_url
                 dataset.to_zarr(*args, zarr_format=zarr_format, **kwargs)
 
-            # Catch any exception that occurs, and raise ZarrOutputError along with the original exception.
+            # Catch any exception that occurs: only clear the in-progress flag without touching other
+            # attrs, so a failed write never corrupts on-disk metadata (e.g. date ranges that the
+            # data doesn't yet cover). Then re-raise as ZarrOutputError.
             except Exception as error:
+                self.info("Writing metadata after failed write to clear in-progress flag.")
+                failed_attrs = {"update_in_progress": False}
+                if zarr_format == 3:
+                    self.store.write_metadata_only(update_attrs=failed_attrs)
+                else:
+                    self.store.write_metadata_only_v2(update_attrs=failed_attrs)
                 raise ZarrOutputError("Error while Zarr was being written.") from error
 
-            # Reset the update in progress flag, whether the write was successful or not.
-            finally:
-                # Indicate in metadata that update is not in progress.
+            # Write succeeded: treat the dataset's attrs as the source of truth and persist them all,
+            # including any attrs set by the tooling (convention attrs, new metadata fields, etc.)
+            # that xarray skips during region= / append_dim= writes. Override update_in_progress last.
+            else:
                 self.info("Writing metadata after writing data to indicate write is finished.")
-                restored_attrs = {"update_in_progress": False}
+                restored_attrs = {**dataset.attrs, "update_in_progress": False}
 
                 # Use Zarr format to determine metadata format.
                 if zarr_format == 3:
