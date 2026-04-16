@@ -50,8 +50,8 @@ def projected_dataset():
     x = np.arange(0, 200000, 3000.0)
     data = np.random.rand(len(y), len(x)).astype(np.float32)
     return xr.Dataset(
-        {"temperature": (["y_projection", "x_projection"], data)},
-        coords={"y_projection": y, "x_projection": x},
+        {"temperature": (["northing", "easting"], data)},
+        coords={"northing": y, "easting": x},
     )
 
 
@@ -216,8 +216,8 @@ class TestBuildSpatialAttrs:
         assert "spatial:bbox" in attrs
 
     def test_projected_coords(self, projected_dataset):
-        attrs = build_spatial_attrs(projected_dataset, ["y_projection", "x_projection"])
-        assert attrs["spatial:dimensions"] == ["y_projection", "x_projection"]
+        attrs = build_spatial_attrs(projected_dataset, ["northing", "easting"])
+        assert attrs["spatial:dimensions"] == ["northing", "easting"]
         assert attrs["spatial:transform_type"] == "affine"
 
     def test_missing_dims_returns_empty(self, regular_latlon_dataset):
@@ -288,7 +288,7 @@ class TestBuildConventionAttrs:
         attrs = build_convention_attrs(
             "Lambert Conformal Conic",
             projected_dataset,
-            ["y_projection", "x_projection"],
+            ["northing", "easting"],
             crs_wkt=LCC_WKT,
         )
         # proj: convention populated via WKT fallback
@@ -306,7 +306,7 @@ class TestBuildConventionAttrs:
         attrs = build_convention_attrs(
             None,
             projected_dataset,
-            ["y_projection", "x_projection"],
+            ["northing", "easting"],
             crs_wkt=LCC_WKT,
         )
         convention_names = [c["name"] for c in attrs["zarr_conventions"]]

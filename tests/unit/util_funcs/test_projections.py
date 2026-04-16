@@ -38,7 +38,7 @@ def test_assign_lambert_crs_to_grib(rtma_ds):
     }
     projected_ds = assign_crs_to_dataset(rtma_ds, cf_dict)
 
-    dims_mapping = {"x": "x_projection", "y": "y_projection"}
+    dims_mapping = {"x": "easting", "y": "northing"}
     assert set(projected_ds.dims.keys()) == set(dims_mapping.values())
 
     for old_dim, new_dim in dims_mapping.items():
@@ -57,9 +57,9 @@ def test_assign_lambert_crs_to_grib(rtma_ds):
     # chosen arbitrarily
     x_index, y_index = 47, 524
 
-    selected_point = projected_ds.isel(x_projection=x_index, y_projection=y_index)
-    x_value = selected_point["x_projection"].values.item()
-    y_value = selected_point["y_projection"].values.item()
+    selected_point = projected_ds.isel(easting=x_index, northing=y_index)
+    x_value = selected_point["easting"].values.item()
+    y_value = selected_point["northing"].values.item()
 
     expected_lon = selected_point["longitude"].item()
     # standardize to [-180, 180), which pyproj and gridded_etl_tools use
