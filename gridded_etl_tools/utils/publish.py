@@ -368,9 +368,10 @@ class Publish(Transform):
         """
         if original_dataset.attrs.get("update_in_progress") is True:
             raise ConcurrentWriteError(
-                "The existing Zarr's 'update_in_progress' flag is True, indicating a prior write did not "
-                "complete cleanly. Roll back to a known-good snapshot or manually reset the flag before "
-                "retrying the update."
+                "The existing Zarr's 'update_in_progress' flag is True, indicating a concurrent update "
+                "is in progress. Check whether there is an ongoing, concurrent update to this dataset running "
+                "elsewhere. If not, the dataset is corrupted and you should consdier rolling back to a known-good "
+                "snapshot or manually reset the flag before retrying the update."
             )
 
     def prepare_update_times(self, original_dataset: xr.Dataset, update_dataset: xr.Dataset) -> tuple[list, list]:
