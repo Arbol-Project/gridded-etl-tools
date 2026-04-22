@@ -13,7 +13,12 @@ import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks, ZarrOutputError
+from gridded_etl_tools.utils.publish import (
+    _is_infish,
+    calculate_time_dim_chunks,
+    ZarrOutputError,
+    ConcurrentWriteError,
+)
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
@@ -609,6 +614,9 @@ class TestPublish:
     def test_update_zarr(manager_class, fake_original_dataset):
         publish_dataset = object()
         dm = manager_class()
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [], [object()]
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
@@ -626,6 +634,9 @@ class TestPublish:
         publish_dataset = object()
 
         dm = manager_class()
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [object()], [object()]
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
@@ -643,6 +654,9 @@ class TestPublish:
         publish_dataset = object()
         dm = manager_class()
         dm.allow_overwrite = True
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [object()], []
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
@@ -656,6 +670,74 @@ class TestPublish:
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_called_once_with(fake_original_dataset, publish_dataset, insert_times)
         dm.append_to_dataset.assert_not_called()
+
+    @staticmethod
+    def test_update_zarr_raises_on_incomplete_prior_write(manager_class):
+        dm = manager_class()
+        dirty_dataset = mock.Mock()
+        dirty_dataset.attrs = {"update_in_progress": True}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = dirty_dataset
+        dm.prepare_update_times = mock.Mock()
+
+        with pytest.raises(ConcurrentWriteError):
+            dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_not_called()
+
+    @staticmethod
+    def test_update_zarr_proceeds_when_flag_false(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {"update_in_progress": False}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = clean_dataset
+        dm.prepare_update_times = mock.Mock(return_value=([], [object()]))
+        dm.update_quality_check = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_called_once()
+
+    @staticmethod
+    def test_update_zarr_proceeds_when_flag_absent(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = clean_dataset
+        dm.prepare_update_times = mock.Mock(return_value=([], [object()]))
+        dm.update_quality_check = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_called_once()
+
+    @staticmethod
+    def test_raise_if_concurrent_write_raises(manager_class):
+        dm = manager_class()
+        dirty_dataset = mock.Mock()
+        dirty_dataset.attrs = {"update_in_progress": True}
+
+        with pytest.raises(ConcurrentWriteError):
+            dm._raise_if_concurrent_write(dirty_dataset)
+
+    @staticmethod
+    def test_raise_if_concurrent_write_passes_on_false(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {"update_in_progress": False}
+        dm._raise_if_concurrent_write(clean_dataset)  # must not raise
+
+    @pytest.mark.parametrize("flag_value", [1, "yes", "true"])
+    def test_raise_if_concurrent_write_ignores_truthy_non_bool(self, manager_class, flag_value):
+        # Guard uses `is True`, so manually-edited metadata with truthy non-booleans does NOT block writes
+        dm = manager_class()
+        dataset = mock.Mock()
+        dataset.attrs = {"update_in_progress": flag_value}
+        dm._raise_if_concurrent_write(dataset)  # must not raise
 
     @staticmethod
     def test_insert_into_dataset_dry_run(manager_class):
