@@ -363,8 +363,8 @@ class Publish(Transform):
 
         Parameters
         ----------
-        original_dataset : xr.Dataset | None
-            The existing dataset as opened from the store, or None if no Zarr exists yet
+        original_dataset : xr.Dataset
+            The existing dataset as opened from the store
         """
         if original_dataset.attrs.get("update_in_progress") is True:
             raise ConcurrentWriteError(
@@ -582,10 +582,9 @@ class Publish(Transform):
         """
         # NOTE this won't work for months (returns 1 minute) because of how pandas handles timedeltas
         # We could define a more precise method with if/else statements if needed.
-        # Get the time unit from the TimeSpan enum member
+        _PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
         time_unit = self.time_resolution.get_time_unit()
-        # Create a pandas Timedelta string in the format "1h", "1d", etc.
-        dataset_time_span = f"{time_unit.value}{time_unit.unit[0]}"
+        dataset_time_span = f"{time_unit.value}{_PANDAS_TIMEDELTA_ALIAS[time_unit.unit]}"
 
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value,

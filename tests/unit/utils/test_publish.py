@@ -614,6 +614,9 @@ class TestPublish:
     def test_update_zarr(manager_class, fake_original_dataset):
         publish_dataset = object()
         dm = manager_class()
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [], [object()]
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
@@ -631,6 +634,9 @@ class TestPublish:
         publish_dataset = object()
 
         dm = manager_class()
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [object()], [object()]
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
@@ -648,6 +654,9 @@ class TestPublish:
         publish_dataset = object()
         dm = manager_class()
         dm.allow_overwrite = True
+        fake_original_dataset.attrs["update_in_progress"] = False
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = fake_original_dataset
         insert_times, append_times = [object()], []
         dm.prepare_update_times = mock.Mock(return_value=(insert_times, append_times))
         dm.update_quality_check = mock.Mock()
