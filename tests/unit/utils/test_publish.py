@@ -707,25 +707,28 @@ class TestPublish:
         dm.prepare_update_times.assert_called_once()
 
     @staticmethod
-    def test_check_for_incomplete_write_raises(manager_class):
+    def test_raise_if_concurrent_write_raises(manager_class):
         dm = manager_class()
         dirty_dataset = mock.Mock()
         dirty_dataset.attrs = {"update_in_progress": True}
 
         with pytest.raises(ConcurrentWriteError):
-            dm._check_for_incomplete_write(dirty_dataset)
+            dm._raise_if_concurrent_write(dirty_dataset)
 
     @staticmethod
-    def test_check_for_incomplete_write_passes_on_false(manager_class):
+    def test_raise_if_concurrent_write_passes_on_false(manager_class):
         dm = manager_class()
         clean_dataset = mock.Mock()
         clean_dataset.attrs = {"update_in_progress": False}
-        dm._check_for_incomplete_write(clean_dataset)  # must not raise
+        dm._raise_if_concurrent_write(clean_dataset)  # must not raise
 
-    @staticmethod
-    def test_check_for_incomplete_write_passes_on_none(manager_class):
+    @pytest.mark.parametrize("flag_value", [1, "yes", "true"])
+    def test_raise_if_concurrent_write_ignores_truthy_non_bool(self, manager_class, flag_value):
+        # Guard uses `is True`, so manually-edited metadata with truthy non-booleans does NOT block writes
         dm = manager_class()
-        dm._check_for_incomplete_write(None)  # must not raise
+        dataset = mock.Mock()
+        dataset.attrs = {"update_in_progress": flag_value}
+        dm._raise_if_concurrent_write(dataset)  # must not raise
 
     @staticmethod
     def test_insert_into_dataset_dry_run(manager_class):
