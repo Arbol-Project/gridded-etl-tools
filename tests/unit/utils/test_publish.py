@@ -13,7 +13,12 @@ import pandas as pd
 import pytest
 
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import _is_infish, calculate_time_dim_chunks, ZarrOutputError
+from gridded_etl_tools.utils.publish import (
+    _is_infish,
+    calculate_time_dim_chunks,
+    ZarrOutputError,
+    ConcurrentWriteError,
+)
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 
 
@@ -656,6 +661,71 @@ class TestPublish:
         dm.update_quality_check.assert_called_once_with(fake_original_dataset, insert_times, append_times)
         dm.insert_into_dataset.assert_called_once_with(fake_original_dataset, publish_dataset, insert_times)
         dm.append_to_dataset.assert_not_called()
+
+    @staticmethod
+    def test_update_zarr_raises_on_incomplete_prior_write(manager_class):
+        dm = manager_class()
+        dirty_dataset = mock.Mock()
+        dirty_dataset.attrs = {"update_in_progress": True}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = dirty_dataset
+        dm.prepare_update_times = mock.Mock()
+
+        with pytest.raises(ConcurrentWriteError):
+            dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_not_called()
+
+    @staticmethod
+    def test_update_zarr_proceeds_when_flag_false(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {"update_in_progress": False}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = clean_dataset
+        dm.prepare_update_times = mock.Mock(return_value=([], [object()]))
+        dm.update_quality_check = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_called_once()
+
+    @staticmethod
+    def test_update_zarr_proceeds_when_flag_absent(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {}
+        dm.store = mock.Mock(spec=store.StoreInterface)
+        dm.store.dataset.return_value = clean_dataset
+        dm.prepare_update_times = mock.Mock(return_value=([], [object()]))
+        dm.update_quality_check = mock.Mock()
+        dm.append_to_dataset = mock.Mock()
+
+        dm.update_zarr(mock.Mock())
+
+        dm.prepare_update_times.assert_called_once()
+
+    @staticmethod
+    def test_check_for_incomplete_write_raises(manager_class):
+        dm = manager_class()
+        dirty_dataset = mock.Mock()
+        dirty_dataset.attrs = {"update_in_progress": True}
+
+        with pytest.raises(ConcurrentWriteError):
+            dm._check_for_incomplete_write(dirty_dataset)
+
+    @staticmethod
+    def test_check_for_incomplete_write_passes_on_false(manager_class):
+        dm = manager_class()
+        clean_dataset = mock.Mock()
+        clean_dataset.attrs = {"update_in_progress": False}
+        dm._check_for_incomplete_write(clean_dataset)  # must not raise
+
+    @staticmethod
+    def test_check_for_incomplete_write_passes_on_none(manager_class):
+        dm = manager_class()
+        dm._check_for_incomplete_write(None)  # must not raise
 
     @staticmethod
     def test_insert_into_dataset_dry_run(manager_class):

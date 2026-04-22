@@ -27,6 +27,10 @@ class ZarrOutputError(Exception):
     """Raise when an exception occurs while the Zarr is being written"""
 
 
+class ConcurrentWriteError(Exception):
+    """Raise when a Zarr's update_in_progress flag indicates a prior write did not complete cleanly"""
+
+
 class Publish(Transform):
     """
     Base class for publishing methods -- both initial publication and updates to existing datasets
@@ -327,6 +331,7 @@ class Publish(Transform):
             A dataset containing all updated (insert) and new (append) records
         """
         original_dataset = self.store.dataset()
+        self._check_for_incomplete_write(original_dataset)
         self.info(f"Original dataset\n{original_dataset}")
         self.info(f"Unfiltered new data\n{publish_dataset}")
         # Create a list of any datetimes to insert and/or append
@@ -349,6 +354,25 @@ class Publish(Transform):
             self.append_to_dataset(publish_dataset, append_times)
         else:
             self.info("No new records to append to original zarr")
+
+    def _check_for_incomplete_write(self, original_dataset: xr.Dataset | None):
+        """
+        Raise ConcurrentWriteError if the existing Zarr's update_in_progress flag is True, which indicates
+        a prior write did not complete cleanly. This prevents a double-append when a previous run wrote
+        data but crashed before resetting the flag, leaving the on-disk time coordinate and the in-memory
+        view of it out of sync.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset | None
+            The existing dataset as opened from the store, or None if no Zarr exists yet
+        """
+        if original_dataset is not None and original_dataset.attrs.get("update_in_progress"):
+            raise ConcurrentWriteError(
+                "The existing Zarr's 'update_in_progress' flag is True, indicating a prior write did not "
+                "complete cleanly. Roll back to a known-good snapshot or manually reset the flag before "
+                "retrying the update."
+            )
 
     def prepare_update_times(self, original_dataset: xr.Dataset, update_dataset: xr.Dataset) -> tuple[list, list]:
         """
