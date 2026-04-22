@@ -27,6 +27,10 @@ class ZarrOutputError(Exception):
     """Raise when an exception occurs while the Zarr is being written"""
 
 
+class ConcurrentWriteError(Exception):
+    """Raise when a Zarr's update_in_progress flag indicates an ongoing, concurrent write elsewhere"""
+
+
 class Publish(Transform):
     """
     Base class for publishing methods -- both initial publication and updates to existing datasets
@@ -327,6 +331,7 @@ class Publish(Transform):
             A dataset containing all updated (insert) and new (append) records
         """
         original_dataset = self.store.dataset()
+        self._raise_if_concurrent_write(original_dataset)
         self.info(f"Original dataset\n{original_dataset}")
         self.info(f"Unfiltered new data\n{publish_dataset}")
         # Create a list of any datetimes to insert and/or append
@@ -349,6 +354,25 @@ class Publish(Transform):
             self.append_to_dataset(publish_dataset, append_times)
         else:
             self.info("No new records to append to original zarr")
+
+    def _raise_if_concurrent_write(self, original_dataset: xr.Dataset):
+        """
+        Raise ConcurrentWriteError if the existing Zarr's update_in_progress flag is True, which indicates
+        an ongoing write from elsewhere. This prevents a double-append which would leave the on-disk
+        time coordinate and the in-memory view of it out of sync.
+
+        Parameters
+        ----------
+        original_dataset : xr.Dataset
+            The existing dataset as opened from the store
+        """
+        if original_dataset.attrs.get("update_in_progress") is True:
+            raise ConcurrentWriteError(
+                "The existing Zarr's 'update_in_progress' flag is True, indicating a concurrent update "
+                "is in progress. Check whether there is an ongoing, concurrent update to this dataset running "
+                "elsewhere. If not, the dataset is corrupted and you should consider rolling back to a known-good "
+                "snapshot or manually reset the flag before retrying the update."
+            )
 
     def prepare_update_times(self, original_dataset: xr.Dataset, update_dataset: xr.Dataset) -> tuple[list, list]:
         """
@@ -559,10 +583,9 @@ class Publish(Transform):
         """
         # NOTE this won't work for months (returns 1 minute) because of how pandas handles timedeltas
         # We could define a more precise method with if/else statements if needed.
-        # Get the time unit from the TimeSpan enum member
+        _PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
         time_unit = self.time_resolution.get_time_unit()
-        # Create a pandas Timedelta string in the format "1h", "1d", etc.
-        dataset_time_span = f"{time_unit.value}{time_unit.unit[0]}"
+        dataset_time_span = f"{time_unit.value}{_PANDAS_TIMEDELTA_ALIAS[time_unit.unit]}"
 
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
         # Define datetime range starts as anything with > 1 unit diff with the previous value,
