@@ -28,7 +28,7 @@ class ZarrOutputError(Exception):
 
 
 class ConcurrentWriteError(Exception):
-    """Raise when a Zarr's update_in_progress flag indicates a prior write did not complete cleanly"""
+    """Raise when a Zarr's update_in_progress flag indicates an ongoing, concurrent write elsewhere"""
 
 
 class Publish(Transform):
@@ -370,7 +370,7 @@ class Publish(Transform):
             raise ConcurrentWriteError(
                 "The existing Zarr's 'update_in_progress' flag is True, indicating a concurrent update "
                 "is in progress. Check whether there is an ongoing, concurrent update to this dataset running "
-                "elsewhere. If not, the dataset is corrupted and you should consdier rolling back to a known-good "
+                "elsewhere. If not, the dataset is corrupted and you should consider rolling back to a known-good "
                 "snapshot or manually reset the flag before retrying the update."
             )
 
