@@ -341,6 +341,7 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface)
 
         dataset = mock.Mock()
+        dataset.attrs = {}
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
@@ -349,7 +350,8 @@ class TestPublish:
         dataset.get.assert_called_once_with("update_is_append_only")
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
 
-        # Metadata v2 function must be called
+        # Metadata v2 function must be called. The restore call includes all of dataset.attrs
+        # (which by the finally block contains the pre-write flags) with update_in_progress overridden to False.
         dm.store.write_metadata_only_v2.assert_has_calls(
             [
                 mock.call(
@@ -359,7 +361,13 @@ class TestPublish:
                         "initial_parse": False,
                     }
                 ),
-                mock.call(update_attrs={"update_in_progress": False}),
+                mock.call(
+                    update_attrs={
+                        "update_in_progress": False,
+                        "update_is_append_only": "is it?",
+                        "initial_parse": False,
+                    }
+                ),
             ]
         )
 
@@ -373,21 +381,17 @@ class TestPublish:
         with pytest.raises(ValueError):
             dm.to_zarr(dataset, zarr_format=3)
 
-        # Test what happens when an unknown exception happens during writing
+        # Test what happens when an unknown exception happens during writing.
+        # dm.output_zarr3 is still True from the check above, so write_metadata_only (v3) is used.
         dataset.reset_mock()
+        dm.store.write_metadata_only.reset_mock()
         dataset.to_zarr.side_effect = RuntimeError("Nuclear meltdown")
         with pytest.raises(ZarrOutputError):
             dm.to_zarr(dataset)
-        # Metadata must be reset even when an error happens during writing
-        dm.store.write_metadata_only_v2.assert_has_calls(
+        # On failure, only the in-progress flag is cleared — other attrs are not written to disk
+        # so that a failed write never corrupts on-disk metadata (e.g. date ranges).
+        dm.store.write_metadata_only.assert_has_calls(
             [
-                mock.call(
-                    update_attrs={
-                        "update_in_progress": True,
-                        "update_is_append_only": "is it?",
-                        "initial_parse": False,
-                    }
-                ),
                 mock.call(update_attrs={"update_in_progress": False}),
             ]
         )
@@ -412,13 +416,16 @@ class TestPublish:
         dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
 
         dataset = mock.Mock()
+        dataset.attrs = {}
         dataset.get.return_value = "is it?"
         dm.to_zarr(dataset, "foo", bar="baz")
 
         # Zarr format is explicitly set to 2.0
         dataset.to_zarr.assert_called_once_with("foo", bar="baz", zarr_format=2)
         dm.pre_parse_quality_check.assert_called_once_with(dataset)
-        dm.store.write_metadata_only_v2.assert_has_calls([mock.call(update_attrs={"update_in_progress": False})])
+        dm.store.write_metadata_only_v2.assert_has_calls(
+            [mock.call(update_attrs={"update_in_progress": False, "initial_parse": True})]
+        )
 
     @staticmethod
     def test_to_zarr_integration(manager_class, fake_original_dataset, tmpdir):
