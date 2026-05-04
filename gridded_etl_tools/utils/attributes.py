@@ -341,7 +341,7 @@ class Attributes(ABC):
     """
     The release_status of the dataset.
 
-    Valid options include "final", "preliminary", "mixed final and preliminary", and "historical".
+    Valid options include "final", "late", "preliminary", "mixed final and preliminary", and "historical".
 
     Defaults to "final".
 
