@@ -351,11 +351,12 @@ class Attributes(ABC):
     "mixed final and preliminary" indicates a dataset that contains both final and preliminary versions of the data.
     """
 
-    version: str | list[str] | None = None
+    version: str | list[int, str] | None = None
     """
     The version of the dataset, i.e. version 2, version 3, satellite-based, model-based, etc.
     Flexible to accommodate the quirks of individual providers' publication practices.
-    May include multiple version tags
+    May include multiple version tags. Versions may be integer or string;
+    the highest integer is presumed to represent the latest version
     """
 
     region: str | None = "global"
