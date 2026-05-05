@@ -16,6 +16,7 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         version: "0.11.6"
+        enable-cache: true
     - name: Create virtual environment
       shell: bash
       run: uv sync ${{ inputs.extra }}
