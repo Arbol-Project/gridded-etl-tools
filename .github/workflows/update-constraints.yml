@@ -1,0 +1,24 @@
+name: Update constraints.txt
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  update-constraints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.6"
+      - name: Export constraints
+        run: uv export --frozen --no-hashes -o constraints.txt
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet constraints.txt || (git add constraints.txt && git commit -m "chore: update constraints.txt" && git push)
