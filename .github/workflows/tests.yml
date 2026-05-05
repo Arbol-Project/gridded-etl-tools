@@ -22,7 +22,7 @@ jobs:
       - name: Install external dependencies via APT
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: cdo netcdf-bin
+          packages: cdo netcdf-bin libeccodes0
           version: 1.0
 
       - uses: actions/checkout@v4
