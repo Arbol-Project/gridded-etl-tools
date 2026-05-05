@@ -15,6 +15,7 @@ runs:
     - uses: astral-sh/setup-uv@v7
       with:
         python-version: ${{ inputs.python-version }}
+        version: "0.11.6"
     - name: Create virtual environment
       shell: bash
       run: uv sync ${{ inputs.extra }}
