@@ -1,0 +1,20 @@
+name: Setup uv
+description: Setup uv with caching for a given Python version
+
+inputs:
+  python-version:
+    description: Python version to install
+    required: true
+  extra:
+    description: Optional dependency group to sync, e.g. "--extra testing"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Create virtual environment
+      shell: bash
+      run: uv sync ${{ inputs.extra }}

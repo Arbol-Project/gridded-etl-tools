@@ -1,0 +1,22 @@
+name: Lint and format
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-format:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/setup
+        with:
+          python-version: "3.12"
+          extra: "--extra dev"
+      - name: Lint
+        run: uv run flake8 gridded_etl_tools tests examples
+      - name: Format check
+        run: uv run black --check gridded_etl_tools tests examples

@@ -1,49 +1,62 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Python application
+name: Run tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
     if: ${{ !github.event.pull_request.draft && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     steps:
-    - name: Install external dependencies via APT
-      run: sudo apt-get update && sudo apt-get install cdo netcdf-bin
+      - name: Install external dependencies via APT
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: cdo netcdf-bin
+          version: 1.0
 
-    - name: Check out repo
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.12"
+      - uses: ./.github/setup
+        with:
+          python-version: ${{ matrix.python-version }}
+          extra: "--extra testing"
 
-    - name: Cache reusable files
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/pip/
-        key: ${{ runner.os }}-dependencies
+      - name: Run unit tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTING_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTING_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          uv run pytest \
+            --log-level=INFO \
+            --log-cli-level=INFO \
+            --cov=gridded_etl_tools \
+            --cov=tests.unit \
+            --cov-config=.coveragerc \
+            --cov-report=term-missing \
+            tests/unit
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install nox
-
-    - name: Run nox
-      env:
-        AWS_ACCESS_KEY_ID: ${{secrets.TESTING_AWS_ACCESS_KEY_ID}}
-        AWS_SECRET_ACCESS_KEY: ${{secrets.TESTING_AWS_SECRET_ACCESS_KEY}}
-      run: |
-        nox
+      - name: Run system tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTING_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTING_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          uv run pytest \
+            --log-level=INFO \
+            --log-cli-level=INFO \
+            --cov=tests.system \
+            --cov-append \
+            --cov-config=.coveragerc \
+            --cov-report=term-missing \
+            --cov-fail-under=100 \
+            tests/system

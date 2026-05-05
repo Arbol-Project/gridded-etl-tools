@@ -77,7 +77,6 @@ dev = [
     "black",
     "flake8",
     "flake8-pyproject",
-    "nox",
 ]
 
 [tool.setuptools_scm]
@@ -103,3 +102,6 @@ namespaces = false
 ignore = ["E203", "E701", "W503"]
 exclude = ["temp/*", "build/*", ".nox", ".venv"]
 max-line-length = 120
+
+[tool.uv]
+exclude-newer = "3 days"
