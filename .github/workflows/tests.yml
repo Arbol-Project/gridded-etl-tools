@@ -20,19 +20,21 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       - name: Install external dependencies via APT
-        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
           packages: cdo netcdf-bin libeccodes0
           version: 1.0
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
 
-      - uses: ./.github/setup
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
         with:
           python-version: ${{ matrix.python-version }}
-          extra: "--extra testing"
+          version: "0.11.10"
 
       - name: Run unit tests
         env:
@@ -43,7 +45,6 @@ jobs:
             --log-level=INFO \
             --log-cli-level=INFO \
             --cov=gridded_etl_tools \
-            --cov=tests.unit \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             tests/unit
@@ -56,11 +57,8 @@ jobs:
           uv run pytest \
             --log-level=INFO \
             --log-cli-level=INFO \
-            --cov=tests.system \
+            --cov=gridded_etl_tools \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-fail-under=100 \
             tests/system
-
-      - name: Enforce combined coverage
-        run: uv run coverage report --fail-under=100 --show-missing

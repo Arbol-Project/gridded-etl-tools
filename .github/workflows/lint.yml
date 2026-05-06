@@ -10,12 +10,14 @@ jobs:
   lint-and-format:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/setup
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
         with:
           python-version: "3.12"
-          extra: "--extra dev"
+          version: "0.11.10"
       - name: Lint
         run: uv run flake8 gridded_etl_tools tests examples
       - name: Format check
