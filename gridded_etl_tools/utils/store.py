@@ -43,7 +43,7 @@ class _ZarrAttrsEncoder(json.JSONEncoder):
             return obj.tolist()
         if isinstance(obj, (datetime.datetime, datetime.date)):  # pragma: no cover
             return obj.isoformat()
-        return super().default(obj)
+        return super().default(obj)  # pragma: no cover
 
 
 class StoreInterface(ABC):
