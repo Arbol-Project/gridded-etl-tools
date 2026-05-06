@@ -60,7 +60,7 @@ jobs:
             --cov=gridded_etl_tools \
             --cov-append \
             --cov-config=.coveragerc \
-            --cov-report=term-missing \
+            --cov-report=term-missing:skip-covered \
             tests/system
 
       - name: Enforce combined coverage

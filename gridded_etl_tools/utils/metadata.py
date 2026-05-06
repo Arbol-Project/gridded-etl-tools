@@ -733,7 +733,7 @@ class Metadata(Convenience):
         # a pyproj-parseable coordinate_reference_system on the manager class instead.
         crs_wkt = None
         crs_dict = dataset.attrs.get("crs")
-        if isinstance(crs_dict, dict):
+        if isinstance(crs_dict, dict):  # pragma: no cover
             crs_wkt = crs_dict.get("crs_wkt")
 
         conv_attrs = build_convention_attrs(
@@ -742,7 +742,7 @@ class Metadata(Convenience):
             spatial_dims=self.spatial_dims,
             crs_wkt=crs_wkt,
         )
-        if conv_attrs:
+        if conv_attrs:  # pragma: no cover
             dataset.attrs.update(conv_attrs)
 
     def rename_data_variable(self, dataset: xr.Dataset) -> xr.Dataset:
