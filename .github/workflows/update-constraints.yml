@@ -18,7 +18,20 @@ jobs:
       - name: Export constraints
         run: uv export --frozen --no-hashes -o constraints.txt
       - name: Commit if changed
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet constraints.txt || (git add constraints.txt && git commit -m "chore: update constraints.txt" && git push)
+          if git diff --quiet constraints.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git add constraints.txt && git commit -m "chore: update constraints.txt" && git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Dispatch to prefect-etl-orchestration
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -X POST https://api.github.com/repos/Arbol-Project/prefect-etl-orchestration/dispatches \
+            -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
+            --data '{"event_type": "non-gridded-etl-managers-constraints-updated", "client_payload": {"repository": "'"$GITHUB_REPOSITORY"'"}}'
