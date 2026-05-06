@@ -31,7 +31,7 @@ jobs:
       - name: Dispatch to prefect-etl-orchestration
         if: steps.commit.outputs.changed == 'true'
         run: |
-          curl -X POST https://api.github.com/repos/Arbol-Project/prefect-etl-orchestration/dispatches \
-            -H "Accept: application/vnd.github.everest-preview+json" \
+          curl --fail -X POST https://api.github.com/repos/Arbol-Project/prefect-etl-orchestration/dispatches \
+            -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
             --data '{"event_type": "non-gridded-etl-managers-constraints-updated", "client_payload": {"repository": "'"$GITHUB_REPOSITORY"'"}}'
