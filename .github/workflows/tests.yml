@@ -58,7 +58,10 @@ jobs:
             --log-level=INFO \
             --log-cli-level=INFO \
             --cov=gridded_etl_tools \
+            --cov-append \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
-            --cov-fail-under=100 \
             tests/system
+
+      - name: Enforce combined coverage
+        run: uv run coverage report --fail-under=100 --show-missing
