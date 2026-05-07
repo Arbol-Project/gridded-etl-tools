@@ -69,6 +69,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "pytest-xdist",
     "responses",
     "moto[server]",
 ]

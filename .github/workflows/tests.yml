@@ -46,6 +46,7 @@ jobs:
       - name: Run unit tests
         run: |
           uv run pytest \
+            -n auto \
             --log-level=INFO \
             --log-cli-level=INFO \
             --cov=gridded_etl_tools \
