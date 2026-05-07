@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   tests:
@@ -36,10 +37,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           version: "0.11.10"
 
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::421396523132:role/github-actions-gridded-testing
+          aws-region: us-east-1
+
       - name: Run unit tests
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTING_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTING_AWS_SECRET_ACCESS_KEY }}
         run: |
           uv run pytest \
             --log-level=INFO \
@@ -50,9 +54,6 @@ jobs:
             tests/unit
 
       - name: Run system tests
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTING_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTING_AWS_SECRET_ACCESS_KEY }}
         run: |
           uv run pytest \
             --log-level=INFO \
