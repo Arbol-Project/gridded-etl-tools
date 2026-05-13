@@ -310,6 +310,20 @@ class TestTransform:
         scan_grib.assert_called_once_with(url="/read/from/here", filter="iamafilter", inline_threshold=20)
 
     @staticmethod
+    def test_local_kerchunk_grib_custom_inline_threshold(manager_class, mocker):
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
+        scan_grib.return_value = [mock.Mock()]
+
+        md = manager_class()
+        md.file_type = "GRIB"
+        md.grib_filter = "iamafilter"
+        md.kerchunk_grib_inline_threshold = 20000
+
+        md.local_kerchunk("/read/from/here")
+
+        scan_grib.assert_called_once_with(url="/read/from/here", filter="iamafilter", inline_threshold=20000)
+
+    @staticmethod
     def test_local_kerchunk_invalid_file_type(manager_class):
         md = manager_class()
         with pytest.raises(ValueError):
@@ -391,6 +405,27 @@ class TestTransform:
             storage_options={"default_cache_type": "readahead"},
             filter="iamafilter",
             inline_threshold=20,
+        )
+
+    @staticmethod
+    def test_remote_kerchunk_grib_custom_inline_threshold(manager_class, mocker):
+        scan_grib = mocker.patch("gridded_etl_tools.utils.transform.scan_grib")
+        scanned_zarr_json = {"hi": "mom!"}
+        scan_grib.return_value = [scanned_zarr_json]
+
+        md = manager_class()
+        md.zarr_jsons = []
+        md.file_type = "GRIB"
+        md.grib_filter = "iamafilter"
+        md.kerchunk_grib_inline_threshold = 20000
+
+        md.remote_kerchunk("over/here")
+
+        scan_grib.assert_called_once_with(
+            url="over/here",
+            storage_options={"default_cache_type": "readahead"},
+            filter="iamafilter",
+            inline_threshold=20000,
         )
 
     @staticmethod
