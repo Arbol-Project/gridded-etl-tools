@@ -317,7 +317,7 @@ class TestTransform:
         md = manager_class()
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"
-        md.kerchunk_grid_inline_threshold = 20000
+        md.kerchunk_grib_inline_threshold = 20000
 
         md.local_kerchunk("/read/from/here")
 
@@ -417,7 +417,7 @@ class TestTransform:
         md.zarr_jsons = []
         md.file_type = "GRIB"
         md.grib_filter = "iamafilter"
-        md.kerchunk_grid_inline_threshold = 20000
+        md.kerchunk_grib_inline_threshold = 20000
 
         md.remote_kerchunk("over/here")
 

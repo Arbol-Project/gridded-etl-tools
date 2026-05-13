@@ -215,7 +215,7 @@ class Transform(Metadata, Convenience):
 
             elif self.file_type == "GRIB":
                 scanned_zarr_json = scan_grib(
-                    url=file_path, filter=self.grib_filter, inline_threshold=self.kerchunk_grid_inline_threshold
+                    url=file_path, filter=self.grib_filter, inline_threshold=self.kerchunk_grib_inline_threshold
                 )[scan_indices]
             else:
                 raise ValueError(f"Invalid value for file_type. Expected 'NetCDF' or 'GRIB', got {self.file_type}")
@@ -259,7 +259,7 @@ class Transform(Metadata, Convenience):
                 url=file_path,
                 storage_options=s3_so,
                 filter=self.grib_filter,
-                inline_threshold=self.kerchunk_grid_inline_threshold,
+                inline_threshold=self.kerchunk_grib_inline_threshold,
             )[scan_indices]
 
         else:

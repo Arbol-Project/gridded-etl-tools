@@ -267,7 +267,7 @@ class Attributes(ABC):
     Options to pass to S3FileSystem when scanning remote files with Kerchunk.
     """
 
-    kerchunk_grid_inline_threshold: int = 20
+    kerchunk_grib_inline_threshold: int = 20
     """
     Byte threshold below which Kerchunk inlines coordinate data as base64 rather than storing a
     [url, offset, length] reference. Raise this value to inline larger coordinate arrays (e.g.
