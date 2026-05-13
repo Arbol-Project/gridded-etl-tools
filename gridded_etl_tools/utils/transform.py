@@ -214,9 +214,9 @@ class Transform(Metadata, Convenience):
                     scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
 
             elif self.file_type == "GRIB":
-                scanned_zarr_json = scan_grib(url=file_path, filter=self.grib_filter, inline_threshold=20)[
-                    scan_indices
-                ]
+                scanned_zarr_json = scan_grib(
+                    url=file_path, filter=self.grib_filter, inline_threshold=self.kerchunk_grid_inline_threshold
+                )[scan_indices]
             else:
                 raise ValueError(f"Invalid value for file_type. Expected 'NetCDF' or 'GRIB', got {self.file_type}")
         except OSError as e:
@@ -256,7 +256,10 @@ class Transform(Metadata, Convenience):
 
         elif "GRIB" in self.file_type:
             scanned_zarr_json = scan_grib(
-                url=file_path, storage_options=s3_so, filter=self.grib_filter, inline_threshold=20
+                url=file_path,
+                storage_options=s3_so,
+                filter=self.grib_filter,
+                inline_threshold=self.kerchunk_grid_inline_threshold,
             )[scan_indices]
 
         else:
