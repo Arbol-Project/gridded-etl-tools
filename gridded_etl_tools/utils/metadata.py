@@ -263,7 +263,7 @@ class Metadata(Convenience):
             "dataset description": self.dataset_description,
             "license": self.license,
             "terms of service": self.terms_of_service,
-            "version": self.version,
+            "models": self.models,
             "release status": self.release_status,
             "region": self.region,
         }

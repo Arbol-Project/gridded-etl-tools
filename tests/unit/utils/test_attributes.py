@@ -182,8 +182,8 @@ class TestAttributes:
         assert manager_class.release_status == "final"
 
     @staticmethod
-    def test_version(manager_class):
-        assert manager_class.version is None
+    def test_model_tags(manager_class):
+        assert manager_class.model_tags == []
 
     @staticmethod
     def test_region(manager_class):
