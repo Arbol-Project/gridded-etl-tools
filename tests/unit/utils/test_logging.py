@@ -251,7 +251,7 @@ class TestUnclosedAiohttpFilter:
         record = self._make_record("")
         assert f.filter(record) is True
 
-    def test_registered_on_asyncio_logger_at_import(self):
-        asyncio_logger = logging.getLogger("asyncio")
-        filter_types = [type(f) for f in asyncio_logger.filters]
-        assert _UnclosedAiohttpFilter in filter_types
+    def test_passes_message_containing_phrase_but_not_starting_with_it(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("Warning: Unclosed client session may cause issues")
+        assert f.filter(record) is True

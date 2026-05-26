@@ -12,13 +12,8 @@ class _UnclosedAiohttpFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return "Unclosed client session" not in msg and "Unclosed connector" not in msg
-
-
-# Install once at import time so the filter is always active regardless of which logging
-# setup method (log_to_file, log_to_console, or neither) is called.
-logging.getLogger("asyncio").addFilter(_UnclosedAiohttpFilter())
+        msg = str(record.msg)
+        return not msg.startswith("Unclosed client session") and not msg.startswith("Unclosed connector")
 
 
 class Logging(Attributes):
