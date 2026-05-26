@@ -182,8 +182,8 @@ class TestAttributes:
         assert manager_class.release_status == "final"
 
     @staticmethod
-    def test_model_tags(manager_class):
-        assert manager_class.model_tags == []
+    def test_models(manager_class):
+        assert manager_class.models == []
 
     @staticmethod
     def test_region(manager_class):
