@@ -337,7 +337,9 @@ class Attributes(ABC):
     to adjust this value
     """
 
-    release_status: typing.Literal["final", "preliminary", "mixed final and preliminary", "historical"] = "final"
+    release_status: typing.Literal["final", "late", "preliminary", "mixed final and preliminary", "historical"] = (
+        "final"
+    )
     """
     The release_status of the dataset.
 
@@ -351,12 +353,14 @@ class Attributes(ABC):
     "mixed final and preliminary" indicates a dataset that contains both final and preliminary versions of the data.
     """
 
-    version: str | list[int | str] | None = None
+    version: str | None = None
     """
     The version of the dataset, i.e. version 2, version 3, satellite-based, model-based, etc.
     Flexible to accommodate the quirks of individual providers' publication practices.
-    May include multiple version tags. Versions may be integer or string;
-    the highest integer is presumed to represent the latest version
+    May include multiple version tags separated by a +.
+    
+    Versions must be string and parsable by the `packaging` package;
+    i.e. "2" or "2+satellite", but not "2_satellite" (invalid for packaging).
     """
 
     region: str | None = "global"
