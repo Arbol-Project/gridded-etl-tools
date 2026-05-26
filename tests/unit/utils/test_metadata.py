@@ -250,7 +250,7 @@ class TestMetadata:
             "dataset description",
             "license",
             "terms of service",
-            "version",
+            "models",
             "release status",
             "region",
         ]
