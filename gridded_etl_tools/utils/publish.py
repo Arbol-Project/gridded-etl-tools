@@ -588,22 +588,50 @@ class Publish(Transform):
             A List of (Datetime, Datetime) tuples defining the time ranges of records to insert
         regions_indices: list[tuple[int, int]]
              A List of (int, int) tuples defining the indices of records to insert
-        """
-        # NOTE this won't work for months (returns 1 minute) because of how pandas handles timedeltas
-        # We could define a more precise method with if/else statements if needed.
-        _PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
-        time_unit = self.time_resolution.get_time_unit()
-        dataset_time_span = f"{time_unit.value}{_PANDAS_TIMEDELTA_ALIAS[time_unit.unit]}"
 
+        Notes
+        -----
+        Contiguity is judged against the dataset's time unit. Fixed-length units (minutes, hours, days,
+        weeks) are compared with pandas Timedeltas. Calendar units (months, years) have no fixed Timedelta,
+        so gaps are measured in whole calendar months instead. The 'seasons' unit is not yet supported, and
+        calendar-unit datasets backed by cftime calendars (e.g. 360_day, noleap) raise NotImplementedError.
+        """
+        time_unit = self.time_resolution.get_time_unit()
         complete_time_series = pd.Series(update_dataset[self.time_dim].values)
+
+        # Gaps are detected by comparing each timestamp to its neighbors. The metric used to measure
+        # that gap depends on the time unit: fixed-length units (minutes...weeks) can be compared with
+        # pandas Timedeltas, but calendar units (months, years) have no fixed Timedelta -- a month is
+        # 28-31 days -- so for those we measure gaps in whole months derived from the calendar instead.
+        if time_unit.unit in ("months", "years"):
+            # `pd.Series.dt` only works on datetime64 data. cftime objects (used for non-standard
+            # calendars like 360_day or noleap, common in climate model output) arrive as an object
+            # dtype Series and would silently break the .dt access below, so reject them explicitly.
+            if not np.issubdtype(complete_time_series.dtype, np.datetime64):
+                raise NotImplementedError(
+                    f"calculate_update_time_ranges received non-datetime64 time values "
+                    f"(dtype '{complete_time_series.dtype}') for a '{time_unit.unit}' dataset. This most "
+                    "likely indicates a cftime calendar (e.g. 360_day, noleap), which is not yet supported "
+                    "for calendar-unit time ranges. Convert the time coordinate to datetime64 first."
+                )
+            # NOTE: 'seasons' is intentionally unsupported (for now) given ambiguities around seasonal defs
+            # Collapse each timestamp to an absolute month ordinal (year * 12 + month). Differences in this
+            # space are exact whole-month counts, sidestepping variable month/year lengths entirely.
+            spacing = complete_time_series.dt.year * 12 + complete_time_series.dt.month
+            step = {"months": 1, "years": 12}[time_unit.unit] * time_unit.value
+            # `inf` plays the same role for the integer ordinals that pd.Timedelta.max plays below: it
+            # forces the first/last elements (whose neighbor diff is NA) to register as range endpoints.
+            fill = float("inf")
+        else:
+            _PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
+            spacing = complete_time_series
+            step = pd.Timedelta(f"{time_unit.value}{_PANDAS_TIMEDELTA_ALIAS[time_unit.unit]}")
+            fill = pd.Timedelta.max
+
         # Define datetime range starts as anything with > 1 unit diff with the previous value,
         # and ends as > 1 unit diff with the following. First/Last will return NAs we must fill.
-        starts = (complete_time_series - complete_time_series.shift(1)).abs().fillna(pd.Timedelta.max) > pd.Timedelta(
-            dataset_time_span
-        )
-        ends = (complete_time_series - complete_time_series.shift(-1)).abs().fillna(pd.Timedelta.max) > pd.Timedelta(
-            dataset_time_span
-        )
+        starts = (spacing - spacing.shift(1)).abs().fillna(fill) > step
+        ends = (spacing - spacing.shift(-1)).abs().fillna(fill) > step
         # Filter down the update time series to just the range starts/ends
         insert_datetimes = complete_time_series[starts + ends]
         single_datetime_inserts = complete_time_series[starts & ends]

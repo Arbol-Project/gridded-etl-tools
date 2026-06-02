@@ -150,6 +150,49 @@ def fake_complex_update_dataset():
 
 
 @pytest.fixture
+def fake_monthly_original_dataset():
+    time = xr.DataArray(
+        np.array(monthly_original_times), dims="time", coords={"time": np.arange(len(monthly_original_times))}
+    )
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(len(monthly_original_times), 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def fake_monthly_complex_update_dataset():
+    time = xr.DataArray(
+        np.array(monthly_complex_update_times),
+        dims="time",
+        coords={"time": np.arange(len(monthly_complex_update_times))},
+    )
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(len(monthly_complex_update_times), 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def monthly_manager_class():
+    return DummyMonthlyManager
+
+
+@pytest.fixture
 def single_time_instant_dataset():
     return _single_time_instant_dataset(original_times[:1])
 
@@ -252,6 +295,18 @@ class DummyManager(DummyManagerBase):
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = TimeSpan.SPAN_DAILY
+    final_lag_in_days = 3
+    expected_nan_frequency = 0.2
+    missing_value = 42
+
+
+class DummyMonthlyManager(DummyManagerBase):
+    collection_name = "Vintage Guitars"
+    concat_dimensions = ["z", "zz"]
+    dataset_name = "DummyMonthlyManager"
+    identical_dimensions = ["x", "y"]
+    protocol = "handshake"
+    time_resolution = TimeSpan.SPAN_MONTHLY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
     missing_value = 42
@@ -519,6 +574,39 @@ complex_update_times = np.array(
         "2022-03-06",
         "2022-03-07",
         "2022-03-08",
+    ],
+    dtype="datetime64[ns]",
+)
+
+
+# Contiguous monthly timestamps used as the "existing" dataset for monthly update tests.
+# 24 month-starts spanning 2020-01 through 2021-12.
+monthly_original_times = np.array(
+    [f"{year}-{month:02d}-01" for year in (2020, 2021) for month in range(1, 13)],
+    dtype="datetime64[ns]",
+)
+
+
+# Monthly update timestamps exercising the same range-detection edge cases as
+# `complex_update_times` but at monthly resolution: a lone month, a multi-month
+# contiguous block, another lone month, and a trailing block that appends past
+# the end of the original dataset.
+monthly_complex_update_times = np.array(
+    [
+        # Single isolated insert
+        "2020-03-01",
+        # Contiguous 4-month insert block
+        "2020-06-01",
+        "2020-07-01",
+        "2020-08-01",
+        "2020-09-01",
+        # Single isolated insert
+        "2020-12-01",
+        # Contiguous block that overlaps the end of the original and appends beyond it
+        "2021-11-01",
+        "2021-12-01",
+        "2022-01-01",
+        "2022-02-01",
     ],
     dtype="datetime64[ns]",
 )
