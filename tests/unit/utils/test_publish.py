@@ -1055,7 +1055,7 @@ class TestPublish:
         datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
             fake_monthly_original_dataset, fake_monthly_complex_update_dataset
         )
-        # Four distinct updates: single, 4-month block, single, 2-month append
+        # Four distinct updates: single, 4-month block, single, 4-month trailing block (2 indices in original)
         assert len(regions_indices) == 4
         insert_range_sizes = [region[1] - region[0] for region in regions_indices]
         assert insert_range_sizes == [1, 4, 1, 2]
@@ -1086,6 +1086,35 @@ class TestPublish:
         dm.set_key_dims()
         with pytest.raises(NotImplementedError, match="cftime"):
             dm.calculate_update_time_ranges(fake_monthly_original_dataset, update_dataset)
+
+    @staticmethod
+    def test_calculate_update_time_ranges_seasons_unsupported(
+        fake_monthly_original_dataset,
+        fake_monthly_complex_update_dataset,
+    ):
+        """
+        Seasonal datasets are intentionally unsupported — seasonal time encodings vary between
+        datasets and there is no concrete, validated use case. Confirm a NotImplementedError is
+        raised rather than silently producing wrong ranges.
+        """
+        from gridded_etl_tools.utils.time import TimeSpan
+        from tests.unit.conftest import DummyManagerBase
+
+        class SeasonalManager(DummyManagerBase):
+            collection_name = "Seasonal Test"
+            concat_dimensions = []
+            dataset_name = "SeasonalManager"
+            identical_dimensions = []
+            protocol = "handshake"
+            time_resolution = TimeSpan.SPAN_SEASONAL
+            final_lag_in_days = 3
+            expected_nan_frequency = 0.2
+            missing_value = 0
+
+        dm = SeasonalManager()
+        dm.set_key_dims()
+        with pytest.raises(NotImplementedError, match="seasonal"):
+            dm.calculate_update_time_ranges(fake_monthly_original_dataset, fake_monthly_complex_update_dataset)
 
     @staticmethod
     def test_preparse_quality_check(manager_class, fake_original_dataset):
