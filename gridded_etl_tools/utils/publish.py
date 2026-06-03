@@ -603,7 +603,11 @@ class Publish(Transform):
         # that gap depends on the time unit: fixed-length units (minutes...weeks) can be compared with
         # pandas Timedeltas, but calendar units (months, years) have no fixed Timedelta -- a month is
         # 28-31 days -- so for those we measure gaps in whole months derived from the calendar instead.
-        if time_unit.unit in ("months", "years"):
+
+        # NOTE: 'seasons' is intentionally unsupported (for now) given ambiguities around seasonal defs
+        if time_unit.unit == "seasons":
+            raise NotImplementedError("calculate_update_time_ranges does not yet support seasonal datasets.")
+        elif time_unit.unit in ("months", "years"):
             # `pd.Series.dt` only works on datetime64 data. cftime objects (used for non-standard
             # calendars like 360_day or noleap, common in climate model output) arrive as an object
             # dtype Series and would silently break the .dt access below, so reject them explicitly.
@@ -614,7 +618,6 @@ class Publish(Transform):
                     "likely indicates a cftime calendar (e.g. 360_day, noleap), which is not yet supported "
                     "for calendar-unit time ranges. Convert the time coordinate to datetime64 first."
                 )
-            # NOTE: 'seasons' is intentionally unsupported (for now) given ambiguities around seasonal defs
             # Collapse each timestamp to an absolute month ordinal (year * 12 + month). Differences in this
             # space are exact whole-month counts, sidestepping variable month/year lengths entirely.
             spacing = complete_time_series.dt.year * 12 + complete_time_series.dt.month
