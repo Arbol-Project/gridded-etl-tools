@@ -24,7 +24,7 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
           packages: cdo netcdf-bin libeccodes0
-          version: 1.0
+          version: "1.0-${{ matrix.python-version }}"
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
 
