@@ -5,6 +5,17 @@ import pathlib
 from .attributes import Attributes
 
 
+class _UnclosedAiohttpFilter(logging.Filter):
+    """Drop 'Unclosed client session' / 'Unclosed connector' noise from aiohttp's __del__ methods.
+
+    These fire when aiobotocore/s3fs sessions outlive zarr's zarr_io event loop thread at shutdown.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = str(record.msg)
+        return not msg.startswith("Unclosed client session") and not msg.startswith("Unclosed connector")
+
+
 class Logging(Attributes):
     """
     A base class holding logging methods for Zarr ETLs

@@ -1,3 +1,4 @@
+import logging
 import os
 import datetime
 import pathlib
@@ -24,6 +25,7 @@ from ..common import (
 
 from gridded_etl_tools.utils.publish import ZarrOutputError
 from gridded_etl_tools.utils.store import StoreInterface
+from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
 
 
 @pytest.fixture
@@ -214,6 +216,10 @@ def test_initial(manager_class, initial_input_path, root):
     assert "spatial:dimensions" in attrs, "spatial:dimensions attr missing after initial write"
     assert "zarr_conventions" in attrs, "zarr_conventions attr missing after initial write"
     assert attrs["update_in_progress"] is False
+
+    # Verify the aiohttp noise filter is removed from the asyncio logger after parse completes.
+    asyncio_filters = [type(f) for f in logging.getLogger("asyncio").filters]
+    assert _UnclosedAiohttpFilter not in asyncio_filters
 
 
 def test_prepare_input_files(manager_class, mocker, appended_input_path):

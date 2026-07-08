@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import logging
+
 from gridded_etl_tools.utils import publish, store
 from gridded_etl_tools.utils.publish import (
     _is_infish,
@@ -20,6 +22,7 @@ from gridded_etl_tools.utils.publish import (
     ConcurrentWriteError,
 )
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
+from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
 
 
 def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
@@ -212,6 +215,55 @@ class TestPublish:
         dm.write_initial_zarr.assert_not_called()
 
         Client.assert_called_once_with(cluster)
+
+    @staticmethod
+    def test_parse_installs_and_removes_aiohttp_filter(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        mocker.patch("gridded_etl_tools.utils.publish.Client")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
+
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        dm.write_initial_zarr = mock.Mock()
+
+        asyncio_logger = logging.getLogger("asyncio")
+        filters_before = list(asyncio_logger.filters)
+
+        active_filter = None
+
+        def capture_filter(_dataset):
+            nonlocal active_filter
+            types = [type(f) for f in asyncio_logger.filters]
+            if _UnclosedAiohttpFilter in types:
+                active_filter = next(f for f in asyncio_logger.filters if isinstance(f, _UnclosedAiohttpFilter))
+
+        dm.write_initial_zarr.side_effect = capture_filter
+
+        dm.parse(mock.Mock())
+
+        assert active_filter is not None, "filter was not added during parse"
+        assert active_filter not in asyncio_logger.filters, "filter was not removed after parse"
+        assert asyncio_logger.filters == filters_before
+
+    @staticmethod
+    def test_parse_removes_aiohttp_filter_on_exception(manager_class, mocker):
+        mocker.patch("gridded_etl_tools.utils.publish.LocalCluster")
+        mocker.patch("gridded_etl_tools.utils.publish.Client")
+        mocker.patch("psutil.virtual_memory", return_value=fake_vmem())
+
+        dm = manager_class(rebuild_requested=False)
+        dm.dask_configuration = mock.Mock()
+        dm.store = mock.Mock(spec=store.StoreInterface, has_existing=False)
+        dm.write_initial_zarr = mock.Mock(side_effect=RuntimeError("boom"))
+
+        asyncio_logger = logging.getLogger("asyncio")
+        filters_before = list(asyncio_logger.filters)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            dm.parse(mock.Mock())
+
+        assert asyncio_logger.filters == filters_before
 
     @staticmethod
     def test_parse_zarr_version_match(manager_class, mocker):

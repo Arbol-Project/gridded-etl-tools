@@ -3,6 +3,8 @@ import pathlib
 import sys
 from unittest.mock import Mock
 
+from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
+
 
 class TestLogging:
     @staticmethod
@@ -219,3 +221,37 @@ class TestLogging:
         mock_logging.getLogger.return_value.log.assert_called_once_with(
             mock_logging.ERROR, "Uncaught exception", exc_info=("foo", "bar", "baz")
         )
+
+
+class TestUnclosedAiohttpFilter:
+    @staticmethod
+    def _make_record(message: str) -> logging.LogRecord:
+        record = logging.LogRecord(
+            name="asyncio", level=logging.ERROR, pathname="", lineno=0, msg=message, args=(), exc_info=None
+        )
+        return record
+
+    def test_blocks_unclosed_client_session(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("Unclosed client session\nclient_session: <aiohttp.client.ClientSession object>")
+        assert f.filter(record) is False
+
+    def test_blocks_unclosed_connector(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("Unclosed connector\nconnections: [...]")
+        assert f.filter(record) is False
+
+    def test_passes_unrelated_asyncio_error(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("Exception in callback foo()")
+        assert f.filter(record) is True
+
+    def test_passes_empty_message(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("")
+        assert f.filter(record) is True
+
+    def test_passes_message_containing_phrase_but_not_starting_with_it(self):
+        f = _UnclosedAiohttpFilter()
+        record = self._make_record("Warning: Unclosed client session may cause issues")
+        assert f.filter(record) is True

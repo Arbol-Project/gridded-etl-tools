@@ -1,5 +1,6 @@
 import datetime
 import itertools
+import logging
 import time
 import re
 import pprint
@@ -18,6 +19,7 @@ from dask.distributed import Client, LocalCluster
 
 from .transform import Transform
 from .errors import NanFrequencyMismatchError
+from .logging import _UnclosedAiohttpFilter
 from .store import S3
 
 TWENTY_MINUTES = 1200
@@ -64,22 +66,28 @@ class Publish(Transform):
         # adjust default dask configuration parameters as needed and spin up a LocalCluster
         self.dask_configuration()
 
-        with LocalCluster(
-            processes=self.dask_use_process_scheduler,
-            dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
-            protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
-            threads_per_worker=self.dask_num_threads,
-            n_workers=self.dask_num_workers,
-        ) as cluster:
-            with Client(cluster):
-                self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
-                try:
-                    self.publish_data(publish_dataset)
-                    # manually closing the cluster within the Client block prevents observed serialization problems
-                    # for reasons not entirely understood
-                    cluster.close()
-                except KeyboardInterrupt:
-                    self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
+        _asyncio_logger = logging.getLogger("asyncio")
+        _filter = _UnclosedAiohttpFilter()
+        _asyncio_logger.addFilter(_filter)
+        try:
+            with LocalCluster(
+                processes=self.dask_use_process_scheduler,
+                dashboard_address=self.dask_dashboard_address,  # specify local IP to prevent exposing the dashboard
+                protocol=self.dask_scheduler_protocol,  # otherwise Dask may default to tcp or tls protocols and choke
+                threads_per_worker=self.dask_num_threads,
+                n_workers=self.dask_num_workers,
+            ) as cluster:
+                with Client(cluster):
+                    self.info(f"Dask Dashboard for this parse can be found at {cluster.dashboard_link}")
+                    try:
+                        self.publish_data(publish_dataset)
+                        # manually closing the cluster within the Client block prevents observed serialization problems
+                        # for reasons not entirely understood
+                        cluster.close()
+                    except KeyboardInterrupt:
+                        self.info("CTRL-C Keyboard Interrupt detected, exiting Dask client before script terminates")
+        finally:
+            _asyncio_logger.removeFilter(_filter)
 
         self.info("Parse run successful")
 
@@ -248,7 +256,7 @@ class Publish(Transform):
                 if zarr_format == 3:
                     self.store.write_metadata_only(update_attrs=failed_attrs)
                 else:
-                    self.store.write_metadata_only_v2(update_attrs=failed_attrs)
+                    self.store.write_metadata_only_v2(update_attrs=failed_attrs)  # pragma: no cover
                 raise ZarrOutputError("Error while Zarr was being written.") from error
 
             # Write succeeded: treat the dataset's attrs as the source of truth and persist them all,

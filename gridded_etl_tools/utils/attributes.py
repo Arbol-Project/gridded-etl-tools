@@ -337,11 +337,13 @@ class Attributes(ABC):
     to adjust this value
     """
 
-    release_status: typing.Literal["final", "preliminary", "mixed final and preliminary", "historical"] = "final"
+    release_status: typing.Literal["final", "late", "preliminary", "mixed final and preliminary", "historical"] = (
+        "final"
+    )
     """
     The release_status of the dataset.
 
-    Valid options include "final", "preliminary", "mixed final and preliminary", and "historical".
+    Valid options include "final", "late", "preliminary", "mixed final and preliminary", and "historical".
 
     Defaults to "final".
 
@@ -351,9 +353,11 @@ class Attributes(ABC):
     "mixed final and preliminary" indicates a dataset that contains both final and preliminary versions of the data.
     """
 
-    version: str | None = None
+    models: list[str] = []
     """
-    The version of the dataset, i.e. version 2, version 3, satellite-based, model-based, etc.
+    String tags representing the model underlying this version of the dataset, with numbers appended to 'v',
+    i.e. "v2", "v3", "satellite", "RnL", etc.
+
     Flexible to accommodate the quirks of individual providers' publication practices.
     """
 
