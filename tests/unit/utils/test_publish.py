@@ -8,6 +8,7 @@ import datetime
 
 from unittest import mock
 
+import cftime
 import numpy as np
 import pandas as pd
 import pytest
@@ -1034,6 +1035,115 @@ class TestPublish:
         append_update = datetime_ranges[-1]
         append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
         assert append_size == np.timedelta64(35, "D")
+
+    @staticmethod
+    def test_calculate_update_time_ranges_monthly(
+        monthly_manager_class,
+        fake_monthly_original_dataset,
+        fake_monthly_complex_update_dataset,
+    ):
+        """
+        Test that calculate_update_time_ranges correctly groups contiguous monthly records into ranges.
+
+        Monthly data cannot be measured with pandas Timedeltas (a month has no fixed length), so this
+        exercises the calendar-ordinal gap detection path. The update fixture contains two isolated
+        single-month inserts, a four-month contiguous insert, and a trailing two-month block that
+        appends past the end of the original dataset.
+        """
+        dm = monthly_manager_class()
+        dm.set_key_dims()
+        datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
+            fake_monthly_original_dataset, fake_monthly_complex_update_dataset
+        )
+        # Four distinct updates: single, 4-month block, single, 4-month trailing block (2 indices in original)
+        assert len(regions_indices) == 4
+        insert_range_sizes = [region[1] - region[0] for region in regions_indices]
+        assert insert_range_sizes == [1, 4, 1, 2]
+        # The trailing append spans 2021-11-01 through 2022-02-01, i.e. three calendar months
+        append_update = datetime_ranges[-1]
+        append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
+        assert append_size == np.timedelta64(92, "D")
+
+    @staticmethod
+    def test_calculate_update_time_ranges_yearly(
+        yearly_manager_class,
+        fake_yearly_original_dataset,
+        fake_yearly_complex_update_dataset,
+    ):
+        """
+        Test that calculate_update_time_ranges correctly groups contiguous yearly records into ranges.
+
+        Yearly data, like monthly data, has no fixed-length pandas Timedelta, so this exercises the
+        calendar-ordinal gap detection path with a 'years' time unit (which measures gaps in whole
+        12-month multiples rather than single calendar months). The update fixture contains two
+        isolated single-year inserts, a four-year contiguous insert, and a trailing block that
+        appends past the end of the original dataset.
+        """
+        dm = yearly_manager_class()
+        dm.set_key_dims()
+        datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
+            fake_yearly_original_dataset, fake_yearly_complex_update_dataset
+        )
+        # Four distinct updates: single, 4-year block, single, 4-year trailing block (2 indices in original)
+        assert len(regions_indices) == 4
+        insert_range_sizes = [region[1] - region[0] for region in regions_indices]
+        assert insert_range_sizes == [1, 4, 1, 2]
+        # The trailing append spans 2022-01-01 through 2025-01-01, i.e. three calendar years
+        append_update = datetime_ranges[-1]
+        append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
+        assert append_size == np.timedelta64(1096, "D")
+
+    @staticmethod
+    def test_calculate_update_time_ranges_monthly_cftime_unsupported(
+        monthly_manager_class,
+        fake_monthly_original_dataset,
+        fake_monthly_complex_update_dataset,
+    ):
+        """
+        cftime calendars (e.g. 360_day, noleap) arrive as object-dtype time coords on which the
+        calendar-ordinal path cannot operate. Confirm we reject them with a descriptive NotImplementedError
+        rather than silently producing wrong ranges.
+        """
+        cftime_times = np.array(
+            [cftime.DatetimeNoLeap(2020, month, 1) for month in (3, 6, 7, 8, 9, 12)],
+            dtype=object,
+        )
+        update_dataset = fake_monthly_complex_update_dataset.isel(time=slice(0, len(cftime_times)))
+        update_dataset = update_dataset.assign_coords(time=cftime_times)
+
+        dm = monthly_manager_class()
+        dm.set_key_dims()
+        with pytest.raises(NotImplementedError, match="cftime"):
+            dm.calculate_update_time_ranges(fake_monthly_original_dataset, update_dataset)
+
+    @staticmethod
+    def test_calculate_update_time_ranges_seasons_unsupported(
+        fake_monthly_original_dataset,
+        fake_monthly_complex_update_dataset,
+    ):
+        """
+        Seasonal datasets are intentionally unsupported — seasonal time encodings vary between
+        datasets and there is no concrete, validated use case. Confirm a NotImplementedError is
+        raised rather than silently producing wrong ranges.
+        """
+        from gridded_etl_tools.utils.time import TimeSpan
+        from tests.unit.conftest import DummyManagerBase
+
+        class SeasonalManager(DummyManagerBase):
+            collection_name = "Seasonal Test"
+            concat_dimensions = []
+            dataset_name = "SeasonalManager"
+            identical_dimensions = []
+            protocol = "handshake"
+            time_resolution = TimeSpan.SPAN_SEASONAL
+            final_lag_in_days = 3
+            expected_nan_frequency = 0.2
+            missing_value = 0
+
+        dm = SeasonalManager()
+        dm.set_key_dims()
+        with pytest.raises(NotImplementedError, match="seasonal"):
+            dm.calculate_update_time_ranges(fake_monthly_original_dataset, fake_monthly_complex_update_dataset)
 
     @staticmethod
     def test_preparse_quality_check(manager_class, fake_original_dataset):
