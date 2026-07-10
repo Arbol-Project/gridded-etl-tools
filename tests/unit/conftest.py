@@ -193,6 +193,49 @@ def monthly_manager_class():
 
 
 @pytest.fixture
+def fake_yearly_original_dataset():
+    time = xr.DataArray(
+        np.array(yearly_original_times), dims="time", coords={"time": np.arange(len(yearly_original_times))}
+    )
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(len(yearly_original_times), 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def fake_yearly_complex_update_dataset():
+    time = xr.DataArray(
+        np.array(yearly_complex_update_times),
+        dims="time",
+        coords={"time": np.arange(len(yearly_complex_update_times))},
+    )
+    latitude = xr.DataArray(np.arange(10, 50, 10), dims="latitude", coords={"latitude": np.arange(10, 50, 10)})
+    longitude = xr.DataArray(np.arange(100, 140, 10), dims="longitude", coords={"longitude": np.arange(100, 140, 10)})
+    data = xr.DataArray(
+        np.random.randn(len(yearly_complex_update_times), 4, 4),
+        dims=("time", "latitude", "longitude"),
+        coords=(time, latitude, longitude),
+    )
+
+    ds = xr.Dataset({"data": data})
+    ds["data"] = ds["data"].astype("<f4")
+    return ds
+
+
+@pytest.fixture
+def yearly_manager_class():
+    return DummyYearlyManager
+
+
+@pytest.fixture
 def single_time_instant_dataset():
     return _single_time_instant_dataset(original_times[:1])
 
@@ -307,6 +350,18 @@ class DummyMonthlyManager(DummyManagerBase):
     identical_dimensions = ["x", "y"]
     protocol = "handshake"
     time_resolution = TimeSpan.SPAN_MONTHLY
+    final_lag_in_days = 3
+    expected_nan_frequency = 0.2
+    missing_value = 42
+
+
+class DummyYearlyManager(DummyManagerBase):
+    collection_name = "Vintage Guitars"
+    concat_dimensions = ["z", "zz"]
+    dataset_name = "DummyYearlyManager"
+    identical_dimensions = ["x", "y"]
+    protocol = "handshake"
+    time_resolution = TimeSpan.SPAN_YEARLY
     final_lag_in_days = 3
     expected_nan_frequency = 0.2
     missing_value = 42
@@ -607,6 +662,39 @@ monthly_complex_update_times = np.array(
         "2021-12-01",
         "2022-01-01",
         "2022-02-01",
+    ],
+    dtype="datetime64[ns]",
+)
+
+
+# Contiguous yearly timestamps used as the "existing" dataset for yearly update tests.
+# 24 year-starts spanning 2000 through 2023.
+yearly_original_times = np.array(
+    [f"{year}-01-01" for year in range(2000, 2024)],
+    dtype="datetime64[ns]",
+)
+
+
+# Yearly update timestamps exercising the same range-detection edge cases as
+# `monthly_complex_update_times`, but at yearly resolution: a lone year, a multi-year
+# contiguous block, another lone year, and a trailing block that appends past
+# the end of the original dataset.
+yearly_complex_update_times = np.array(
+    [
+        # Single isolated insert
+        "2003-01-01",
+        # Contiguous 4-year insert block
+        "2006-01-01",
+        "2007-01-01",
+        "2008-01-01",
+        "2009-01-01",
+        # Single isolated insert
+        "2012-01-01",
+        # Contiguous block that overlaps the end of the original and appends beyond it
+        "2022-01-01",
+        "2023-01-01",
+        "2024-01-01",
+        "2025-01-01",
     ],
     dtype="datetime64[ns]",
 )

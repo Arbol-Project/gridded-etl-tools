@@ -1065,6 +1065,35 @@ class TestPublish:
         assert append_size == np.timedelta64(92, "D")
 
     @staticmethod
+    def test_calculate_update_time_ranges_yearly(
+        yearly_manager_class,
+        fake_yearly_original_dataset,
+        fake_yearly_complex_update_dataset,
+    ):
+        """
+        Test that calculate_update_time_ranges correctly groups contiguous yearly records into ranges.
+
+        Yearly data, like monthly data, has no fixed-length pandas Timedelta, so this exercises the
+        calendar-ordinal gap detection path with a 'years' time unit (which measures gaps in whole
+        12-month multiples rather than single calendar months). The update fixture contains two
+        isolated single-year inserts, a four-year contiguous insert, and a trailing block that
+        appends past the end of the original dataset.
+        """
+        dm = yearly_manager_class()
+        dm.set_key_dims()
+        datetime_ranges, regions_indices = dm.calculate_update_time_ranges(
+            fake_yearly_original_dataset, fake_yearly_complex_update_dataset
+        )
+        # Four distinct updates: single, 4-year block, single, 4-year trailing block (2 indices in original)
+        assert len(regions_indices) == 4
+        insert_range_sizes = [region[1] - region[0] for region in regions_indices]
+        assert insert_range_sizes == [1, 4, 1, 2]
+        # The trailing append spans 2022-01-01 through 2025-01-01, i.e. three calendar years
+        append_update = datetime_ranges[-1]
+        append_size = (append_update[-1] - append_update[0]).astype("timedelta64[D]")
+        assert append_size == np.timedelta64(1096, "D")
+
+    @staticmethod
     def test_calculate_update_time_ranges_monthly_cftime_unsupported(
         monthly_manager_class,
         fake_monthly_original_dataset,
