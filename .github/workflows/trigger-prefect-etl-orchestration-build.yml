@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Dispatch to workflows
         run: |
-            curl -X POST https://api.github.com/repos/${{ matrix.repo }}/dispatches \
-            -H "Accept: application/vnd.github.everest-preview+json" \
+            curl --fail -X POST https://api.github.com/repos/${{ matrix.repo }}/dispatches \
+            -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
             --data '{"event_type": "gridded-build", "client_payload": { "repository": "'"$GITHUB_REPOSITORY"'" }'

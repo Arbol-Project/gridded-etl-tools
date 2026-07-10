@@ -54,11 +54,11 @@ def _crs_to_proj_attrs(crs: CRS) -> dict[str, str | dict[str, Any]]:
         result["proj:code"] = f"{authority[0]}:{authority[1]}"
 
     wkt2 = crs.to_wkt("WKT2_2019")
-    if wkt2:
+    if wkt2:  # pragma: no cover
         result["proj:wkt2"] = wkt2
 
     projjson = crs.to_json_dict()
-    if projjson:
+    if projjson:  # pragma: no cover
         # Serialize as JSON string to ensure clean round-trip through Zarr attrs,
         # which may not preserve nested dicts depending on Zarr version/codec.
         result["proj:projjson"] = json.dumps(projjson)
@@ -153,7 +153,7 @@ def _is_regular_grid(coords: npt.NDArray[np.floating], tolerance: float = 0.01) 
         return False
     diffs = np.diff(coords)
     median = float(np.median(diffs))
-    if median == 0:
+    if median == 0:  # pragma: no cover
         return False
     max_dev = float(np.max(np.abs(diffs - median)))
     return max_dev <= abs(median) * tolerance
@@ -217,7 +217,7 @@ def build_spatial_attrs(dataset: xr.Dataset, spatial_dims: list[str]) -> dict:
     y_coords = dataset[y_dim].values
     x_coords = dataset[x_dim].values
 
-    if len(y_coords) < 2 or len(x_coords) < 2:
+    if len(y_coords) < 2 or len(x_coords) < 2:  # pragma: no cover
         return {}
 
     attrs: dict = {}

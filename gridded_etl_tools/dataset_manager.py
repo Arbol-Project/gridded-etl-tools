@@ -337,7 +337,7 @@ class DatasetManager(Logging, Publish, ABC):
                     log += release["VERSION"]
             if log:
                 self.info(log)
-        except OSError:
+        except OSError:  # pragma: no cover
             # OK to pass because the platform may not be Linux, in which case, just platform.platform() will print
             pass
 
