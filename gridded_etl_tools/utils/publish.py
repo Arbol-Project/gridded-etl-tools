@@ -621,14 +621,16 @@ class Publish(Transform):
             # Collapse each timestamp to an absolute month ordinal (year * 12 + month). Differences in this
             # space are exact whole-month counts, sidestepping variable month/year lengths entirely.
             spacing = complete_time_series.dt.year * 12 + complete_time_series.dt.month
-            step = {"months": 1, "years": 12}[time_unit.unit] * time_unit.value
+            # `spacing` counts months, so a 'years' step is that many groups of 12 months.
+            step = time_unit.value
+            if time_unit.unit == "years":
+                step *= 12
             # `inf` plays the same role for the integer ordinals that pd.Timedelta.max plays below: it
             # forces the first/last elements (whose neighbor diff is NA) to register as range endpoints.
             fill = float("inf")
         else:
-            _PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
             spacing = complete_time_series
-            step = pd.Timedelta(f"{time_unit.value}{_PANDAS_TIMEDELTA_ALIAS[time_unit.unit]}")
+            step = pd.Timedelta(f"{time_unit.value}{time_unit.pandas_alias}")
             fill = pd.Timedelta.max
 
         # Define datetime range starts as anything with > 1 unit diff with the previous value,

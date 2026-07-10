@@ -5,6 +5,8 @@ from datetime import timedelta
 
 TimeUnitType = Literal["minutes", "hours", "days", "weeks", "months", "years", "seasons"]
 
+_PANDAS_TIMEDELTA_ALIAS = {"minutes": "min", "hours": "h", "days": "D", "weeks": "W"}
+
 
 @dataclass(frozen=True)
 class TimeUnit:
@@ -71,6 +73,22 @@ class TimeUnit:
                 "Please type manually in your code the specific duration you need"
             )
         return self.value * self._CONVERSION_FACTORS[self.unit]
+
+    @property
+    def pandas_alias(self) -> str:
+        """Return the pandas offset alias for this time unit.
+
+        Returns
+        -------
+        str
+            The pandas alias (e.g. "min", "h", "D", "W") suitable for building a pd.Timedelta
+
+        Raises
+        ------
+        KeyError
+            If the unit has no fixed-duration pandas alias (months, years, seasons)
+        """
+        return _PANDAS_TIMEDELTA_ALIAS[self.unit]
 
     def __str__(self) -> str:
         """Return a string representation of this time unit.
