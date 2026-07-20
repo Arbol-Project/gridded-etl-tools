@@ -109,6 +109,11 @@ class TestDatasetManager:
         dm = manager_class(store="s3", s3_bucket_name="mop_water")
         assert isinstance(dm.store, dataset_manager.S3)
         assert dm.store.bucket == "mop_water"
+        assert dm.store.endpoint_url is None
+        dm = manager_class(store="s3", s3_bucket_name="mop_water", s3_endpoint_url="fbi.access")
+        assert isinstance(dm.store, dataset_manager.S3)
+        assert dm.store.bucket == "mop_water"
+        assert dm.store.endpoint_url == "fbi.access"
 
     @staticmethod
     def test_constructor_match_existing_format(manager_class, mocker):
