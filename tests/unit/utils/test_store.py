@@ -217,9 +217,8 @@ class TestS3:
         store = store_module.S3(mock.Mock(), "bucket", "fbi.access")
         dataset = store.dataset(storage_options={"anon": True})
         mock_open_zarr.assert_called_with(
-            store=store.path,
-            decode_timedelta=True,
-            storage_options={"anon": True, "endpoint_url": "fbi.access"})
+            store=store.path, decode_timedelta=True, storage_options={"anon": True, "endpoint_url": "fbi.access"}
+        )
 
     @staticmethod
     def test___repr__():
