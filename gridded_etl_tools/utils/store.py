@@ -375,7 +375,8 @@ class S3(StoreInterface):
         """
         if self.endpoint_url is not None:
             if "storage_options" in kwargs:
-                kwargs["storage_options"].update({"endpoint_url": self.endpoint_url})
+                kwargs["storage_options"] = {**kwargs["storage_options"], "endpoint_url": self.endpoint_url}
+                return super().dataset(**kwargs)
                 return super().dataset(**kwargs)
             else:
                 return super().dataset(storage_options={"endpoint_url": self.endpoint_url}, **kwargs)
