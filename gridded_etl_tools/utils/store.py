@@ -306,6 +306,8 @@ class S3(StoreInterface):
             The dataset to be read or written.
         bucket : str
             The name of the S3 bucket to connect to (s3://[bucket])
+        endpoint_url : str, optional
+            URL to an S3 server. Usually determined automatically, but this can be used for testing.
         """
         super().__init__(dm)
         if not bucket:
@@ -356,6 +358,27 @@ class S3(StoreInterface):
             return self.dm.custom_output_path
         else:
             return f"s3://{self.bucket}/datasets/{self.dm.key()}.zarr"
+
+    def dataset(self, **kwargs) -> xr.Dataset | None:
+        """
+        Override parent so that custom endpoint_url is sent if it is set.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments to forward to xr.open_zarr, for example, "refresh=True"
+
+        Returns
+        -------
+        xr.Dataset | None
+            The dataset opened in xarray or None if there is no dataset currently stored.
+        """
+        if self.endpoint_url is not None:
+            if "storage_options" in kwargs:
+                kwargs["storage_options"] = {**kwargs["storage_options"], "endpoint_url": self.endpoint_url}
+            else:
+                return super().dataset(storage_options={"endpoint_url": self.endpoint_url}, **kwargs)
+        return super().dataset(**kwargs)
 
     def __repr__(self) -> str:
         return "S3"

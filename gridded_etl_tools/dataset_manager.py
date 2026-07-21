@@ -85,6 +85,7 @@ class DatasetManager(Logging, Publish, ABC):
         global_log_level=logging.DEBUG,
         store=None,
         s3_bucket_name=None,
+        s3_endpoint_url: str | None = None,
         allow_overwrite=False,
         dask_dashboard_address: str = "127.0.0.1:8787",
         dask_worker_memory_target: float = 0.65,
@@ -133,6 +134,8 @@ class DatasetManager(Logging, Publish, ABC):
             or set manually.
         s3_bucket_name : str
             Name of the S3 bucket where this dataset's Zarrs are stored. Only used if "s3" store is used.
+        s3_endpoint_url : str, optional
+            Usually the S3 endpoint is set automatically. This is intended for tests that need to mock an S3 server.
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date
             will fail with a warning message.
@@ -206,7 +209,7 @@ class DatasetManager(Logging, Publish, ABC):
         if store is None or store == "local":
             self.store = Local(self)
         elif store == "s3":
-            self.store = S3(self, s3_bucket_name)
+            self.store = S3(self, s3_bucket_name, s3_endpoint_url)
         else:
             raise ValueError("Store must be one of 'local' or 's3'")
 
