@@ -135,7 +135,7 @@ class DatasetManager(Logging, Publish, ABC):
         s3_bucket_name : str
             Name of the S3 bucket where this dataset's Zarrs are stored. Only used if "s3" store is used.
         s3_endpoint_url : str, optional
-            Usually set automatically, but this can be used to force a URL for the S3 server
+            Usually the S3 endpoint is set automatically. This is intended for tests that need to mock an S3 server.
         allow_overwrite : bool
             Unless this is set to `True`, inserting or overwriting data for dates before the dataset's current end date
             will fail with a warning message.
