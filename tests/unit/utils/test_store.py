@@ -203,14 +203,23 @@ class TestS3:
         store = store_module.S3(mock.Mock(), "bucket")
         mocker.patch("gridded_etl_tools.utils.store.StoreInterface.has_existing", return_value=True)
         mocker.patch("s3fs.S3FileSystem.exists", return_value=True)
-        dataset = store.dataset()
+
+        # Call dataset just to check internal calls
+        store.dataset()
         mock_open_zarr.assert_called_with(store=store.path, decode_timedelta=True)
         store = store_module.S3(mock.Mock(), "bucket", "fbi.access")
-        dataset = store.dataset()
+        store.dataset()
+        mock_open_zarr.assert_called_with(
+            store=store.path, decode_timedelta=True, storage_options={"endpoint_url": "fbi.access"}
+        )
+
+        # Check storage_options
+        store = store_module.S3(mock.Mock(), "bucket", "fbi.access")
+        dataset = store.dataset(storage_options={"anon": True})
         mock_open_zarr.assert_called_with(
             store=store.path,
             decode_timedelta=True,
-            storage_options={"endpoint_url": "fbi.access"})
+            storage_options={"anon": True, "endpoint_url": "fbi.access"})
 
     @staticmethod
     def test___repr__():
