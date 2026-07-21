@@ -29,9 +29,14 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Dispatch to prefect-etl-orchestration
-        if: steps.commit.outputs.changed == 'true'
+        # Fire on EVERY merge to main, not only when constraints.txt changed. A
+        # source-only change here does not alter constraints.txt, but
+        # gridded-etl-managers pins `gridded_etl_tools @ main`, so the downstream
+        # GRIDDED lock must re-resolve this repo's SHA (via --upgrade-package) for
+        # the change to ship. The event type is the one update-locks routes to the
+        # gridded lock job (previously mis-set to the non-gridded event).
         run: |
           curl --fail -X POST https://api.github.com/repos/Arbol-Project/prefect-etl-orchestration/dispatches \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
-            --data '{"event_type": "non-gridded-etl-managers-constraints-updated", "client_payload": {"repository": "'"$GITHUB_REPOSITORY"'"}}'
+            --data '{"event_type": "gridded-etl-managers-constraints-updated", "client_payload": {"repository": "'"$GITHUB_REPOSITORY"'"}}'
