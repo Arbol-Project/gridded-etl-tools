@@ -347,7 +347,7 @@ class Publish(Transform):
         if len(insert_times) > 0:
             if not self.allow_overwrite:
                 self.warn(
-                    "Not inserting records despite historical data detected. 'allow_overwrite'flag has not been set."
+                    "Not inserting records despite historical data detected. 'allow_overwrite' flag has not been set."
                 )
             else:
                 self.insert_into_dataset(original_dataset, publish_dataset, insert_times)
