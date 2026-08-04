@@ -1317,9 +1317,9 @@ dev = [
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
     { name = "responses" },
-    { name = "ruff" },
+    { name = "ruff", specifier = ">=0.16.1,<0.17" },
 ]
-lint = [{ name = "ruff" }]
+lint = [{ name = "ruff", specifier = ">=0.16.1,<0.17" }]
 
 [[package]]
 name = "h5netcdf"
