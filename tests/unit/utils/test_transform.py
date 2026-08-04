@@ -1,10 +1,10 @@
 import json
 import os
 import pathlib
-
 from unittest import mock
 
 import pytest
+
 from gridded_etl_tools.utils import store
 
 

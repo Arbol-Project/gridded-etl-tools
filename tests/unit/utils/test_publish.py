@@ -1,11 +1,11 @@
-from collections import UserDict
 import copy
+import datetime
 import functools
+import logging
 import operator
 import pathlib
 import re
-import datetime
-
+from collections import UserDict
 from unittest import mock
 
 import cftime
@@ -13,17 +13,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import logging
-
 from gridded_etl_tools.utils import publish, store
-from gridded_etl_tools.utils.publish import (
-    _is_infish,
-    calculate_time_dim_chunks,
-    ZarrOutputError,
-    ConcurrentWriteError,
-)
 from gridded_etl_tools.utils.errors import NanFrequencyMismatchError
 from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
+from gridded_etl_tools.utils.publish import (
+    ConcurrentWriteError,
+    ZarrOutputError,
+    _is_infish,
+    calculate_time_dim_chunks,
+)
 
 
 def generate_partial_nan_array(shape: tuple[float], percent_nan: float):
@@ -1798,9 +1796,7 @@ class TestPublish:
         dm.strings_to_date_range = mock.Mock(
             return_value=(datetime.datetime(2025, 3, 10), datetime.datetime(2025, 3, 14))
         )
-        dm.time_range_in_file = mock.Mock(
-            return_value=(datetime.datetime(2025, 1, 1), datetime.datetime(2025, 12, 31))
-        )
+        dm.time_range_in_file = mock.Mock(return_value=(datetime.datetime(2025, 1, 1), datetime.datetime(2025, 12, 31)))
 
         assert dm.filter_search_space(mock.Mock(attrs={"update_date_range": mock.Mock()})) == [
             "One_file_per_update.mp3"

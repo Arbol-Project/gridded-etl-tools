@@ -1,28 +1,28 @@
 # This is necessary for referencing types that aren't fully imported yet. See https://peps.python.org/pep-0563/
 from __future__ import annotations
 
-from abc import abstractmethod, ABC
 import datetime
-import typing
-import warnings
-import deprecation
 import logging
 import multiprocessing
 import multiprocessing.pool
-import sys
-import xarray as xr
-import platform
 import pathlib
+import platform
+import sys
+import typing
+import warnings
+from abc import ABC, abstractmethod
 
+import deprecation
 import psutil
+import xarray as xr
 import zarr
 from packaging.version import Version
 
 from .utils.encryption import register_encryption_key
 from .utils.logging import Logging
 from .utils.publish import Publish
+from .utils.store import S3, Local
 from .utils.time import TimeSpan
-from .utils.store import Local, S3
 
 
 class DatasetManager(Logging, Publish, ABC):

@@ -61,10 +61,11 @@ dependencies = [
 Homepage = "https://arbol.io/"
 
 [dependency-groups]
+# Kept separate from dev so CI's lint and format jobs can install ruff alone
+# (`uv run --only-group lint`) instead of the whole scientific stack.
+lint = ["ruff"]
 dev = [
-    "black",
-    "flake8",
-    "flake8-pyproject",
+    { include-group = "lint" },
     "h5py",
     "pytest",
     "pytest-cov",
@@ -80,14 +81,21 @@ source = "vcs"
 [tool.hatch.build.targets.wheel]
 packages = ["gridded_etl_tools"]
 
-[tool.black]
-line-length = 119
+[tool.ruff]
+line-length = 120
+# Gitignored scratch directories (temp/, datasets/, the .venv trees) are skipped
+# automatically. .claude/worktrees holds throwaway checkouts of this repo, which
+# would otherwise be linted twice.
+#
+# Markdown is excluded because `ruff format` reformats fenced python blocks, and
+# the prose docs illustrate calls with argument fragments rather than complete
+# modules. Ruff reparses a fragment's trailing comma as a tuple and rewrites it,
+# turning correct documentation into incorrect code.
+extend-exclude = [".claude/worktrees", "*.md"]
 
-[tool.flake8]
-# flake8 and black disagree on E203, E701, and W503
-ignore = ["E203", "E701", "W503"]
-exclude = ["temp/*", "build/*", ".venv"]
-max-line-length = 120
+[tool.ruff.lint]
+# E = pycodestyle errors, F = pyflakes, I = isort. More rulesets to follow.
+select = ["E", "F", "I"]
 
 [tool.uv]
 exclude-newer = "3 days"

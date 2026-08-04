@@ -1,6 +1,6 @@
-import sys
 import logging
 import pathlib
+import sys
 
 from .attributes import Attributes
 
@@ -140,11 +140,7 @@ class Logging(Attributes):
             for handler in logger.handlers:
                 # Check if the attached handler has a stream equal to stderr or stdout, meaning it is writing to the
                 # console.
-                if (
-                    hasattr(handler, "stream")
-                    and handler.level >= level
-                    and handler.stream in (sys.stderr, sys.stdout)
-                ):
+                if hasattr(handler, "stream") and handler.level >= level and handler.stream in (sys.stderr, sys.stdout):
                     # Apply requested formatting
                     handler.setFormatter(formatter)
                     cls.info(f"Found existing console log handler {handler}")

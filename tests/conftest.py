@@ -1,5 +1,6 @@
-import pytest  # noqa: F401
 import logging
+
+import pytest  # noqa: F401
 
 
 @pytest.fixture(scope="session")

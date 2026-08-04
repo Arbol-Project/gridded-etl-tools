@@ -1,21 +1,21 @@
 import datetime
+import pathlib
 from unittest import mock
 
-import pathlib
-import pytest
-import numpy as np
 import numcodecs
-from numcodecs import Blosc
-import zarr
+import numpy as np
+import pytest
 import xarray as xr
+import zarr
+from numcodecs import Blosc
 
 # Imports used for legacy encoding change tests
 # import os
 # from time import sleep
-
 from requests.exceptions import Timeout
 
 from gridded_etl_tools.utils import encryption, metadata, store
+
 from ...common import clean_up_input_paths
 
 
@@ -295,9 +295,7 @@ class TestMetadata:
     def test_retrieve_stac(manager_class):
         dm = manager_class()
         dm.store = mock.Mock(spec=store.StoreInterface)
-        assert (
-            dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
-        )
+        assert dm.retrieve_stac("The Jungle Book", metadata.StacType.CATALOG) is dm.store.retrieve_metadata.return_value
         dm.store.retrieve_metadata.assert_called_once_with("The Jungle Book", metadata.StacType.CATALOG.value)
 
     @staticmethod

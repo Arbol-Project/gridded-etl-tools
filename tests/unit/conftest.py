@@ -1,11 +1,11 @@
 import datetime
 import json
 import pathlib
+from abc import ABC
 
 import numpy as np
 import pytest
 import xarray as xr
-from abc import ABC
 
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils.time import TimeSpan

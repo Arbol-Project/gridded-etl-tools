@@ -26,7 +26,6 @@ dask-worker-space/
 # Editor/IDE
 *.swp
 .vscode
-.flake8
 mypy.ini
 
 # Tests temp data

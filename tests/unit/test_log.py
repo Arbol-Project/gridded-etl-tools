@@ -1,8 +1,10 @@
-import os
-import logging
 import glob
-import pytest
+import logging
+import os
 import pathlib
+
+import pytest
+
 from examples.managers.chirps import CHIRPSFinal25
 
 

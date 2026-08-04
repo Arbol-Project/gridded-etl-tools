@@ -1,8 +1,8 @@
 import pathlib
 
-from pyproj import Transformer, CRS
 import pytest
 import xarray as xr
+from pyproj import CRS, Transformer
 
 from gridded_etl_tools.util_funcs.projections import assign_crs_to_dataset, drop_coord_encoding
 

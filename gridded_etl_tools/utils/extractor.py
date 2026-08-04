@@ -5,28 +5,28 @@ Consolidation of functions useful during the extract step of an ETL cycle for a 
 # The annotations dict and TYPE_CHECKING var are necessary for referencing types that aren't fully imported yet. See
 # https://peps.python.org/pep-0563/
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
-from abc import ABC, abstractmethod
-
-from multiprocessing.pool import ThreadPool
-import pathlib
-import typing
+import collections
 import ftplib
+import logging
+import os
+import pathlib
 import re
 import time
-import logging
-import requests
-from requests.adapters import HTTPAdapter, Retry
-from urllib.parse import urlparse, urljoin
-import os
-import collections
-import s3fs
+import typing
+from abc import ABC, abstractmethod
+from multiprocessing.pool import ThreadPool
+from urllib.parse import urljoin, urlparse
 
+import requests
+import s3fs
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter, Retry
 
 log = logging.getLogger("extraction_logs")
 

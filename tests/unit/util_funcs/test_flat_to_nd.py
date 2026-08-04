@@ -1,8 +1,10 @@
 import pathlib
 import re
+
 import pandas as pd
 import pytest
-from gridded_etl_tools.util_funcs.flat_to_nd import parse_filenames, nest_files, reshape
+
+from gridded_etl_tools.util_funcs.flat_to_nd import nest_files, parse_filenames, reshape
 
 FILE_NAME_PATTERNS_V1 = {
     "time": re.compile(r"forecast_reference_time-(\d{4}-\d{2}-\d{2})_step"),

@@ -1,9 +1,9 @@
-from abc import ABC
+import typing
 import warnings
+from abc import ABC
 
 import deprecation
 import numpy as np
-import typing
 
 from gridded_etl_tools.utils.store import StoreInterface
 

@@ -1,26 +1,26 @@
 # The annotations dict and TYPE_CHECKING var are necessary for referencing types that aren't fully imported yet. See
 # https://peps.python.org/pep-0563/
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma NO COVER
     from .. import dataset_manager
 
+import collections
 import datetime
 import json
 import os
-
-import numpy as np
+import pathlib
 import shutil
+from abc import ABC, abstractmethod
+from typing import Any
+
+import boto3  # type: ignore[import-untyped]
+import fsspec  # type: ignore[import-untyped]
+import numpy as np
 import s3fs  # type: ignore[import-untyped]
 import xarray as xr
-import pathlib
-import fsspec  # type: ignore[import-untyped]
-import collections
-import boto3  # type: ignore[import-untyped]
-
-from abc import abstractmethod, ABC
-from typing import Any
 
 
 class _ZarrAttrsEncoder(json.JSONEncoder):

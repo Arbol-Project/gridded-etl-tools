@@ -1,7 +1,7 @@
 import datetime
+import ftplib
 import json
 import pathlib
-import ftplib
 from unittest.mock import Mock
 
 import numpy as np

@@ -3,7 +3,8 @@ import pathlib
 import pytest
 
 from examples.managers.chirps import CHIRPSFinal25
-from ..common import patched_key, patched_zarr_json_path, patched_root_stac_catalog, patched_output_root
+
+from ..common import patched_key, patched_output_root, patched_root_stac_catalog, patched_zarr_json_path
 
 
 @pytest.fixture(scope="module")

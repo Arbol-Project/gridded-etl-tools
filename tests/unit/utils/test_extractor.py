@@ -1,23 +1,24 @@
-import pytest
-import time
 import ftplib
-import pathlib
-import responses
-import requests
-import re
 import os
-
-
+import pathlib
+import re
+import time
 from unittest.mock import Mock
+
+import pytest
+import requests
+import responses
+
 from gridded_etl_tools.utils.extractor import (
     Extractor,
+    FTPExtractor,
     HTTPExtractor,
     S3Extractor,
-    S3ExtractorKerchunk,
-    S3ExtractorDownload,
     S3ExtractorBase,
-    FTPExtractor,
+    S3ExtractorDownload,
+    S3ExtractorKerchunk,
 )
+
 from .test_convenience import DummyFtpClient
 
 

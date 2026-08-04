@@ -95,6 +95,18 @@ Note that the S3 path for a dataset can be found at any time by consulting the `
 
 For further help invoking scripts and retrieving datasets, including over Amazon's s3 or a local file system, consult [the ETL running manual](docs/running_an_etl.md). To understand the various optional invocation flags, consult the docstring for the `run_etl` function in the [dataset_manager script](gridded_etl_tools/dataset_manager.py#391)
 
+Linting and formatting
+----------------------
+
+[Ruff](https://docs.astral.sh/ruff/) handles both linting and formatting. The enforced rulesets are `E` (pycodestyle errors), `F` (pyflakes) and `I` (import sorting), with a line length of 120; the configuration lives in the `[tool.ruff]` sections of `pyproject.toml`.
+
+Run the checks over the whole repository with
+
+    uv run ruff check .
+    uv run ruff format --check .
+
+Drop `--check` to apply formatting, and add `--fix` to `ruff check` to apply the fixable lint rules. Both commands are enforced on every pull request by the `Lint and format` workflow.
+
 dClimate
 --------
 
