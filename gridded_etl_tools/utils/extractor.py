@@ -464,7 +464,7 @@ class HTTPExtractor(RetryingExtractor):
         log.info(f"Getting links from {url}")
 
         # Get a response from a given url, and raise an exception on error
-        response = self.session.get(url, timeout=10)
+        response = self.session.get(url, timeout=timeout)
         response.raise_for_status()
 
         # Parse the returned HTML webpage with BeautifulSoup and build a list of all links on the page, filtered by a
