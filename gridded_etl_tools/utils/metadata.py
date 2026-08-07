@@ -1,19 +1,18 @@
-from enum import Enum
-import json
 import datetime
+import json
 import typing
-import zarr
-import shapely.geometry
+from enum import Enum
+
 import numcodecs
-
 import numpy as np
+import shapely.geometry
 import xarray as xr
-
-from .encryption import EncryptionFilter
-from .convenience import Convenience
-from ..util_funcs.conventions import build_convention_attrs
-
+import zarr
 from requests.exceptions import Timeout as TimeoutError
+
+from ..util_funcs.conventions import build_convention_attrs
+from .convenience import Convenience
+from .encryption import EncryptionFilter
 
 XARRAY_ENCODING_FIELDS = [
     "dtype",

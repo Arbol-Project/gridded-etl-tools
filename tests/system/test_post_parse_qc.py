@@ -1,28 +1,29 @@
 import logging
 import os
-import pytest
-import shutil
 import random
-import numpy as np
-
+import shutil
 from unittest.mock import Mock
+
+import numpy as np
+import pytest
+
 from ..common import (
-    run_etl,
     clean_up_input_paths,
-    remove_mock_output,
+    nc4_input_files,
+    original_ds_bad_data,
+    original_ds_no_time_at_all,
+    original_ds_no_time_dim,
+    original_ds_no_time_dim_in_data_var,
+    original_ds_normal,
+    original_ds_null,
+    original_ds_random,
+    original_ds_single_time,
     remove_dask_worker_dir,
+    remove_metadata,
+    remove_mock_output,
     remove_performance_report,
     remove_zarr_json,
-    original_ds_normal,
-    original_ds_single_time,
-    original_ds_bad_data,
-    original_ds_no_time_dim,
-    original_ds_no_time_at_all,
-    original_ds_no_time_dim_in_data_var,
-    original_ds_random,
-    original_ds_null,
-    nc4_input_files,
-    remove_metadata,
+    run_etl,
 )
 
 

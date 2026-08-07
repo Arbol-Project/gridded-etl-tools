@@ -1,17 +1,16 @@
 import datetime
 import logging
-import unittest
 import pathlib
+import unittest
 
 import pytest
 
 import gridded_etl_tools
-
 from gridded_etl_tools import dataset_manager
 from gridded_etl_tools.utils import encryption, store
 from gridded_etl_tools.utils.time import TimeSpan
 
-from .conftest import Beatles, John, Paul, George, Ringo, RingoDaily, Pete, Stuart, PeteBest, StuartSutcliffe
+from .conftest import Beatles, George, John, Paul, Pete, PeteBest, Ringo, RingoDaily, Stuart, StuartSutcliffe
 
 
 class TestDatasetManager:

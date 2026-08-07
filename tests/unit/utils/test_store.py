@@ -4,11 +4,10 @@ import os
 import pathlib
 from unittest import mock
 
-import numpy as np
-from moto.server import ThreadedMotoServer
 import boto3  # type: ignore[import-untyped]
-
+import numpy as np
 import pytest
+from moto.server import ThreadedMotoServer
 
 from gridded_etl_tools.utils import store as store_module
 

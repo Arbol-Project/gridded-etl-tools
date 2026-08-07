@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
-from typing import Literal, Dict, ClassVar, TypeVar, get_args
 from datetime import timedelta
+from typing import ClassVar, Dict, Literal, TypeVar, get_args
 
 TimeUnitType = Literal["minutes", "hours", "days", "weeks", "months", "years", "seasons"]
 

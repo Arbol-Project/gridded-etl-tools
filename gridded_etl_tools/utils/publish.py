@@ -1,26 +1,24 @@
 import datetime
 import itertools
 import logging
-import time
-import re
-import pprint
-import dask
 import pathlib
+import pprint
 import random
-
+import re
+import time
 from typing import Any, Generator
+
+import dask
+import numpy as np
+import pandas as pd
+import xarray as xr
+from dask.distributed import Client, LocalCluster
 from statsmodels.stats.proportion import proportion_confint
 
-import pandas as pd
-import numpy as np
-import xarray as xr
-
-from dask.distributed import Client, LocalCluster
-
-from .transform import Transform
 from .errors import NanFrequencyMismatchError
 from .logging import _UnclosedAiohttpFilter
 from .store import S3
+from .transform import Transform
 
 TWENTY_MINUTES = 1200
 
@@ -113,7 +111,6 @@ class Publish(Transform):
             If the data cannot be published to the store
         """
         if self.store.has_existing and not self.rebuild_requested:
-
             # If zarr.json is present, the format is considered 3. Otherwise, it is considered format 2.
             if self.store.has_v3_metadata:
                 if not self.output_zarr3:
@@ -350,8 +347,7 @@ class Publish(Transform):
         if len(insert_times) > 0:
             if not self.allow_overwrite:
                 self.warn(
-                    "Not inserting records despite historical data detected. 'allow_overwrite'"
-                    "flag has not been set."
+                    "Not inserting records despite historical data detected. 'allow_overwrite' flag has not been set."
                 )
             else:
                 self.insert_into_dataset(original_dataset, publish_dataset, insert_times)
@@ -910,7 +906,6 @@ class Publish(Transform):
                 # There should always be more than one time step available because the source files have been filtered,
                 # so log a warning if no times are found.
                 if len(orig_ds[self.time_dim]) > 0:
-
                     # Run the checks
                     self.check_written_value(orig_ds, prod_ds, threshold, checks_per_file)
                     i += 1
@@ -924,15 +919,13 @@ class Publish(Transform):
 
                 else:
                     self.warn(
-                        "No times in randomly selected source file coincide with the update time range: "
-                        f"{sample_file}"
+                        f"No times in randomly selected source file coincide with the update time range: {sample_file}"
                     )
                     break
 
             elapsed = time.perf_counter() - start_checking
             self.info(
-                "Written values check successfully passed. "
-                f"Checking dataset took {datetime.timedelta(seconds=elapsed)}"
+                f"Written values check successfully passed. Checking dataset took {datetime.timedelta(seconds=elapsed)}"
             )
 
     def filter_search_space(self, prod_ds: xr.Dataset) -> list[pathlib.Path]:

@@ -16,7 +16,9 @@ jobs:
           python-version: "3.12"
           version: "0.11.10"
       - name: Lint
-        run: uv run flake8 gridded_etl_tools tests examples
+        # --only-group lint installs ruff and nothing else. The version comes from
+        # uv.lock, so CI and local runs always agree on which ruff is in charge.
+        run: uv run --only-group lint --frozen ruff check .
 
   format:
     if: ${{ !github.event.pull_request.draft }}
@@ -28,4 +30,4 @@ jobs:
           python-version: "3.12"
           version: "0.11.10"
       - name: Format check
-        run: uv run black --check gridded_etl_tools tests examples
+        run: uv run --only-group lint --frozen ruff format --check .

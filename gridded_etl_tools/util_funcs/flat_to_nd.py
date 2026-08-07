@@ -1,7 +1,8 @@
 import pathlib
 import re
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def parse_filenames(files: list[pathlib.Path], file_name_patterns: dict[str, re.Pattern]) -> pd.DataFrame:
@@ -177,7 +178,7 @@ def nest_files(
         key_file = file_lookup.get(key, None)
         if key_file is None:
             raise FileNotFoundError(
-                f"No file found for key: {key}. " "Nested file structure must be complete for all dimensions, exiting."
+                f"No file found for key: {key}. Nested file structure must be complete for all dimensions, exiting."
             )
         flat_list.append(key_file)
 

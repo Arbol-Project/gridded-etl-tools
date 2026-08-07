@@ -7,13 +7,13 @@ import pytest
 import xarray as xr
 
 from gridded_etl_tools.util_funcs.conventions import (
+    _compute_affine_transform,
+    _compute_bbox,
+    _is_regular_grid,
     build_convention_attrs,
     build_proj_attrs,
     build_proj_attrs_from_wkt,
     build_spatial_attrs,
-    _is_regular_grid,
-    _compute_affine_transform,
-    _compute_bbox,
 )
 
 # --- Fixtures ---

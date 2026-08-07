@@ -1,21 +1,19 @@
-import multiprocessing
-import time
-import json
-import re
-import fsspec
-import pathlib
 import glob
+import json
+import multiprocessing
 import os
-import s3fs
-import zarr
-
+import pathlib
+import re
+import time
 from subprocess import Popen
 
+import fsspec
+import s3fs
 import xarray as xr
-
-from kerchunk.hdf import SingleHdf5ToZarr
-from kerchunk.grib2 import scan_grib
+import zarr
 from kerchunk.combine import MultiZarrToZarr
+from kerchunk.grib2 import scan_grib
+from kerchunk.hdf import SingleHdf5ToZarr
 from tqdm import tqdm
 
 from .convenience import Convenience
@@ -214,9 +212,7 @@ class Transform(Metadata, Convenience):
                     scanned_zarr_json = SingleHdf5ToZarr(h5f=infile, url=file_path, inline_threshold=5000).translate()
 
             elif self.file_type == "GRIB":
-                scanned_zarr_json = scan_grib(url=file_path, filter=self.grib_filter, inline_threshold=20)[
-                    scan_indices
-                ]
+                scanned_zarr_json = scan_grib(url=file_path, filter=self.grib_filter, inline_threshold=20)[scan_indices]
             else:
                 raise ValueError(f"Invalid value for file_type. Expected 'NetCDF' or 'GRIB', got {self.file_type}")
         except OSError as e:

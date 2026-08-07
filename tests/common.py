@@ -1,8 +1,9 @@
 import pathlib
 import shutil
+import typing
+
 import cftime
 import numpy as np
-import typing
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 

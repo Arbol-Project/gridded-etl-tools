@@ -1,31 +1,32 @@
+import datetime
+import glob
 import logging
 import os
-import datetime
 import pathlib
+import shutil
+from unittest.mock import Mock, patch
+
 import pytest
 import xarray
-import shutil
-import glob
 
-from unittest.mock import Mock, patch
+from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
+from gridded_etl_tools.utils.publish import ZarrOutputError
+from gridded_etl_tools.utils.store import StoreInterface
+
 from ..common import (
-    run_etl,
-    mocked_ftp_extract_request,
-    get_manager,
     clean_up_input_paths,
+    get_manager,
+    mocked_ftp_extract_request,
     patched_key,
     patched_root_stac_catalog,
     patched_zarr_json_path,
-    remove_mock_output,
     remove_dask_worker_dir,
+    remove_metadata,
+    remove_mock_output,
     remove_performance_report,
     remove_zarr_json,
-    remove_metadata,
+    run_etl,
 )
-
-from gridded_etl_tools.utils.publish import ZarrOutputError
-from gridded_etl_tools.utils.store import StoreInterface
-from gridded_etl_tools.utils.logging import _UnclosedAiohttpFilter
 
 
 @pytest.fixture
@@ -277,9 +278,7 @@ def test_append_only(mocker, manager_class, test_chunks, appended_input_path, ro
     assert attrs["update_in_progress"] is False
 
 
-def test_misaligned_zarr_dask_chunks_regression(
-    mocker, manager_class, initial_smaller_input_path, appended_input_path
-):
+def test_misaligned_zarr_dask_chunks_regression(mocker, manager_class, initial_smaller_input_path, appended_input_path):
     """
     Regression test that will fail if Zarr chunks span multiple Dask chunks. This can happen if the initial
     dataset is smaller than both the append dataset and the requested Dask chunks. It will trigger

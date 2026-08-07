@@ -1,7 +1,7 @@
 # Technically not our code we're testing, but want to have advanced warning if this functionality breaks
 
-import tempfile
 import pathlib
+import tempfile
 
 import xarray as xr
 

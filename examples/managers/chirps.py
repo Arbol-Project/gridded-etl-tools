@@ -2,11 +2,12 @@
 Classes for managing CHIRPS global, gridded precipitation data
 """
 
-import glob
 import datetime
+import glob
 import pathlib
-import xarray as xr
 from abc import ABC
+
+import xarray as xr
 
 from gridded_etl_tools.dataset_manager import DatasetManager
 from gridded_etl_tools.utils import extractor

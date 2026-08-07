@@ -1,6 +1,8 @@
-import pytest
 from datetime import timedelta
-from gridded_etl_tools.utils.time import TimeUnit, TimeSpan
+
+import pytest
+
+from gridded_etl_tools.utils.time import TimeSpan, TimeUnit
 
 
 class TestTimeUnit:
@@ -180,9 +182,7 @@ class TestTimeSpan:
             TimeSpan.SPAN_MONTHLY.to_timedelta()
         with pytest.raises(ValueError, match="Cannot convert years to minutes as years is not of a fixed duration"):
             TimeSpan.SPAN_YEARLY.to_timedelta()
-        with pytest.raises(
-            ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration"
-        ):
+        with pytest.raises(ValueError, match="Cannot convert seasons to minutes as seasons is not of a fixed duration"):
             TimeSpan.SPAN_SEASONAL.to_timedelta()
 
     def test_create_factory_method(self):
@@ -341,5 +341,7 @@ class TestTimeSpan:
         # Test the == operator (should use __eq__)
         assert not (timespan == "not a timespan")
         assert not (timespan == 123)
-        assert not (timespan is None)
+        # `is None` would be trivially false whatever __eq__ does, so compare with
+        # the operator under test even though that means a literal None comparison.
+        assert not (timespan == None)  # noqa: E711
         assert not (timespan == TimeUnit("minutes", 2))

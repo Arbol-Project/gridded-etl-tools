@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 from gridded_etl_tools.utils.encryption import (
-    generate_encryption_key,
     EncryptionFilter,
     MissingKeyError,
+    generate_encryption_key,
     register_encryption_key,
 )
 

@@ -1,16 +1,16 @@
-import pathlib
 import datetime
 import io
 import json
+import pathlib
 import random
 from typing import Any, Iterator
 
-from dateutil.parser import parse as parse_date
 import deprecation
 import natsort
 import numpy as np
 import pandas as pd
 import xarray as xr
+from dateutil.parser import parse as parse_date
 
 from .attributes import Attributes
 
@@ -25,7 +25,6 @@ class Convenience(Attributes):
     def root_directory(self, refresh: bool = False):
         # ensure this is only calculated one time, at the beginning of the script
         if refresh or not hasattr(self, "_root_directory"):
-
             # Paths are relative to the working directory of the ETL manager, *not* the scripts
             self._root_directory = pathlib.Path.cwd()
 
